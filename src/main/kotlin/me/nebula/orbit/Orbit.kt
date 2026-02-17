@@ -21,6 +21,7 @@ import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.ranking.RankingReportStore
 import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.sanction.SanctionStore
+import me.nebula.gravity.server.ProvisionStore
 import me.nebula.gravity.server.ServerStore
 import me.nebula.gravity.session.ServerOccupancyStore
 import me.nebula.gravity.session.SessionStore
@@ -107,6 +108,7 @@ object Orbit {
                         +StatsStore
                         +RankingReportStore
                         +ServerStore
+                        +ProvisionStore
                     }
                 }
             }
