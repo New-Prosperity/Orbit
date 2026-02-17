@@ -8,6 +8,9 @@ import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
 import me.nebula.gravity.economy.EconomyStore
 import me.nebula.gravity.economy.EconomyTransactionStore
+import me.nebula.gravity.messaging.NetworkMessenger
+import me.nebula.gravity.messaging.ServerDeregistrationMessage
+import me.nebula.gravity.messaging.ServerRegistrationMessage
 import me.nebula.gravity.player.PlayerStore
 import me.nebula.gravity.player.PreferenceStore
 import me.nebula.gravity.property.PropertyStore
@@ -18,6 +21,7 @@ import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.ranking.RankingReportStore
 import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.sanction.SanctionStore
+import me.nebula.gravity.server.ServerStore
 import me.nebula.gravity.session.ServerOccupancyStore
 import me.nebula.gravity.session.SessionStore
 import me.nebula.gravity.stats.StatsStore
@@ -74,6 +78,7 @@ object Orbit {
         }
 
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
+        val serverUuid = env.optional("P_SERVER_UUID", "")
 
         app = appDelegate("Orbit") {
             configureResources {
@@ -101,6 +106,7 @@ object Orbit {
                         +RankingStore
                         +StatsStore
                         +RankingReportStore
+                        +ServerStore
                     }
                 }
             }
@@ -142,7 +148,14 @@ object Orbit {
 
         server.start("0.0.0.0", port)
 
+        if (serverUuid.isNotEmpty()) {
+            NetworkMessenger.publish(ServerRegistrationMessage(serverUuid))
+        }
+
         Runtime.getRuntime().addShutdownHook(Thread {
+            if (serverUuid.isNotEmpty()) {
+                NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid))
+            }
             app.modules.disableAll()
             app.stop().join()
         })
