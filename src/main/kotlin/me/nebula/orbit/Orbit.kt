@@ -31,6 +31,7 @@ import me.nebula.orbit.command.OnlinePlayerCache
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
+import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
@@ -87,6 +88,7 @@ object Orbit {
             serverName = required("SERVER_NAME")
             gameMode = optional("GAME_MODE", "").ifEmpty { null }
             required("HAZELCAST_LICENSE")
+            required("VELOCITY_SECRET")
         }
 
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
@@ -136,7 +138,7 @@ object Orbit {
 
         app.start().join()
 
-        val server = MinecraftServer.init()
+        val server = MinecraftServer.init(Auth.Velocity(env.all["VELOCITY_SECRET"]!!))
         val instanceManager = MinecraftServer.getInstanceManager()
         val defaultInstance = instanceManager.createInstanceContainer()
         defaultInstance.setGenerator { unit -> unit.modifier().fillHeight(0, 40, Block.GRASS_BLOCK) }
