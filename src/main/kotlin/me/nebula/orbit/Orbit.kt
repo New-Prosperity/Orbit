@@ -37,6 +37,8 @@ import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.instance.block.Block
 import net.minestom.server.timer.TaskSchedule
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -70,6 +72,13 @@ object Orbit {
     fun deserialize(key: String, locale: String, vararg resolvers: TagResolver): Component =
         miniMessage.deserialize(translations.require(key, locale), *resolvers)
 
+    private fun detectContainerAddress(): String? =
+        NetworkInterface.getNetworkInterfaces()
+            .asSequence()
+            .flatMap { it.inetAddresses.asSequence() }
+            .firstOrNull { !it.isLoopbackAddress && it is Inet4Address }
+            ?.hostAddress
+
     @JvmStatic
     fun main(args: Array<String>) {
         Thread.currentThread().contextClassLoader = Orbit::class.java.classLoader
@@ -82,7 +91,8 @@ object Orbit {
 
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
         val serverUuid = env.optional("P_SERVER_UUID", "")
-        logger.info { "P_SERVER_UUID = '${serverUuid.ifEmpty { "<not set>" }}'" }
+        val serverHost = env.optional("SERVER_HOST", "").ifEmpty { null } ?: detectContainerAddress()
+        logger.info { "P_SERVER_UUID = '${serverUuid.ifEmpty { "<not set>" }}', SERVER_HOST = '${serverHost ?: "<not set>"}'" }
 
         app = appDelegate("Orbit") {
             configureResources {
@@ -154,8 +164,8 @@ object Orbit {
         server.start("0.0.0.0", port)
 
         if (serverUuid.isNotEmpty()) {
-            logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid)" }
-            NetworkMessenger.publish(ServerRegistrationMessage(serverUuid))
+            logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid, address=$serverHost)" }
+            NetworkMessenger.publish(ServerRegistrationMessage(serverUuid, serverHost))
             logger.info { "ServerRegistrationMessage published" }
         } else {
             logger.warn { "P_SERVER_UUID is empty, skipping server registration" }
