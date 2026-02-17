@@ -8,6 +8,7 @@ import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
 import me.nebula.gravity.economy.EconomyStore
 import me.nebula.gravity.economy.EconomyTransactionStore
+import me.nebula.ether.utils.logging.logger
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.ServerDeregistrationMessage
 import me.nebula.gravity.messaging.ServerRegistrationMessage
@@ -49,6 +50,7 @@ object Orbit {
     var gameMode: String? = null
         private set
 
+    private val logger = logger("Orbit")
     private val miniMessage = MiniMessage.miniMessage()
     private val localeCache = ConcurrentHashMap<UUID, String>()
 
@@ -80,6 +82,7 @@ object Orbit {
 
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
         val serverUuid = env.optional("P_SERVER_UUID", "")
+        logger.info { "P_SERVER_UUID = '${serverUuid.ifEmpty { "<not set>" }}'" }
 
         app = appDelegate("Orbit") {
             configureResources {
@@ -151,11 +154,16 @@ object Orbit {
         server.start("0.0.0.0", port)
 
         if (serverUuid.isNotEmpty()) {
+            logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid)" }
             NetworkMessenger.publish(ServerRegistrationMessage(serverUuid))
+            logger.info { "ServerRegistrationMessage published" }
+        } else {
+            logger.warn { "P_SERVER_UUID is empty, skipping server registration" }
         }
 
         Runtime.getRuntime().addShutdownHook(Thread {
             if (serverUuid.isNotEmpty()) {
+                logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
                 NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid))
             }
             app.modules.disableAll()
