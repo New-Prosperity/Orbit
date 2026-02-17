@@ -140,8 +140,6 @@ object Orbit {
             .repeat(TaskSchedule.seconds(5))
             .schedule()
 
-        app.modules.enableAll()
-
         server.start("0.0.0.0", port)
 
         Runtime.getRuntime().addShutdownHook(Thread {
