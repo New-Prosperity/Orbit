@@ -4,11 +4,11 @@ import me.nebula.ether.utils.app.App
 import me.nebula.ether.utils.app.appDelegate
 import me.nebula.ether.utils.environment.environment
 import me.nebula.ether.utils.hazelcast.hazelcastModule
+import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
 import me.nebula.gravity.economy.EconomyStore
 import me.nebula.gravity.economy.EconomyTransactionStore
-import me.nebula.ether.utils.logging.logger
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.ServerDeregistrationMessage
 import me.nebula.gravity.messaging.ServerRegistrationMessage
@@ -28,20 +28,21 @@ import me.nebula.gravity.session.ServerOccupancyStore
 import me.nebula.gravity.session.SessionStore
 import me.nebula.gravity.stats.StatsStore
 import me.nebula.orbit.command.OnlinePlayerCache
+import me.nebula.orbit.mode.ServerMode
+import me.nebula.orbit.mode.hub.HubMode
+import me.nebula.orbit.translation.OrbitTranslations
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
-import net.minestom.server.coordinate.Pos
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
-import net.minestom.server.instance.block.Block
 import net.minestom.server.timer.TaskSchedule
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.nio.file.Path
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 object Orbit {
@@ -94,7 +95,6 @@ object Orbit {
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
         val serverUuid = env.optional("P_SERVER_UUID", "")
         val serverHost = env.optional("SERVER_HOST", "").ifEmpty { null } ?: detectContainerAddress()
-        logger.info { "P_SERVER_UUID = '${serverUuid.ifEmpty { "<not set>" }}', SERVER_HOST = '${serverHost ?: "<not set>"}'" }
 
         app = appDelegate("Orbit") {
             configureResources {
@@ -133,25 +133,27 @@ object Orbit {
                     defaultLocale("en")
                     fallback(true)
                 }
+                OrbitTranslations.register(translations)
             }
         }
 
         app.start().join()
 
         val server = MinecraftServer.init(Auth.Velocity(env.all["VELOCITY_SECRET"]!!))
-        val instanceManager = MinecraftServer.getInstanceManager()
-        val defaultInstance = instanceManager.createInstanceContainer()
-        defaultInstance.setGenerator { unit -> unit.modifier().fillHeight(0, 40, Block.GRASS_BLOCK) }
+
+        val mode: ServerMode = resolveMode(env)
+        logger.info { "Server mode: ${mode::class.simpleName}" }
 
         val handler = MinecraftServer.getGlobalEventHandler()
+        mode.install(handler)
 
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
             val player = event.player
             val playerData = PlayerStore.load(player.uuid)
             val locale = playerData?.language ?: translations.defaultLocale
             cacheLocale(player.uuid, locale)
-            event.spawningInstance = defaultInstance
-            player.respawnPoint = Pos(0.0, 41.0, 0.0)
+            event.spawningInstance = mode.defaultInstance
+            player.respawnPoint = mode.spawnPoint
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
@@ -178,8 +180,15 @@ object Orbit {
                 logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
                 NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid))
             }
+            mode.shutdown()
             app.modules.disableAll()
             app.stop().join()
         })
     }
+
+    private fun resolveMode(env: me.nebula.ether.utils.environment.EnvironmentVariableBuilder): ServerMode =
+        when (gameMode) {
+            null -> HubMode(env)
+            else -> error("Unknown game mode: $gameMode")
+        }
 }
