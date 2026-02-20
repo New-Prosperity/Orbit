@@ -14,9 +14,9 @@ Standalone Minestom game server for the Nebula network. Runs on every server —
 - Env vars: `HAZELCAST_LICENSE` (required), `VELOCITY_SECRET` (required), `SERVER_PORT` (default 25565), `P_SERVER_UUID` (optional), `PROTON_URL` (required when `P_SERVER_UUID` set), `PROTON_API_KEY` (required when `P_SERVER_UUID` set), `SERVER_HOST` (optional).
 - **Provision self-discovery**: When `P_SERVER_UUID` is set, Orbit calls `ProtonClient.findProvisionByUuid(serverUuid)` to fetch its own provision data, deriving `serverName` from the provision's server name and `gameMode` from `provision.metadata["game_mode"]`. When `P_SERVER_UUID` is empty or no provision found, `serverName` defaults to `"orbit-local"` and `gameMode` to `null` (hub mode).
 - Hazelcast: lite member with 18 stores (includes ReconnectionStore).
-- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → `MinecraftServer.init()` → `resolveMode()` → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
+- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `CustomContentRegistry.init()` → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
 - Common listeners: `AsyncPlayerConfigurationEvent` (locale cache, set spawning instance/respawn from mode), `PlayerDisconnectEvent` (evict locale), `OnlinePlayerCache` refresh (5s).
-- `resolveMode()` selects `ServerMode` by `GAME_MODE` env var: `null` → `HubMode(app.resources)`, else → `error()` (extend here for minigames).
+- `resolveMode()` selects `ServerMode` by `gameMode` (sourced from Proton provision `metadata["game_mode"]`, NOT an env var): `null` → `HubMode(app.resources)`, else → `error()` (extend here for minigames).
 
 ## Server Mode System — `mode/`
 
@@ -48,7 +48,7 @@ Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Or
 - Lines without placeholders become `LiveLine.Static`; lines with placeholders become `LiveLine.Dynamic`. All placeholder lines resolve with the player context.
 
 ### `HubMode` (`mode/hub/HubMode.kt`)
-- **Config-driven**: All settings loaded from `hub.json` via `ResourceManager.loadOrCopyDefault<HubModeConfig>("hub.json")`. First run copies bundled default from classpath to `data/hub.json`. Operators edit the JSON file without code changes.
+- **Config-driven**: All settings loaded from `modes/hub.json` via `ResourceManager.loadOrCopyDefault<HubModeConfig>("hub.json", "modes/hub.json")`. First run copies bundled default from classpath to `data/modes/hub.json`. Operators edit the JSON file without code changes.
 - **Config data classes**: `HubModeConfig` (`mode/hub/HubModeConfig.kt`) wraps `SpawnConfig`, `ScoreboardConfig`, `TabListConfig`, `LobbyConfig`, `List<HotbarItemConfig>`, `SelectorConfig(title, rows, border)`.
 - **Default config**: `src/main/resources/hub.json` bundled in JAR.
 - **Placeholders**: Global `{online}` (SessionStore.cachedSize), `{server}` (Orbit.serverName). Per-player `{rank}` (PlayerRankStore/RankStore lookup).
@@ -481,16 +481,72 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `polar-bear` | Polar bear neutral behavior: attacks when baby nearby is hit, 6 damage, 12-block aggro range |
 | `axolotl-behavior` | Axolotl attacks drowned/guardians via `EntitySpawnEvent` tracking + `nearbyEntities`, plays dead at low HP (regenerates), grants Regeneration I to nearby players |
 
-## Utility Framework — `utils/` (173 files)
+## Custom Content System — `utils/customcontent/` (15 files)
+Custom item and block system with JSON config or code DSL definitions, Blockbench `.bbmodel` model source, and resource pack merging.
 
-### Model Engine (47)
+### Architecture
+| File | Summary |
+|---|---|
+| `CustomContentRegistry.kt` | Central singleton: init, load JSON, allocate states, register items/blocks, merge pack. Top-level `customItem {}` and `customBlock {}` DSL functions |
+| `item/CustomItem.kt` | Item data class (`id`, `baseMaterial`, `customModelDataId`, `displayName`, `lore`, `unbreakable`, `glowing`, `maxStackSize`, `modelPath`), `createStack(amount)` |
+| `item/CustomItemRegistry.kt` | ConcurrentHashMap registry: `get(id)`, `require(id)`, `byCustomModelData(cmd)`, `all()` |
+| `item/CustomItemLoader.kt` | JSON deserialization → `CustomItemDefinition`, `CustomItemDsl` builder class |
+| `block/BlockHitbox.kt` | Sealed class: `Full` (592), `Slab` (53), `Stair` (50), `Thin` (17), `Transparent` (128), `Wall` (22), `Fence` (12), `Trapdoor` (11). `fromString()` companion |
+| `block/BlockStateAllocator.kt` | Deterministic vanilla block state pools per hitbox type, `allocate(id, hitbox)`, `isAllocated(block)`, `fromVanillaBlock(block)`. Persists to `data/customcontent/allocations.dat` |
+| `block/CustomBlock.kt` | Block data class (`id`, `hitbox`, `itemId`, `customModelDataId`, `hardness`, `drops`, `modelPath`, `placeSound`, `breakSound`, `allocatedState`). `CustomBlockDrops` sealed: `SelfDrop`, `LootTableDrop` |
+| `block/CustomBlockRegistry.kt` | ConcurrentHashMap registry: `get(id)`, `require(id)`, `fromVanillaBlock(block)`, `fromItemId(itemId)`, `all()` |
+| `block/CustomBlockLoader.kt` | JSON deserialization → `CustomBlockDefinition`, `CustomBlockDsl` and `CustomBlockDropsDsl` builder classes |
+| `event/CustomBlockPlaceHandler.kt` | `PlayerBlockPlaceEvent` listener: detects held CustomModelData item → sets allocated vanilla block state, decrements item, plays place sound |
+| `event/CustomBlockBreakHandler.kt` | `PlayerBlockBreakEvent` listener: detects custom block → spawns drops (self or loot table), plays break sound |
+| `event/CustomBlockInteractHandler.kt` | `PlayerBlockInteractEvent` listener: cancels vanilla interactions on custom block states |
+| `pack/PackMerger.kt` | Merges ModelEngine bones + custom item/block models into single ZIP with SHA-1. `merge(modelsDir, rawResults)` → `MergeResult(packBytes, sha1)` |
+| `pack/ItemModelOverrideWriter.kt` | Generates `models/item/{material}.json` with sorted CustomModelData override entries |
+| `pack/BlockStateWriter.kt` | Generates `blockstates/{block}.json` with complete `variants` for `full` (note_block/mushroom) and `thin` (carpet) hitbox types. Non-allocated states fall back to vanilla model. Other hitbox types skip blockstate generation (placed block renders as vanilla material) |
+
+### Block State Pools
+| Hitbox | Source | Count | Custom Visual |
+|---|---|---|---|
+| `full` | note_block (16 instruments × 25 notes × powered=false) + brown/red mushroom_block + mushroom_stem (64 face combos each) | 592 | Yes — complete `variants` blockstate with vanilla fallback |
+| `thin` | 17 carpet colors | 17 | Yes — single-variant blockstate replacement |
+| `slab` | 53 slab materials, canonical `type=bottom,waterlogged=false` | 53 | No — vanilla material visual when placed |
+| `stair` | 50 stair materials, canonical `facing=north,half=bottom,shape=straight,waterlogged=false` | 50 | No — vanilla material visual when placed |
+| `transparent` | tripwire 7-boolean combos | 128 | No — vanilla material visual when placed |
+| `wall` | 22 wall materials, canonical isolated state | 22 | No — vanilla material visual when placed |
+| `fence` | 12 fence materials, canonical disconnected state | 12 | No — vanilla material visual when placed |
+| `trapdoor` | 11 trapdoor materials (no iron), canonical closed state | 11 | No — vanilla material visual when placed |
+
+Non-`full`/`thin` hitbox types provide the correct collision shape but render as their vanilla material when placed. This is because replacing blockstate files for complex blocks (slabs, stairs, fences, walls, trapdoors, tripwire) would break all vanilla instances of that material. The custom model is only visible on the held item.
+
+### Mechanic Guards
+- `NoteBlockModule` — skips tuning for `BlockStateAllocator.isAllocated(block)`
+- `BlockModule` — skips vanilla drops for allocated states
+- `SlabModule` — skips double-slab stacking for allocated states
+
+### Data Directories
+```
+data/customcontent/
+├── items/           (JSON item definitions)
+├── blocks/          (JSON block definitions)
+├── models/          (.bbmodel files)
+├── allocations.dat  (persistent block state allocations)
+├── model_ids.dat    (persistent CustomModelData IDs)
+└── pack.zip         (merged resource pack output)
+```
+
+### Modified Existing Files
+- `modelengine/generator/ModelIdRegistry.kt` — added `assignId(key: String)` single-arg overload, `getId(key: String)` overload
+- `modelengine/generator/ModelGenerator.kt` — added `generateRaw()` returning `RawGenerationResult(blueprint, boneModels, textureBytes)`, `buildBoneElements()` and `buildFlatModel()` helpers
+- `Orbit.kt` — calls `CustomContentRegistry.init()` before mode install
+
+## Utility Framework — `utils/` (189 files)
+
+### Model Engine (46)
 | Util | Summary |
 |---|---|
 | `modelengine/ModelEngine.kt` | Singleton registry, factory DSL (`modeledEntity(entity) {}`, `modeledEntity(owner) {}`, `standAloneModel(pos) {}`), 1-tick loop via `install()`/`uninstall()`, blueprint CRUD, modeled entity lifecycle, `PlayerDisconnectEvent` session cleanup (viewer eviction, mount/VFX cleanup). `ModelOwner` interface decouples from Entity |
 | `modelengine/math/ModelMath.kt` | `data class Quat(x,y,z,w)` with `operator get`/`toFloatArray()`, `eulerToQuat`/`quatToEuler` (gimbal-lock safe)/`quatSlerp`/`quatMultiply`/`quatRotateVec`/`quatInverse`/`quatNormalize`/`wrapDegrees`, `OrientedBoundingBox` (containsPoint/intersects/rayTrace), `clamp`/`lerp`/`lerpVec`/`colorArgb` |
 | `modelengine/blueprint/ModelBlueprint.kt` | Immutable model data: bone tree, animations, hitbox dimensions. `traverseDepthFirst()` visitor. `AnimationBlueprint`, `BoneKeyframes`, `Keyframe`, `InterpolationType`, `LoopMode` |
 | `modelengine/blueprint/BlueprintBone.kt` | Static bone definition: name, parent, children, offset, rotation, scale, modelItem, behaviors map, visibility |
-| `modelengine/blueprint/BlueprintLoader.kt` | Loads blueprint from simplified JSON (bones + animations). Full bbmodel via `ModelGenerator` |
 | `modelengine/bone/BoneTransform.kt` | Immutable `BoneTransform(position, leftRotation, rightRotation, scale)`. `combine(parent)` chain, `toWorldPosition(modelPos)`, `toWorldRotation(yaw)`, `lerp()` |
 | `modelengine/bone/ModelBone.kt` | Runtime mutable bone: local + animated transforms, `computeTransform()` recurses children, dirty-check. `behaviors` list, `addBehavior()`/`removeBehavior()`, inline `behavior<T>()`/`behaviorsOf<T>()` |
 | `modelengine/render/BoneRenderer.kt` | Per-player `ITEM_DISPLAY` packet renderer. Entity IDs from `-3,000,000`. Spawn/update/destroy with dirty-checking (only changed metadata). `show`/`hide`/`update`/`destroy` |
@@ -554,8 +610,11 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `notification/Notification.kt` | `notify(player) { title(); message(); channels(CHAT, ACTION_BAR, TITLE, SOUND) }` DSL, `NotificationManager` broadcast/instance/player, multi-channel (CHAT, ACTION_BAR, TITLE, BOSS_BAR, SOUND), `announceChat()`, `announceActionBar()`, `announceTitle()` convenience functions |
 | `playertag/PlayerTag.kt` | `playerTag(player) { prefix(); suffix(); nameColor(); priority() }` DSL, `PlayerTagManager`, priority-based tag stacking, display name/tab/above-head rendering |
 | `clickablechat/ClickableChat.kt` | `clickableMessage(player) { text(); clickText("[HERE]") { action(OPEN_URL, url) }; hover() }` DSL, `Player.sendClickable {}`, RUN_COMMAND/SUGGEST_COMMAND/OPEN_URL/COPY_TO_CLIPBOARD actions |
+| `blockhighlight/BlockHighlight.kt` | `BlockHighlightManager` glowing invisible shulker at block position, `Player.highlightBlock(x, y, z, durationTicks)`, `Player.clearHighlights()`, auto-remove after duration |
+| `nametag/NameTag.kt` | `Player.setNameTag { prefix(); suffix(); displayName() }` DSL, `NameTagManager` per-player custom name via prefix+name+suffix Component, `Player.clearNameTag()` |
+| `playerlist/PlayerList.kt` | `playerList { header(); footer(); updateIntervalTicks }` DSL, `PlayerListManager` periodic per-player header/footer updates, MiniMessage support |
 
-### Game Framework (19)
+### Game Framework (21)
 | Util | Summary |
 |---|---|
 | `gamestate/GameState.kt` | `gameStateMachine(initialState) { allow(); onEnter(); timedTransition() }` DSL |
@@ -577,8 +636,12 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `minigametimer/MinigameTimer.kt` | `minigameTimer(name) { duration(); display(BOSS_BAR/ACTION_BAR/TITLE); onTick {}; onHalf {}; onQuarter {}; onEnd {} }` DSL, start/pause/resume/stop, addTime/removeTime, milestone callbacks |
 | `taskqueue/TaskQueue.kt` | `taskQueue(name) { maxConcurrent(1); onComplete {}; onError {} }` DSL, `TaskQueue.submit {}`, sequential/limited-concurrency async execution on virtual threads, pause/resume/stop, `TaskQueueRegistry` |
 | `teambalance/TeamBalance.kt` | `TeamBalance.balance(players, teamCount, scorer)`, snake-draft distribution, `suggestSwap()` variance minimization, `autoBalance()` |
+| `knockback/Knockback.kt` | `KnockbackProfile(horizontal, vertical, extraHorizontal, extraVertical, friction)`, `KnockbackManager` per-player profile overrides, `Entity.applyKnockback(source, profile)`, `Entity.applyDirectionalKnockback()`, `knockbackProfile(name) {}` DSL |
+| `respawn/Respawn.kt` | `RespawnManager` per-player and default respawn points, `Player.setRespawnPoint()`, `Player.clearRespawnPoint()`, `Player.getCustomRespawnPoint()`, instance resolution by identity hash |
+| `instancepool/InstancePool.kt` | `instancePool(name, poolSize) { factory }`, `InstancePool` with `acquire()`/`release()`, auto-warmup pool, excess unregistration, `availableCount`/`inUseCount`/`totalCount` |
+| `timer/Timer.kt` | `gameTimer(name) { durationSeconds(); onTick {}; onComplete {}; display {} }` DSL, `GameTimer` with start/stop/reset, per-player viewer tracking, action bar display |
 
-### World (14)
+### World (15)
 | Util | Summary |
 |---|---|
 | `world/WorldManager.kt` | Named instance management, `create(name) { generator(); flat(); void() }` DSL |
@@ -595,8 +658,11 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `selectiontool/SelectionTool.kt` | `SelectionManager`, `Player.setPos1/setPos2`, `Player.getSelection()`, wand item, particle boundary display, `Player.fillSelection(block)`, `countBlocks()` |
 | `randomteleport/RandomTeleport.kt` | `randomTeleport(player) { minX(); maxX(); minZ(); maxZ(); instance(); maxAttempts(); safeCheck() }` DSL, `Player.randomTeleport {}` extension, safe location finding |
 | `blockpalette/BlockPalette.kt` | `blockPalette(name) { block(Block.X, weight) }` DSL, weighted random block selection, `fillRegion()`, `Instance.fillWithPalette()` |
+| `fallingblock/FallingBlockUtil.kt` | `spawnFallingBlock(instance, position, block, velocity, onLand)` with ground detection and 600-tick auto-remove, `launchBlock(instance, position, block, direction, speed)` directional launch |
+| `structureblock/StructureBlock.kt` | `Structure(name, blocks)` with `paste()`, `pasteRotated90()`, `clear()`, `captureStructure(name, instance, from, to)` region capture, `StructureRegistry` CRUD |
+| `voidteleport/VoidTeleport.kt` | `voidTeleport { threshold(-64.0); destination { player -> pos }; onTeleport {} }` DSL, `VoidTeleportManager` global `PlayerMoveEvent` listener, configurable Y threshold, respawnPoint default destination |
 
-### Player (13)
+### Player (17)
 | Util | Summary |
 |---|---|
 | `snapshot/InventorySnapshot.kt` | `InventorySnapshot.capture(player)` / `snapshot.restore(player)` |
@@ -612,8 +678,12 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `velocityhelper/VelocityHelper.kt` | `Player.launchUp()`, `launchForward()`, `launchToward()`, `knockbackFrom()`, `Entity.freeze()`, `calculateParabolicVelocity()` |
 | `inventoryserializer/InventorySerializer.kt` | `InventorySerializer.serialize(player): ByteArray`, `deserialize(player, data)`, `Player.serializeInventory()`, `Player.deserializeInventory()` extensions |
 | `playervault/PlayerVault.kt` | `playerVault { maxVaults(); rows(); titleFormat() }` DSL, `open(player, vaultId)`, `getVault()`, per-player vault storage |
+| `inventoryutil/InventoryUtil.kt` | Player inventory extensions: `hasItem()`, `countItem()`, `removeItem()`, `giveItem()`, `firstEmptySlot()`, `clearInventory()`, `sortInventory()`, `swapSlots()` |
+| `playerdata/PlayerData.kt` | `PlayerDataManager` full player state snapshots (position, health, food, gameMode, level, inventory), `Player.captureData()`, `Player.restoreData()`, `Player.restoreLatest()`, timestamped history |
+| `signprompt/SignPrompt.kt` | `SignPromptManager` sign-based text input prompts, `Player.openSignPrompt(lines) { player, lines -> }`, callback-driven response handling, cancel support |
+| `waypoint/Waypoint.kt` | `WaypointManager` global and per-player named waypoints with position/instance/icon, `Player.setWaypoint()`, `Player.removeWaypoint()`, `Player.getWaypoint()`, `Player.allWaypoints()` |
 
-### Advanced (9)
+### Advanced (10)
 | Util | Summary |
 |---|---|
 | `commandalias/CommandAlias.kt` | `registerAlias("tp", "teleport")`, `registerAliases()` batch |
@@ -625,8 +695,9 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `entitycleanup/EntityCleanup.kt` | `entityCleanup(instance) { maxAge(); maxPerInstance(); excludeTypes(); warningMessage() }` DSL, `EntityCleanupManager`, timer-based cleanup, item-first priority, per-instance config |
 | `entitymount/EntityMount.kt` | `EntityMountManager.mount(rider, vehicle)`, `dismount()`, `mountStack()`, `mountConfig { speedMultiplier(); jumpBoost(); steeringOverride() }` DSL, `Player.mountEntity()`/`dismountEntity()` extensions |
 | `entityleash/EntityLeash.kt` | `EntityLeashManager.leash(entity, holder, maxDistance)`, `unleash()`, velocity correction scheduler, `LeashHandle`, `Entity.leashTo()`, `Entity.unleash()`, `Entity.isLeashed()`, `Entity.leashHolder()` |
+| `entitystack/EntityStack.kt` | `StackedEntity(base, riders)` with `addRider()`/`removeTop()`/`removeAll()`/`despawn()`, `EntityStackManager` singleton with `createStack(instance, position, baseType)`, `getStack()`, `removeStack()`, `all()`, `clear()` |
 
-### Infrastructure (23)
+### Infrastructure (26)
 | Util | Summary |
 |---|---|
 | `cooldown/Cooldown.kt` | Generic `Cooldown<K>` with `isReady/use/tryUse/remaining/reset/cleanup`, `NamedCooldown` (player+key with warning message), `MaterialCooldown` (player+material), `SkillCooldown` (visual indicator via BossBar/ActionBar), `Player.isOnCooldown/useCooldown/cooldownRemaining` extensions |
@@ -667,16 +738,13 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `customrecipe/CustomRecipe.kt` | `shapedRecipe(result) { pattern(); ingredient() }`, `shapelessRecipe {}`, `smeltingRecipe()`, `RecipeRegistry` matching, `RecipeHandle` unregistration |
 | `entityequipment/EntityEquipment.kt` | `Entity.equip { helmet(); chestplate(); mainHand() }` DSL, `Entity.clearEquipment()`, `Entity.getEquipmentSnapshot()`, `EquipmentSnapshot.apply()` |
 | `worldedit/WorldEdit.kt` | `WorldEdit.copy/paste/rotate/flip/fill/replace/undo/redo`, `ClipboardData` packed Long coords, per-player undo/redo stacks (max 50), Region-aware, `fillPattern()` weighted random block fill |
-| `commandbuilder/CommandBuilder.kt` | `command(name) { aliases(); permission(); playerOnly(); subCommand(); onExecute() }` DSL, argument types, tab completion, recursive sub-commands |
+| `commandbuilder/CommandBuilder.kt` | `command(name) { aliases(); permission(); playerOnly(); subCommand(); onPlayerExecute {}; onExecute() }` DSL, `CommandExecutionContext(player, args, locale)`, virtual-thread execution, typed arguments, tab completion, recursive sub-commands, `RankManager` permissions |
+| `commandbuilder/CommandHelpers.kt` | `OnlinePlayerCache` (5s refresh from SessionStore), `suggestPlayers(prefix)`, `resolvePlayer(name)` (online then PlayerStore) |
 | `entityformation/EntityFormation.kt` | `entityFormation { circle(); line(); grid(); wedge() }` DSL, `Formation.apply(entities, center)`, `animate(speed)`, yaw rotation |
 | `musicsystem/MusicSystem.kt` | `song(name) { bpm(); note(tick, instrument, pitch) }` DSL, `Instance.playSong(pos, song)`, 16 instruments, tick-based playback, `SongManager` |
-
-## Command DSL — `command/CommandDsl.kt`
-- `minestomCommand(name, aliases) { permission; playerOnly; execute {}; suggest {} }` DSL
-- `OnlinePlayerCache` refreshes from `SessionStore.all()` every 5s
-
-## Player Resolver — `command/PlayerResolver.kt`
-- `resolvePlayer(name): Pair<UUID, String>?` via online lookup then `PlayerStore`
+| `broadcastscheduler/BroadcastScheduler.kt` | `broadcastScheduler { intervalSeconds(300); shuffled = true; message("<gold>Welcome!") }` DSL, `BroadcastScheduler` with `start()`/`stop()`/`isRunning`, cyclic message rotation to all online players |
+| `motd/Motd.kt` | `motd { line1 = "<gradient:gold:yellow>Nebula"; line2 = "<gray>Play now!" }` DSL, `MotdManager` singleton with `AtomicReference<MotdConfig>`, `ServerListPingEvent` listener, MiniMessage rendering |
+| `pagination/Pagination.kt` | `paginatedView<T> { items(); pageSize = 10; render { item, index -> }; header {}; footer {} }` DSL, `PaginatedView.send(player, page)`, translated header/footer, auto page clamping |
 
 ## Translation System — `translation/`
 - `OrbitTranslations.register(translations)` registers all keys for mechanics and utilities in `en` locale. Hub text is config-driven (not translations).
@@ -725,3 +793,41 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
   - `stonecutter/StonecutterModule.kt` — inventory title (`orbit.mechanic.stonecutter.title`)
   - `trading/TradingModule.kt` — inventory title (`orbit.mechanic.trading.title`)
   - `recoverycompass/RecoveryCompassModule.kt` — action bar with `<direction>`/`<distance>` placeholders (`orbit.mechanic.recovery_compass.distance`)
+
+## Admin Commands
+
+### `/me` — ModelEngine Command (`utils/modelengine/ModelEngineCommand.kt`)
+Permission: `orbit.modelengine`
+
+| Sub-command | Args | Action |
+|---|---|---|
+| `list` | — | List all registered blueprints with bone count + animation count |
+| `info <blueprint>` | `blueprint: Word` | Show blueprint details: bones (tree), animations (name, duration, loop mode), root bones |
+| `spawn <blueprint> [scale]` | `blueprint: Word`, `scale: Float (default 1.0)` | Spawn `standAloneModel` at player position, show to player |
+| `despawn` | — | Remove all standalone models spawned via `/me spawn` |
+| `reload <name>` | `name: Word` | Re-parse `data/models/<name>.bbmodel` via `ModelGenerator.generateRaw`, re-register blueprint |
+| `entities` | — | List all tracked `ModeledEntity` instances with position, model names, viewer count |
+| `ids` | — | Show ModelIdRegistry stats: total assigned IDs, sample entries |
+
+- Tab completion for `<blueprint>` from `ModelEngine.blueprints().keys`
+- Tab completion for `<name>` from `resources.list("models", "bbmodel")`
+- Spawned models tracked in file-level `ConcurrentHashMap.newKeySet<StandaloneModelOwner>()` for `despawn`
+- Registered in `Orbit.kt` after `CustomContentRegistry.init()`
+
+### `/cc` — CustomContent Command (`utils/customcontent/CustomContentCommand.kt`)
+Permission: `orbit.customcontent`
+
+| Sub-command | Args | Action |
+|---|---|---|
+| `items` | — | List all custom items: id, base material, CMD ID |
+| `blocks` | — | List all custom blocks: id, hitbox type, allocated state, CMD ID |
+| `give <item> [amount]` | `item: Word`, `amount: Int (default 1)` | Give `CustomItem.createStack(amount)` to player |
+| `info <id>` | `id: Word` | Show full details of item or block (checks both registries) |
+| `pack` | — | Trigger `CustomContentRegistry.mergePack()`, report size + SHA-1 |
+| `allocations` | — | Show per-hitbox pool usage: used/total for each `BlockHitbox` type |
+| `send` | — | Start embedded HTTP server (port 8080) serving `packBytes`, send resource pack URL to player |
+
+- Tab completion for `<item>` from `CustomItemRegistry.all().map { it.id }`
+- Tab completion for `<id>` from combined item + block IDs
+- `send` starts a JDK `HttpServer` on a random port (9100-9200) serving `CustomContentRegistry.packBytes` at `/pack.zip`, then sends the URL via Adventure `sendResourcePacks`. Server address from `SERVER_HOST` env var or auto-detected, fallback `127.0.0.1`
+- Registered in `Orbit.kt` after `CustomContentRegistry.init()`, receives `serverHost` for pack URL construction

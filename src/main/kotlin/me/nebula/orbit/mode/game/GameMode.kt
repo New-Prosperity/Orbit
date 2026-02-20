@@ -34,6 +34,7 @@ import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.timer.Task
+import java.nio.file.Files
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
@@ -80,10 +81,12 @@ abstract class GameMode : ServerMode {
     override val spawnPoint: Pos by lazy { settings.spawn.toPos() }
 
     override val defaultInstance: InstanceContainer by lazy {
+        val worldPath = java.nio.file.Path.of(settings.worldPath)
+        worldPath.parent?.let { Files.createDirectories(it) }
         val centerX = spawnPoint.blockX() shr 4
         val centerZ = spawnPoint.blockZ() shr 4
         val (instance, future) = AnvilWorldLoader.loadAndPreload(
-            "game-${this::class.simpleName?.lowercase()}", java.nio.file.Path.of(settings.worldPath),
+            "game-${this::class.simpleName?.lowercase()}", worldPath,
             centerX, centerZ, settings.preloadRadius,
         )
         future.join()

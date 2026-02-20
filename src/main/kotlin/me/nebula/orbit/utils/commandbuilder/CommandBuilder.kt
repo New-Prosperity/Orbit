@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.commandbuilder
 
-import me.nebula.orbit.utils.permissions.PermissionManager
+import me.nebula.gravity.rank.RankManager
+import me.nebula.orbit.Orbit
 import net.minestom.server.command.CommandSender
 import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.CommandContext
@@ -8,6 +9,13 @@ import net.minestom.server.command.builder.arguments.Argument
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.command.builder.suggestion.SuggestionEntry
 import net.minestom.server.entity.Player
+import java.util.UUID
+
+data class CommandExecutionContext(
+    val player: Player,
+    val args: CommandContext,
+    val locale: String,
+)
 
 class CommandBuilderDsl @PublishedApi internal constructor(
     @PublishedApi internal val name: String,
@@ -18,16 +26,14 @@ class CommandBuilderDsl @PublishedApi internal constructor(
     @PublishedApi internal val arguments = mutableListOf<Argument<*>>()
     @PublishedApi internal val subCommands = mutableListOf<Command>()
     @PublishedApi internal var executeHandler: ((CommandSender, CommandContext) -> Unit)? = null
+    @PublishedApi internal var playerExecuteHandler: ((CommandExecutionContext) -> Unit)? = null
     @PublishedApi internal var tabCompleteHandler: ((Player, String) -> List<String>)? = null
 
-    fun aliases(vararg names: String) { aliases.addAll(names) }
+    fun aliases(vararg names: String) { aliases += names }
     fun permission(perm: String) { permission = perm }
     fun playerOnly() { playerOnly = true }
 
     fun <T> argument(arg: Argument<T>) { arguments += arg }
-
-    fun argument(name: String, type: Argument<*>) { arguments += type }
-
     fun stringArgument(name: String) { arguments += ArgumentType.String(name) }
     fun intArgument(name: String) { arguments += ArgumentType.Integer(name) }
     fun doubleArgument(name: String) { arguments += ArgumentType.Double(name) }
@@ -42,9 +48,9 @@ class CommandBuilderDsl @PublishedApi internal constructor(
 
     fun onExecute(handler: (CommandSender, CommandContext) -> Unit) { executeHandler = handler }
 
-    fun onPlayerExecute(handler: (Player, CommandContext) -> Unit) {
+    fun onPlayerExecute(handler: CommandExecutionContext.() -> Unit) {
         playerOnly = true
-        executeHandler = { sender, context -> handler(sender as Player, context) }
+        playerExecuteHandler = handler
     }
 
     fun tabComplete(handler: (Player, String) -> List<String>) { tabCompleteHandler = handler }
@@ -52,29 +58,28 @@ class CommandBuilderDsl @PublishedApi internal constructor(
     @PublishedApi internal fun build(): Command {
         val cmd = object : Command(name, *aliases.toTypedArray()) {}
 
-        permission?.let { perm ->
+        val perm = permission
+        if (perm != null) {
             cmd.setCondition { sender, _ ->
-                sender is Player && PermissionManager.hasPermission(sender.uuid, perm)
+                sender is Player && RankManager.hasPermission(sender.uuid, perm)
             }
-        }
-
-        if (permission == null && playerOnly) {
+        } else if (playerOnly) {
             cmd.setCondition { sender, _ -> sender is Player }
         }
 
         subCommands.forEach { cmd.addSubcommand(it) }
 
+        val resolvedHandler = resolveHandler()
+
         if (arguments.isNotEmpty()) {
-            val lastArg = arguments.last()
             tabCompleteHandler?.let { handler ->
-                lastArg.setSuggestionCallback { sender, _, suggestion ->
+                arguments.last().setSuggestionCallback { sender, _, suggestion ->
                     if (sender !is Player) return@setSuggestionCallback
-                    val input = suggestion.input
-                    handler(sender, input).forEach { suggestion.addEntry(SuggestionEntry(it)) }
+                    handler(sender, suggestion.input).forEach { suggestion.addEntry(SuggestionEntry(it)) }
                 }
             }
 
-            executeHandler?.let { handler ->
+            resolvedHandler?.let { handler ->
                 cmd.addSyntax({ sender, context ->
                     if (playerOnly && sender !is Player) return@addSyntax
                     handler(sender, context)
@@ -82,7 +87,7 @@ class CommandBuilderDsl @PublishedApi internal constructor(
             }
         }
 
-        executeHandler?.let { handler ->
+        resolvedHandler?.let { handler ->
             cmd.setDefaultExecutor { sender, _ ->
                 if (playerOnly && sender !is Player) return@setDefaultExecutor
                 handler(sender, CommandContext(""))
@@ -90,6 +95,21 @@ class CommandBuilderDsl @PublishedApi internal constructor(
         }
 
         return cmd
+    }
+
+    private fun resolveHandler(): ((CommandSender, CommandContext) -> Unit)? {
+        val playerHandler = playerExecuteHandler
+        if (playerHandler != null) return { sender, context ->
+            val player = sender as Player
+            Thread.startVirtualThread {
+                playerHandler(CommandExecutionContext(player, context, Orbit.localeOf(player.uuid)))
+            }
+        }
+        val rawHandler = executeHandler
+        if (rawHandler != null) return { sender, context ->
+            Thread.startVirtualThread { rawHandler(sender, context) }
+        }
+        return null
     }
 }
 

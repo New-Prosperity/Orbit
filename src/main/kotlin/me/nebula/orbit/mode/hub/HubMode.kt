@@ -15,6 +15,10 @@ import me.nebula.orbit.utils.hotbar.hotbar
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.lobby.Lobby
 import me.nebula.orbit.utils.lobby.lobby
+import me.nebula.orbit.utils.modelengine.ModelEngine
+import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
+import me.nebula.orbit.utils.modelengine.model.standAloneModel
+import me.nebula.orbit.utils.modelengine.modeledEntity
 import me.nebula.orbit.utils.scoreboard.LiveScoreboard
 import me.nebula.orbit.utils.scoreboard.liveScoreboard
 import me.nebula.orbit.utils.tablist.LiveTabList
@@ -32,10 +36,10 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.seconds
 
-class HubMode(resources: ResourceManager) : ServerMode {
+class HubMode(private val resources: ResourceManager) : ServerMode {
 
     private val logger = logger("HubMode")
-    private val config = resources.loadOrCopyDefault<HubModeConfig>("hub.json")
+    private val config = resources.loadOrCopyDefault<HubModeConfig>("hub.json", "modes/hub.json")
 
     private val resolver = placeholderResolver {
         global("online") { SessionStore.cachedSize.toString() }
@@ -57,6 +61,7 @@ class HubMode(resources: ResourceManager) : ServerMode {
 
     private fun createInstance(): InstanceContainer {
         val worldPath = Path.of(config.worldPath)
+        worldPath.parent?.let { Files.createDirectories(it) }
         if (Files.isDirectory(worldPath)) {
             logger.info { "Loading hub world from ${worldPath.toAbsolutePath()}" }
             val centerChunkX = spawnPoint.blockX() shr 4
@@ -147,13 +152,24 @@ class HubMode(resources: ResourceManager) : ServerMode {
         }
         lobby.install()
 
+
+        val raw = ModelGenerator.generateRaw(resources, "cimetery_monster.bbmodel")
+        ModelEngine.registerBlueprint("cimetery_monster", raw.blueprint)
+
+        val cimeteryMonster = standAloneModel(Pos(0.0, 65.0, 0.0)) {
+            model("cimetery_monster") { scale(.5f) }
+        }
+
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
             if (!event.isFirstSpawn) return@addListener
             hotbar.apply(event.player)
+            cimeteryMonster.position = event.player.position
+            cimeteryMonster.show(event.player)
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             hotbar.remove(event.player)
+            cimeteryMonster.hide(event.player)
         }
 
         logger.info { "Hub mode installed" }

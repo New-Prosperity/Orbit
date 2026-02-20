@@ -1,11 +1,15 @@
 # CommandBuilder
 
-Enhanced command builder DSL extending Minestom's command system. Supports aliases, permissions, player-only restriction, arguments, sub-commands, and tab completion.
+Command DSL for Minestom with virtual-thread execution, locale-aware context, typed arguments, sub-commands, and tab completion.
 
 ## Key Classes
 
 - **`CommandBuilderDsl`** -- DSL builder for command configuration
+- **`CommandExecutionContext`** -- Player + args + locale context passed to `onPlayerExecute`
 - **`command()`** -- top-level DSL entry point
+- **`OnlinePlayerCache`** -- 5-second refreshing cache of online player names
+- **`suggestPlayers(prefix)`** -- filter `OnlinePlayerCache` by prefix
+- **`resolvePlayer(name)`** -- resolve player by name (online first, then PlayerStore)
 
 ## Usage
 
@@ -13,18 +17,15 @@ Enhanced command builder DSL extending Minestom's command system. Supports alias
 val cmd = command("teleport") {
     aliases("tp", "goto")
     permission("orbit.teleport")
-    playerOnly()
 
     stringArgument("target")
 
     tabComplete { player, input ->
-        MinecraftServer.getConnectionManager().onlinePlayers
-            .map { it.username }
-            .filter { it.startsWith(input.split(" ").last(), ignoreCase = true) }
+        suggestPlayers(input.split(" ").last())
     }
 
-    onPlayerExecute { player, context ->
-        val target = context.get<String>("target")
+    onPlayerExecute {
+        val target = args.get<String>("target")
         player.sendMessage("Teleporting to $target")
     }
 }
@@ -38,15 +39,15 @@ MinecraftServer.getCommandManager().register(cmd)
 val cmd = command("arena") {
     subCommand("create") {
         stringArgument("name")
-        onPlayerExecute { player, context ->
-            val name = context.get<String>("name")
+        onPlayerExecute {
+            val name = args.get<String>("name")
             player.sendMessage("Created arena $name")
         }
     }
 
     subCommand("delete") {
         stringArgument("name")
-        onPlayerExecute { player, context ->
+        onPlayerExecute {
             player.sendMessage("Deleted arena")
         }
     }
@@ -68,9 +69,10 @@ val cmd = command("arena") {
 
 ## Details
 
-- `onExecute` receives raw `CommandSender` + `CommandContext`
-- `onPlayerExecute` automatically sets `playerOnly()` and casts sender
+- All handlers run on virtual threads (safe for blocking operations)
+- `onPlayerExecute` provides `CommandExecutionContext` with `player`, `args`, and `locale`
+- `onExecute` provides raw `CommandSender` + `CommandContext` (also on virtual thread)
+- Permission check via `RankManager.hasPermission()` (Gravity network ranks)
 - Tab completion applied to last argument's suggestion callback
 - Sub-commands are full `Command` objects added recursively
-- Permission check via Minestom's condition system
 - Player-only commands reject non-Player senders silently

@@ -29,10 +29,13 @@ import me.nebula.gravity.server.ServerStore
 import me.nebula.gravity.session.ServerOccupancyStore
 import me.nebula.gravity.session.SessionStore
 import me.nebula.gravity.stats.StatsStore
-import me.nebula.orbit.command.OnlinePlayerCache
+import me.nebula.orbit.utils.commandbuilder.OnlinePlayerCache
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.hub.HubMode
 import me.nebula.orbit.translation.OrbitTranslations
+import me.nebula.orbit.utils.customcontent.CustomContentRegistry
+import me.nebula.orbit.utils.customcontent.customContentCommand
+import me.nebula.orbit.utils.modelengine.modelEngineCommand
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
@@ -164,6 +167,14 @@ object Orbit {
         logger.info { "Server mode: ${mode::class.simpleName}" }
 
         val handler = MinecraftServer.getGlobalEventHandler()
+
+        app.resources.ensureDirectory("models")
+        CustomContentRegistry.init(app.resources, handler)
+
+        val commandManager = MinecraftServer.getCommandManager()
+        commandManager.register(modelEngineCommand(app.resources))
+        commandManager.register(customContentCommand(app.resources, serverHost))
+
         mode.install(handler)
 
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->

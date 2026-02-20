@@ -1,6 +1,7 @@
 package me.nebula.orbit.mechanic.slab
 
 import me.nebula.orbit.module.OrbitModule
+import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
 import net.minestom.server.event.player.PlayerBlockPlaceEvent
 
 private val SLAB_BLOCKS = buildSet {
@@ -32,6 +33,8 @@ class SlabModule : OrbitModule("slab") {
             val instance = event.player.instance ?: return@addListener
             val pos = event.blockPosition
             val existing = instance.getBlock(pos)
+
+            if (BlockStateAllocator.isAllocated(existing)) return@addListener
 
             if (existing.name() == event.block.name()) {
                 val existingType = existing.getProperty("type") ?: "bottom"

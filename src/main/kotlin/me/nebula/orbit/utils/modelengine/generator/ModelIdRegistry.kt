@@ -1,6 +1,6 @@
 package me.nebula.orbit.utils.modelengine.generator
 
-import java.io.File
+import me.nebula.ether.utils.resource.ResourceManager
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -8,12 +8,14 @@ object ModelIdRegistry {
 
     private val assignments = ConcurrentHashMap<String, Int>()
     private val nextId = AtomicInteger(1)
-    private var persistFile: File? = null
+    private lateinit var resources: ResourceManager
+    private lateinit var filePath: String
 
-    fun init(file: File) {
-        persistFile = file
-        if (file.exists()) {
-            file.readLines().forEach { line ->
+    fun init(resources: ResourceManager, path: String) {
+        this.resources = resources
+        this.filePath = path
+        if (resources.exists(path)) {
+            resources.readLines(path).forEach { line ->
                 val parts = line.split("=", limit = 2)
                 if (parts.size == 2) {
                     val key = parts[0].trim()
@@ -25,8 +27,7 @@ object ModelIdRegistry {
         }
     }
 
-    fun assignId(modelName: String, boneName: String): Int {
-        val key = "$modelName:$boneName"
+    fun assignId(key: String): Int {
         var isNew = false
         val id = assignments.computeIfAbsent(key) {
             isNew = true
@@ -36,8 +37,13 @@ object ModelIdRegistry {
         return id
     }
 
+    fun assignId(modelName: String, boneName: String): Int =
+        assignId("$modelName:$boneName")
+
+    fun getId(key: String): Int? = assignments[key]
+
     fun getId(modelName: String, boneName: String): Int? =
-        assignments["$modelName:$boneName"]
+        getId("$modelName:$boneName")
 
     fun all(): Map<String, Int> = assignments.toMap()
 
@@ -48,11 +54,7 @@ object ModelIdRegistry {
     }
 
     private fun save() {
-        val file = persistFile ?: return
-        file.parentFile?.mkdirs()
         val content = assignments.entries.sortedBy { it.value }.joinToString("\n") { "${it.key}=${it.value}" }
-        val temp = File(file.parentFile, "${file.name}.tmp")
-        temp.writeText(content, Charsets.UTF_8)
-        temp.renameTo(file)
+        resources.writeText(filePath, content)
     }
 }

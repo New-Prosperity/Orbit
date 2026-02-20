@@ -1,28 +1,46 @@
 package me.nebula.orbit.utils.modelengine.generator
 
+import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.blueprint.*
-import me.nebula.orbit.utils.modelengine.math.QUAT_IDENTITY
 import me.nebula.orbit.utils.modelengine.math.eulerToQuat
 import net.minestom.server.component.DataComponents
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.item.component.CustomModelData
-import java.io.File
-import java.io.FileReader
 
 object ModelGenerator {
 
-    fun generate(bbmodelFile: File, outputDir: File? = null): GenerationResult {
-        val model = FileReader(bbmodelFile).use { BlockbenchParser.parse(bbmodelFile.nameWithoutExtension, it) }
-        return generate(model, outputDir)
+    private const val MODELS_DIR = "models"
+
+    fun generate(resources: ResourceManager, path: String): GenerationResult {
+        val name = path.substringAfterLast('/').substringBeforeLast('.')
+        val model = resources.reader("$MODELS_DIR/$path").use { BlockbenchParser.parse(name, it) }
+        return generate(model)
     }
 
-    fun generate(model: BlockbenchModel, outputDir: File? = null): GenerationResult {
+    fun generate(model: BlockbenchModel): GenerationResult {
+        val raw = generateRaw(model)
+        ModelEngine.registerBlueprint(model.name, raw.blueprint)
+        val packBytes = PackWriter.write(
+            packName = model.name,
+            packDescription = "Model: ${model.name}",
+            models = raw.boneModels,
+            textureBytes = raw.textureBytes,
+        )
+        return GenerationResult(raw.blueprint, packBytes, raw.boneModels.size)
+    }
+
+    fun generateRaw(resources: ResourceManager, path: String): RawGenerationResult {
+        val name = path.substringAfterLast('/').substringBeforeLast('.')
+        val model = resources.reader("$MODELS_DIR/$path").use { BlockbenchParser.parse(name, it) }
+        return generateRaw(model)
+    }
+
+    fun generateRaw(model: BlockbenchModel): RawGenerationResult {
         val atlas = AtlasManager.stitch(model.textures)
         val atlasBytes = AtlasManager.toBytes(atlas.image)
-
         val boneModels = mutableMapOf<String, GeneratedBoneModel>()
         val blueprintBones = mutableMapOf<String, BlueprintBone>()
         val rootBoneNames = mutableListOf<String>()
@@ -33,49 +51,7 @@ object ModelGenerator {
             val elements = group.children.filterIsInstance<BbGroupChild.ElementRef>()
                 .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
 
-            val boneElements = elements.map { element ->
-                val from = floatArrayOf(
-                    (element.from.x() - group.origin.x()).toFloat() + 8f,
-                    (element.from.y() - group.origin.y()).toFloat(),
-                    (element.from.z() - group.origin.z()).toFloat() + 8f,
-                )
-                val to = floatArrayOf(
-                    (element.to.x() - group.origin.x()).toFloat() + 8f,
-                    (element.to.y() - group.origin.y()).toFloat(),
-                    (element.to.z() - group.origin.z()).toFloat() + 8f,
-                )
-
-                val rotation = if (element.rotation != Vec.ZERO) {
-                    val origin = floatArrayOf(
-                        (element.origin.x() - group.origin.x()).toFloat() + 8f,
-                        (element.origin.y() - group.origin.y()).toFloat(),
-                        (element.origin.z() - group.origin.z()).toFloat() + 8f,
-                    )
-                    val (axis, angle) = dominantAxis(element.rotation)
-                    GeneratedRotation(angle, axis, origin)
-                } else null
-
-                val faces = element.faces.mapValues { (_, face) ->
-                    val uv = if (atlas.entries.isNotEmpty() && face.texture >= 0) {
-                        val entry = AtlasManager.entryByOriginalIndex(atlas.entries, face.texture)
-                        if (entry != null) {
-                            val texW = entry.image.width.toFloat()
-                            val texH = entry.image.height.toFloat()
-                            val scaleX = 16f / atlas.width
-                            val scaleY = 16f / atlas.height
-                            floatArrayOf(
-                                face.uv[0] / texW * entry.image.width * scaleX + entry.offsetX * scaleX,
-                                face.uv[1] / texH * entry.image.height * scaleY + entry.offsetY * scaleY,
-                                face.uv[2] / texW * entry.image.width * scaleX + entry.offsetX * scaleX,
-                                face.uv[3] / texH * entry.image.height * scaleY + entry.offsetY * scaleY,
-                            )
-                        } else face.uv
-                    } else face.uv
-                    GeneratedFace(uv, 0, face.rotation)
-                }
-
-                GeneratedElement(from, to, rotation, faces)
-            }
+            val boneElements = buildBoneElements(elements, group, atlas)
 
             val texturePath = "modelengine/${model.name}_atlas"
             boneModels["${model.name}/${group.name}"] = GeneratedBoneModel(
@@ -131,22 +107,78 @@ object ModelGenerator {
             animations = animations,
         )
 
-        ModelEngine.registerBlueprint(model.name, blueprint)
-
         val textureBytes = mapOf("${model.name}_atlas.png" to atlasBytes)
-        val packBytes = PackWriter.write(
-            packName = model.name,
-            packDescription = "Model: ${model.name}",
-            models = boneModels,
-            textureBytes = textureBytes,
+        return RawGenerationResult(blueprint, boneModels, textureBytes)
+    }
+
+    fun buildBoneElements(
+        elements: List<BbElement>,
+        group: BbGroup,
+        atlas: AtlasResult,
+    ): List<GeneratedElement> = elements.map { element ->
+        val from = floatArrayOf(
+            (element.from.x() - group.origin.x()).toFloat() + 8f,
+            (element.from.y() - group.origin.y()).toFloat(),
+            (element.from.z() - group.origin.z()).toFloat() + 8f,
+        )
+        val to = floatArrayOf(
+            (element.to.x() - group.origin.x()).toFloat() + 8f,
+            (element.to.y() - group.origin.y()).toFloat(),
+            (element.to.z() - group.origin.z()).toFloat() + 8f,
         )
 
-        outputDir?.let { dir ->
-            dir.mkdirs()
-            File(dir, "${model.name}.zip").writeBytes(packBytes)
+        val rotation = if (element.rotation != Vec.ZERO) {
+            val origin = floatArrayOf(
+                (element.origin.x() - group.origin.x()).toFloat() + 8f,
+                (element.origin.y() - group.origin.y()).toFloat(),
+                (element.origin.z() - group.origin.z()).toFloat() + 8f,
+            )
+            val (axis, angle) = dominantAxis(element.rotation)
+            GeneratedRotation(angle, axis, origin)
+        } else null
+
+        val faces = element.faces.mapValues { (_, face) ->
+            val uv = if (atlas.entries.isNotEmpty() && face.texture >= 0) {
+                val entry = AtlasManager.entryByOriginalIndex(atlas.entries, face.texture)
+                if (entry != null) {
+                    val texW = entry.image.width.toFloat()
+                    val texH = entry.image.height.toFloat()
+                    val scaleX = 16f / atlas.width
+                    val scaleY = 16f / atlas.height
+                    floatArrayOf(
+                        face.uv[0] / texW * entry.image.width * scaleX + entry.offsetX * scaleX,
+                        face.uv[1] / texH * entry.image.height * scaleY + entry.offsetY * scaleY,
+                        face.uv[2] / texW * entry.image.width * scaleX + entry.offsetX * scaleX,
+                        face.uv[3] / texH * entry.image.height * scaleY + entry.offsetY * scaleY,
+                    )
+                } else face.uv
+            } else face.uv
+            GeneratedFace(uv, 0, face.rotation)
         }
 
-        return GenerationResult(blueprint, packBytes, boneModels.size)
+        GeneratedElement(from, to, rotation, faces)
+    }
+
+    fun buildFlatModel(model: BlockbenchModel): Pair<GeneratedBoneModel, ByteArray> {
+        val atlas = AtlasManager.stitch(model.textures)
+        val atlasBytes = AtlasManager.toBytes(atlas.image)
+        val allElements = mutableListOf<GeneratedElement>()
+
+        fun collectElements(group: BbGroup) {
+            val elements = group.children.filterIsInstance<BbGroupChild.ElementRef>()
+                .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
+            allElements += buildBoneElements(elements, group, atlas)
+            group.children.filterIsInstance<BbGroupChild.SubGroup>().forEach { collectElements(it.group) }
+        }
+
+        model.groups.forEach { collectElements(it) }
+
+        val texturePath = "customcontent/${model.name}_atlas"
+        val boneModel = GeneratedBoneModel(
+            textures = listOf(texturePath),
+            elements = allElements,
+        )
+        return boneModel to atlasBytes
     }
 
     private fun convertAnimation(anim: BbAnimation, flatGroups: List<BbGroup>): AnimationBlueprint {
@@ -209,6 +241,12 @@ object ModelGenerator {
     private fun snapAngle(angle: Float): Float =
         validAngles.minByOrNull { kotlin.math.abs(it - angle) } ?: 0f
 }
+
+data class RawGenerationResult(
+    val blueprint: ModelBlueprint,
+    val boneModels: Map<String, GeneratedBoneModel>,
+    val textureBytes: Map<String, ByteArray>,
+)
 
 data class GenerationResult(
     val blueprint: ModelBlueprint,

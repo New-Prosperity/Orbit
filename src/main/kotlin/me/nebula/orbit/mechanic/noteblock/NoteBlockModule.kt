@@ -1,6 +1,7 @@
 package me.nebula.orbit.mechanic.noteblock
 
 import me.nebula.orbit.module.OrbitModule
+import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
 import net.kyori.adventure.sound.Sound
 import net.minestom.server.event.player.PlayerBlockInteractEvent
 import net.minestom.server.sound.SoundEvent
@@ -31,6 +32,7 @@ class NoteBlockModule : OrbitModule("noteblock") {
 
         eventNode.addListener(PlayerBlockInteractEvent::class.java) { event ->
             if (event.block.name() != "minecraft:note_block") return@addListener
+            if (BlockStateAllocator.isAllocated(event.block)) return@addListener
 
             val instance = event.player.instance ?: return@addListener
             val pos = event.blockPosition

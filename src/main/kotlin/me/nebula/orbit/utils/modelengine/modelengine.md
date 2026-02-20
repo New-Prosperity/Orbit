@@ -13,13 +13,17 @@ Minestom-native custom entity model system. Renders Blockbench models as `ITEM_D
 
 ## Quick Start
 
+Place `.bbmodel` files in `data/models/`. The `ResourceManager`-based overloads automatically resolve paths under `data/models/`.
+
 ```kotlin
 // 1. Install the engine
 ModelEngine.install()
 
-// 2. Register a blueprint (from JSON)
-val blueprint = BlueprintLoader.load("dragon", FileReader("dragon.json"))
-ModelEngine.registerBlueprint("dragon", blueprint)
+// 2. Load a .bbmodel from data/models/ and register the blueprint
+ModelIdRegistry.init(resources, "model_ids.dat")
+val result = ModelGenerator.generate(resources, "dragon.bbmodel")
+// resolves to data/models/dragon.bbmodel
+// result.blueprint is auto-registered with ModelEngine
 
 // 3. Attach to an entity
 val modeled = modeledEntity(entity) {
@@ -73,18 +77,21 @@ Entity-only features (mount controllers, root motion, leash) gracefully degrade:
 
 ## Blueprint Loading
 
-### From simplified JSON
+### From .bbmodel (full pipeline — generates blueprint + resource pack)
 ```kotlin
-val blueprint = BlueprintLoader.load("name", reader)
-ModelEngine.registerBlueprint("name", blueprint)
+ModelIdRegistry.init(resources, "model_ids.dat")
+val result = ModelGenerator.generate(resources, "model.bbmodel")
+// resolves to data/models/model.bbmodel
+// result.blueprint is auto-registered with ModelEngine
+// result.packBytes is the resource pack zip
 ```
 
-### From .bbmodel (full pipeline)
+### From .bbmodel (raw — blueprint + intermediate data, no ZIP)
 ```kotlin
-ModelIdRegistry.init(File("data/model_ids.txt"))
-val result = ModelGenerator.generate(File("model.bbmodel"), File("output/"))
-// result.blueprint is auto-registered
-// result.packBytes is the resource pack zip
+val raw = ModelGenerator.generateRaw(resources, "model.bbmodel")
+// resolves to data/models/model.bbmodel
+ModelEngine.registerBlueprint("model", raw.blueprint)
+// raw.boneModels / raw.textureBytes available for custom pack merging
 ```
 
 ## Animation
@@ -212,8 +219,9 @@ val restored = ModelSerializer.deserialize(entity, data)
 ## Resource Pack Generation
 
 ```kotlin
-ModelIdRegistry.init(File("data/model_ids.txt"))
-val result = ModelGenerator.generate(File("models/dragon.bbmodel"), File("output/packs/"))
+ModelIdRegistry.init(resources, "model_ids.dat")
+val result = ModelGenerator.generate(resources, "dragon.bbmodel")
+// resolves to data/models/dragon.bbmodel
 // result.packBytes = zip file contents
 // result.blueprint = registered ModelBlueprint
 // result.boneCount = number of bone models generated
@@ -240,8 +248,7 @@ utils/modelengine/
 ├── math/ModelMath.kt              # Quaternion, OBB, interpolation math
 ├── blueprint/
 │   ├── ModelBlueprint.kt          # Immutable model data
-│   ├── BlueprintBone.kt           # Static bone definition
-│   └── BlueprintLoader.kt         # JSON loader
+│   └── BlueprintBone.kt           # Static bone definition
 ├── bone/
 │   ├── BoneTransform.kt           # Position/rotation/scale + parent combine
 │   └── ModelBone.kt               # Runtime mutable bone

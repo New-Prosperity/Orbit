@@ -3,6 +3,7 @@ package me.nebula.orbit.mechanic.block
 import me.nebula.orbit.mechanic.data.BlockDropData
 import me.nebula.orbit.mechanic.food.addExhaustion
 import me.nebula.orbit.module.OrbitModule
+import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
 import net.minestom.server.component.DataComponents
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.ItemEntity
@@ -22,6 +23,8 @@ class BlockModule : OrbitModule("block") {
             val player = event.player
             val block = event.block
             val blockPos = event.blockPosition
+
+            if (BlockStateAllocator.isAllocated(block)) return@addListener
 
             val requiresTool = block.registry()?.requiresTool() ?: false
             val tool = player.getItemInMainHand().get(DataComponents.TOOL)

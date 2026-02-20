@@ -18,6 +18,13 @@ dependencies {
     implementation("me.nebula:Gravity:1.0-SNAPSHOT")
     implementation("net.minestom:minestom:2026.02.09-1.21.11")
     implementation("net.kyori:adventure-text-minimessage:4.20.0")
+    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 application {
