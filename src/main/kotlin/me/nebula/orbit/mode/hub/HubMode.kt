@@ -1,20 +1,24 @@
 package me.nebula.orbit.mode.hub
 
-import me.nebula.ether.utils.environment.EnvironmentVariableBuilder
 import me.nebula.ether.utils.logging.logger
+import me.nebula.ether.utils.resource.ResourceManager
+import me.nebula.gravity.queue.QueueStore
 import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankStore
+import me.nebula.gravity.session.SessionStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.ServerMode
+import me.nebula.orbit.mode.config.placeholderResolver
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
 import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.hotbar.hotbar
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.lobby.Lobby
 import me.nebula.orbit.utils.lobby.lobby
-import me.nebula.orbit.utils.scoreboard.PerPlayerScoreboard
-import me.nebula.orbit.utils.scoreboard.perPlayerScoreboard
-import me.nebula.orbit.utils.tablist.tabList
+import me.nebula.orbit.utils.scoreboard.LiveScoreboard
+import me.nebula.orbit.utils.scoreboard.liveScoreboard
+import me.nebula.orbit.utils.tablist.LiveTabList
+import me.nebula.orbit.utils.tablist.liveTabList
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
@@ -24,39 +28,41 @@ import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.instance.block.Block
 import net.minestom.server.item.Material
-import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.time.Duration.Companion.seconds
 
-class HubMode(env: EnvironmentVariableBuilder) : ServerMode {
+class HubMode(resources: ResourceManager) : ServerMode {
 
     private val logger = logger("HubMode")
-    private val translations = Orbit.translations
+    private val config = resources.loadOrCopyDefault<HubModeConfig>("hub.json")
 
-    override val spawnPoint: Pos = Pos(
-        env.optional("HUB_SPAWN_X", 0.5) { it.toDouble() },
-        env.optional("HUB_SPAWN_Y", 65.0) { it.toDouble() },
-        env.optional("HUB_SPAWN_Z", 0.5) { it.toDouble() },
-        env.optional("HUB_SPAWN_YAW", 0.0f) { it.toFloat() },
-        env.optional("HUB_SPAWN_PITCH", 0.0f) { it.toFloat() },
-    )
+    private val resolver = placeholderResolver {
+        global("online") { SessionStore.cachedSize.toString() }
+        global("server") { Orbit.serverName }
+        perPlayer("rank") { player ->
+            val rankData = PlayerRankStore.load(player.uuid)
+            rankData?.let { RankStore.load(it.rank)?.name } ?: "Member"
+        }
+    }
+
+    override val spawnPoint: Pos = config.spawn.toPos()
 
     override val defaultInstance: InstanceContainer = createInstance()
 
     private lateinit var lobby: Lobby
-    private lateinit var scoreboard: PerPlayerScoreboard
+    private lateinit var scoreboard: LiveScoreboard
+    private lateinit var tabList: LiveTabList
     private lateinit var hotbar: me.nebula.orbit.utils.hotbar.Hotbar
-    private var updateTask: Task? = null
 
     private fun createInstance(): InstanceContainer {
-        val worldPath = Path.of("worlds/hub")
+        val worldPath = Path.of(config.worldPath)
         if (Files.isDirectory(worldPath)) {
             logger.info { "Loading hub world from ${worldPath.toAbsolutePath()}" }
             val centerChunkX = spawnPoint.blockX() shr 4
             val centerChunkZ = spawnPoint.blockZ() shr 4
             val (instance, future) = AnvilWorldLoader.loadAndPreload(
-                "hub", worldPath, centerChunkX, centerChunkZ, 6
+                "hub", worldPath, centerChunkX, centerChunkZ, config.preloadRadius
             )
             future.join()
             if (!AnvilWorldLoader.verifyLoaded(instance, spawnPoint)) {
@@ -73,31 +79,58 @@ class HubMode(env: EnvironmentVariableBuilder) : ServerMode {
     override fun install(handler: GlobalEventHandler) {
         logger.info { "Installing hub mode (spawn=$spawnPoint)" }
 
-        scoreboard = perPlayerScoreboard(
-            translations.require("orbit.hub.scoreboard.title", "en"),
-        ) {
-            line("")
-            line(translations.require("orbit.hub.scoreboard.online", "en"))
-            line(translations.require("orbit.hub.scoreboard.rank", "en"))
-            line("")
-            line(translations.require("orbit.hub.scoreboard.server", "en"))
-            line("")
-            line(translations.require("orbit.hub.scoreboard.website", "en"))
+        val selectorGui = gui(config.selector.title, config.selector.rows) {
+            border(Material.fromKey(config.selector.border) ?: Material.GRAY_STAINED_GLASS_PANE)
         }
 
-        val selectorGui = gui(
-            translations.require("orbit.hub.selector.title", "en"),
-            3,
-        ) {
-            border(Material.GRAY_STAINED_GLASS_PANE)
+        val actions = mapOf<String, (net.minestom.server.entity.Player) -> Unit>(
+            "open_selector" to { player -> selectorGui.open(player) }
+        )
+
+        scoreboard = liveScoreboard {
+            if (resolver.hasPlaceholders(config.scoreboard.title)) {
+                title { player -> resolver.resolve(config.scoreboard.title, player) }
+            } else {
+                title(config.scoreboard.title)
+            }
+            refreshEvery(config.scoreboard.refreshSeconds.seconds)
+            for (line in config.scoreboard.lines) {
+                if (resolver.hasPlaceholders(line)) {
+                    line { player -> resolver.resolve(line, player) }
+                } else {
+                    line(line)
+                }
+            }
+        }
+
+        tabList = liveTabList {
+            refreshEvery(config.tabList.refreshSeconds.seconds)
+            if (resolver.hasPlaceholders(config.tabList.header)) {
+                header { player -> resolver.resolve(config.tabList.header, player) }
+            } else {
+                header(config.tabList.header)
+            }
+            if (resolver.hasPlaceholders(config.tabList.footer)) {
+                footer { player -> resolver.resolve(config.tabList.footer, player) }
+            } else {
+                footer(config.tabList.footer)
+            }
         }
 
         hotbar = hotbar("hub") {
-            slot(4, itemStack(Material.COMPASS) {
-                name(translations.require("orbit.hub.selector.item", "en"))
-                glowing()
-            }) { player ->
-                selectorGui.open(player)
+            for (item in config.hotbar) {
+                val material = Material.fromKey(item.material)
+                if (material == null) {
+                    logger.warn { "Unknown material: ${item.material}" }
+                    continue
+                }
+                slot(item.slot, itemStack(material) {
+                    name(item.name)
+                    if (item.glowing) glowing()
+                }) { player ->
+                    actions[item.action]?.invoke(player)
+                        ?: logger.warn { "Unknown hotbar action: ${item.action}" }
+                }
             }
         }
         hotbar.install()
@@ -105,71 +138,30 @@ class HubMode(env: EnvironmentVariableBuilder) : ServerMode {
         lobby = lobby {
             instance = defaultInstance
             this.spawnPoint = this@HubMode.spawnPoint
-            gameMode = GameMode.ADVENTURE
-            protectBlocks = true
-            disableDamage = true
-            disableHunger = true
-            lockInventory = true
-            voidTeleportY = -64.0
+            gameMode = GameMode.valueOf(config.lobby.gameMode)
+            protectBlocks = config.lobby.protectBlocks
+            disableDamage = config.lobby.disableDamage
+            disableHunger = config.lobby.disableHunger
+            lockInventory = config.lobby.lockInventory
+            voidTeleportY = config.lobby.voidTeleportY
         }
         lobby.install()
 
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
             if (!event.isFirstSpawn) return@addListener
-            val player = event.player
-            val onlineCount = MinecraftServer.getConnectionManager().onlinePlayers.size.toString()
-            val rankData = PlayerRankStore.load(player.uuid)
-            val rankName = rankData?.let { RankStore.load(it.rank)?.name } ?: "Member"
-
-            hotbar.apply(player)
-
-            player.tabList {
-                header(translations.require("orbit.hub.tab.header", "en"))
-                footer(
-                    translations.require("orbit.hub.tab.footer", "en")
-                        .replace("<online>", onlineCount)
-                        .replace("<server>", Orbit.serverName)
-                )
-            }
-
-            scoreboard.show(player, mapOf(
-                "online" to onlineCount,
-                "rank" to rankName,
-                "server" to Orbit.serverName,
-            ))
+            hotbar.apply(event.player)
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
-            scoreboard.hide(event.player)
             hotbar.remove(event.player)
         }
-
-        updateTask = MinecraftServer.getSchedulerManager().buildTask {
-            val onlineCount = MinecraftServer.getConnectionManager().onlinePlayers.size.toString()
-            MinecraftServer.getConnectionManager().onlinePlayers.forEach { player ->
-                val rankData = PlayerRankStore.load(player.uuid)
-                val rankName = rankData?.let { RankStore.load(it.rank)?.name } ?: "Member"
-                scoreboard.update(player, mapOf(
-                    "online" to onlineCount,
-                    "rank" to rankName,
-                    "server" to Orbit.serverName,
-                ))
-                player.tabList {
-                    header(translations.require("orbit.hub.tab.header", "en"))
-                    footer(
-                        translations.require("orbit.hub.tab.footer", "en")
-                            .replace("<online>", onlineCount)
-                            .replace("<server>", Orbit.serverName)
-                    )
-                }
-            }
-        }.repeat(TaskSchedule.seconds(5)).schedule()
 
         logger.info { "Hub mode installed" }
     }
 
     override fun shutdown() {
-        updateTask?.cancel()
+        scoreboard.uninstall()
+        tabList.uninstall()
         lobby.uninstall()
         hotbar.uninstall()
     }

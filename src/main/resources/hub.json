@@ -1,0 +1,51 @@
+{
+  "worldPath": "worlds/hub",
+  "preloadRadius": 6,
+  "spawn": {
+    "x": 0.5,
+    "y": 65.0,
+    "z": 0.5,
+    "yaw": 0.0,
+    "pitch": 0.0
+  },
+  "scoreboard": {
+    "title": "<gradient:#7B68EE:#00CED1><bold>NEBULA</bold></gradient>",
+    "refreshSeconds": 5,
+    "lines": [
+      "",
+      "<gray>Online: <white>{online}",
+      "<gray>Rank: {rank}",
+      "",
+      "<gray>Server: <white>{server}",
+      "",
+      "<dark_gray>play.nebula.me"
+    ]
+  },
+  "tabList": {
+    "refreshSeconds": 5,
+    "header": "<newline><gradient:#7B68EE:#00CED1><bold>NEBULA NETWORK</bold></gradient><newline>",
+    "footer": "<newline><gray>Online: <white>{online} <dark_gray>| <gray>Server: <white>{server}<newline>"
+  },
+  "lobby": {
+    "gameMode": "ADVENTURE",
+    "protectBlocks": true,
+    "disableDamage": true,
+    "disableHunger": true,
+    "lockInventory": true,
+    "voidTeleportY": -64.0
+  },
+  "hotbar": [
+    {
+      "slot": 4,
+      "material": "minecraft:compass",
+      "name": "<green><bold>Server Selector",
+      "glowing": true,
+      "action": "open_selector"
+    }
+  ],
+  "selector": {
+    "title": "<gradient:#7B68EE:#00CED1><bold>Server Selector</bold></gradient>",
+    "rows": 3,
+    "border": "minecraft:gray_stained_glass_pane"
+  }
+}

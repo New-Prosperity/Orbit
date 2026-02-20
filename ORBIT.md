@@ -11,11 +11,12 @@ Standalone Minestom game server for the Nebula network. Runs on every server —
 
 ## Entry — `Orbit.kt`
 - `object Orbit` with `@JvmStatic fun main()`.
-- Env vars: `SERVER_NAME` (required), `GAME_MODE` (optional), `SERVER_PORT` (default 25565), `HAZELCAST_LICENSE`, `VELOCITY_SECRET`, `P_SERVER_UUID`, `SERVER_HOST`.
-- Hazelcast: lite member with 17 stores.
-- Init order: `environment {}` → `appDelegate` → `app.start()` → `MinecraftServer.init()` → `resolveMode()` → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
+- Env vars: `HAZELCAST_LICENSE` (required), `VELOCITY_SECRET` (required), `SERVER_PORT` (default 25565), `P_SERVER_UUID` (optional), `PROTON_URL` (required when `P_SERVER_UUID` set), `PROTON_API_KEY` (required when `P_SERVER_UUID` set), `SERVER_HOST` (optional).
+- **Provision self-discovery**: When `P_SERVER_UUID` is set, Orbit calls `ProtonClient.findProvisionByUuid(serverUuid)` to fetch its own provision data, deriving `serverName` from the provision's server name and `gameMode` from `provision.metadata["game_mode"]`. When `P_SERVER_UUID` is empty or no provision found, `serverName` defaults to `"orbit-local"` and `gameMode` to `null` (hub mode).
+- Hazelcast: lite member with 18 stores (includes ReconnectionStore).
+- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → `MinecraftServer.init()` → `resolveMode()` → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
 - Common listeners: `AsyncPlayerConfigurationEvent` (locale cache, set spawning instance/respawn from mode), `PlayerDisconnectEvent` (evict locale), `OnlinePlayerCache` refresh (5s).
-- `resolveMode(env)` selects `ServerMode` by `GAME_MODE` env var: `null` → `HubMode`, else → `error()` (extend here for minigames).
+- `resolveMode()` selects `ServerMode` by `GAME_MODE` env var: `null` → `HubMode(app.resources)`, else → `error()` (extend here for minigames).
 
 ## Server Mode System — `mode/`
 
@@ -30,16 +31,82 @@ interface ServerMode {
 ```
 Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Orbit.kt` delegates to it.
 
+### Config-Driven Mode System — `mode/config/`
+
+#### Shared Config Data Classes (`mode/config/ModeConfig.kt`)
+- `SpawnConfig(x, y, z, yaw, pitch)` — spawn coordinates. `toPos()` converts to Minestom `Pos`.
+- `ScoreboardConfig(title, refreshSeconds, lines)` — scoreboard layout.
+- `TabListConfig(refreshSeconds, header, footer)` — tab list layout.
+- `LobbyConfig(gameMode, protectBlocks, disableDamage, disableHunger, lockInventory, voidTeleportY)` — lobby protection settings.
+- `HotbarItemConfig(slot, material, name, glowing, action)` — hotbar item definition.
+
+#### Placeholder System (`mode/config/PlaceholderResolver.kt`)
+- `{placeholder}` syntax in config strings (curly braces, distinct from MiniMessage `<tag>`).
+- `placeholderResolver { global("name") { value }; perPlayer("name") { player -> value } }` DSL.
+- `resolve(template, player?)` — replaces `{name}` tokens with provider values.
+- `hasPlaceholders(template)` — determines static vs dynamic lines at build time.
+- Lines without placeholders become `LiveLine.Static`; lines with placeholders become `LiveLine.Dynamic`. All placeholder lines resolve with the player context.
+
 ### `HubMode` (`mode/hub/HubMode.kt`)
-- Env vars: `HUB_SPAWN_X/Y/Z/YAW/PITCH` (optional, defaults to 0.5/65.0/0.5/0/0).
-- **Hub instance**: Validates and loads Anvil world from `worlds/hub/` (requires `region/` with `.mca` files), preloads chunks centered on spawn point, verifies block data post-load. Falls back to flat grass generator if directory missing.
-- **Lobby**: `lobby {}` DSL — Adventure mode, full protection (break/place/damage/hunger/inventory), void teleport at Y=-64.
-- **Scoreboard**: `PerPlayerScoreboard` with online count, rank, server name. Updates every 5s.
-- **Tab list**: Header/footer with server branding, online count, server name. Updates every 5s.
-- **Hotbar**: Compass (slot 4) opens server selector GUI.
-- **Server selector**: 3-row GUI with border. Placeholder for game mode entries.
+- **Config-driven**: All settings loaded from `hub.json` via `ResourceManager.loadOrCopyDefault<HubModeConfig>("hub.json")`. First run copies bundled default from classpath to `data/hub.json`. Operators edit the JSON file without code changes.
+- **Config data classes**: `HubModeConfig` (`mode/hub/HubModeConfig.kt`) wraps `SpawnConfig`, `ScoreboardConfig`, `TabListConfig`, `LobbyConfig`, `List<HotbarItemConfig>`, `SelectorConfig(title, rows, border)`.
+- **Default config**: `src/main/resources/hub.json` bundled in JAR.
+- **Placeholders**: Global `{online}` (SessionStore.cachedSize), `{server}` (Orbit.serverName). Per-player `{rank}` (PlayerRankStore/RankStore lookup).
+- **Action system**: Hotbar items reference click actions by string name (e.g., `"open_selector"`). Immutable actions map built locally in `install()`. Unknown actions and invalid material keys logged as warnings.
+- **Hub instance**: Validates and loads Anvil world from `config.worldPath` (requires `region/` with `.mca` files), preloads chunks with `config.preloadRadius`, verifies block data post-load. Falls back to flat grass generator if directory missing.
+- **Lobby**: Built from `config.lobby` — `GameMode.valueOf(config.lobby.gameMode)`, all protection flags from config.
+- **Scoreboard**: Built from `config.scoreboard` — title and lines support `{placeholder}` syntax, static vs dynamic determined by placeholder presence.
+- **Tab list**: Built from `config.tabList` — same placeholder resolution for header/footer.
+- **Hotbar**: Built from `config.hotbar` — `Material.fromKey()`, maps action strings via registered actions.
+- **Server selector**: Built from `config.selector` — title, rows, border material.
 - No `MechanicLoader` — hub mode has no mechanics enabled.
-- `shutdown()` cancels update task, uninstalls lobby and hotbar.
+- `shutdown()` uninstalls scoreboard, tab list, lobby, and hotbar.
+
+### Game Engine — `mode/game/`
+Abstract lifecycle framework for minigames. Concrete modes subclass `GameMode` and implement only game-specific logic; the base class owns phases, player tracking, countdowns, timers, and cleanup.
+
+#### Phase Lifecycle
+```
+WAITING ──(minPlayers)──> STARTING ──(countdown)──> PLAYING ──(win / timer)──> ENDING ──(end timer)──> WAITING
+```
+- **WAITING**: Lobby protection, scoreboard/tablist/hotbar. Tracks players. → STARTING when `tracker.aliveCount >= minPlayers`.
+- **STARTING**: Countdown (`timing.countdownSeconds`). Cancels → WAITING if players drop below `minPlayers`.
+- **PLAYING**: `onGameSetup(players)` for game-specific prep. Grace period + game timer if configured. `eliminate(player)` → spectator, check win condition.
+- **ENDING**: `MatchResultDisplay.broadcast()`. End countdown, then reset → WAITING.
+
+#### `GamePhase.kt`
+`enum class GamePhase { WAITING, STARTING, PLAYING, ENDING }`
+
+#### `GameSettings.kt`
+- `TimingConfig(countdownSeconds, gameDurationSeconds, endingDurationSeconds, gracePeriodSeconds, minPlayers, maxPlayers, allowReconnect, disconnectEliminationSeconds, reconnectWindowSeconds)` — 0 = unlimited/disabled for duration fields. `allowReconnect` (default `true`): when `false`, disconnecting during PLAYING immediately eliminates instead of allowing reconnection. `disconnectEliminationSeconds` (default `0`): per-player auto-elimination timer after disconnect; 0 = no auto-elimination. `reconnectWindowSeconds` (default `0`): game-wide window after PLAYING starts; after expiry, all disconnected players are eliminated and new disconnects are instant eliminations; 0 = unlimited.
+- `GameSettings(worldPath, preloadRadius, spawn, scoreboard, tabList, lobby, hotbar, timing)` — wraps all config types from `mode/config/`.
+
+#### `PlayerTracker.kt`
+- `sealed interface PlayerState { Alive, Spectating, Disconnected(since) }`
+- `PlayerTracker` — `ConcurrentHashMap<UUID, PlayerState>`. Properties: `alive`, `spectating`, `disconnected` (Set<UUID>), `aliveCount`, `size`. Methods: `join`, `eliminate`, `disconnect`, `reconnect`, `remove`, `stateOf`, `isAlive`, `isSpectating`, `isDisconnected`, `contains`, `clear`.
+
+#### `GameMode.kt`
+Abstract `ServerMode` implementation. Lazy fields: `spawnPoint`, `defaultInstance` (AnvilWorldLoader), `resolver`, `stateMachine` (GameStateMachine<GamePhase>).
+
+**Composed utilities** (managed by base):
+
+| Utility | Phase | Notes |
+|---|---|---|
+| `Lobby` | WAITING | From `settings.lobby`. Created on WAITING enter, uninstalled on STARTING enter |
+| `Hotbar` | WAITING | Via `buildLobbyHotbar()` (open, null default). Uninstalled on PLAYING enter |
+| `LiveScoreboard` | All | Built once in `install()` from `settings.scoreboard` + resolver |
+| `LiveTabList` | All | Built once in `install()` from `settings.tabList` + resolver |
+| `Countdown` | STARTING | `timing.countdownSeconds`. Cancels → WAITING if players drop |
+| `MinigameTimer` | PLAYING | `timing.gameDurationSeconds`. 0 = not created. Expiry → ENDING |
+| `GracePeriodManager` | PLAYING start | `timing.gracePeriodSeconds`. 0 = skipped |
+| `MatchResultDisplay` | ENDING | Broadcasts result to all tracked players |
+| `Countdown` | ENDING | `timing.endingDurationSeconds`. Complete → reset to WAITING |
+
+**Abstract** (must implement): `settings: GameSettings`, `buildPlaceholderResolver()`, `onGameSetup(players)`, `checkWinCondition(): MatchResult?`.
+
+**Open** (default no-op): `onWaitingStart()`, `onPlayerJoinWaiting()`, `onPlayerLeaveWaiting()`, `onCountdownTick()`, `onPlayingStart()`, `onPlayerEliminated()`, `onPlayerDisconnected()`, `onPlayerReconnected()`, `onEndingStart()`, `onEndingComplete()`, `onGameReset()`, `buildLobbyHotbar(): Hotbar?`, `buildTimeExpiredResult(): MatchResult`.
+
+**Public API**: `eliminate(player)`, `forceEnd(result)`, `phase: GamePhase`, `tracker: PlayerTracker`, `gameStartTime: Long`.
 
 ## Module System — `module/OrbitModule.kt`
 Extends Ether's `Module(name, canReload = true)`. Scoped `EventNode<Event>` attaches/detaches in one operation. Override `commands()` to provide commands. Managed via `app.modules`.
@@ -414,7 +481,58 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `polar-bear` | Polar bear neutral behavior: attacks when baby nearby is hit, 6 damage, 12-block aggro range |
 | `axolotl-behavior` | Axolotl attacks drowned/guardians via `EntitySpawnEvent` tracking + `nearbyEntities`, plays dead at low HP (regenerates), grants Regeneration I to nearby players |
 
-## Utility Framework — `utils/` (127 files)
+## Utility Framework — `utils/` (173 files)
+
+### Model Engine (47)
+| Util | Summary |
+|---|---|
+| `modelengine/ModelEngine.kt` | Singleton registry, factory DSL (`modeledEntity(entity) {}`, `modeledEntity(owner) {}`, `standAloneModel(pos) {}`), 1-tick loop via `install()`/`uninstall()`, blueprint CRUD, modeled entity lifecycle, `PlayerDisconnectEvent` session cleanup (viewer eviction, mount/VFX cleanup). `ModelOwner` interface decouples from Entity |
+| `modelengine/math/ModelMath.kt` | `data class Quat(x,y,z,w)` with `operator get`/`toFloatArray()`, `eulerToQuat`/`quatToEuler` (gimbal-lock safe)/`quatSlerp`/`quatMultiply`/`quatRotateVec`/`quatInverse`/`quatNormalize`/`wrapDegrees`, `OrientedBoundingBox` (containsPoint/intersects/rayTrace), `clamp`/`lerp`/`lerpVec`/`colorArgb` |
+| `modelengine/blueprint/ModelBlueprint.kt` | Immutable model data: bone tree, animations, hitbox dimensions. `traverseDepthFirst()` visitor. `AnimationBlueprint`, `BoneKeyframes`, `Keyframe`, `InterpolationType`, `LoopMode` |
+| `modelengine/blueprint/BlueprintBone.kt` | Static bone definition: name, parent, children, offset, rotation, scale, modelItem, behaviors map, visibility |
+| `modelengine/blueprint/BlueprintLoader.kt` | Loads blueprint from simplified JSON (bones + animations). Full bbmodel via `ModelGenerator` |
+| `modelengine/bone/BoneTransform.kt` | Immutable `BoneTransform(position, leftRotation, rightRotation, scale)`. `combine(parent)` chain, `toWorldPosition(modelPos)`, `toWorldRotation(yaw)`, `lerp()` |
+| `modelengine/bone/ModelBone.kt` | Runtime mutable bone: local + animated transforms, `computeTransform()` recurses children, dirty-check. `behaviors` list, `addBehavior()`/`removeBehavior()`, inline `behavior<T>()`/`behaviorsOf<T>()` |
+| `modelengine/render/BoneRenderer.kt` | Per-player `ITEM_DISPLAY` packet renderer. Entity IDs from `-3,000,000`. Spawn/update/destroy with dirty-checking (only changed metadata). `show`/`hide`/`update`/`destroy` |
+| `modelengine/model/ActiveModel.kt` | Model instance from blueprint, owns bone map + renderer. Auto-creates behaviors from blueprint. `modelScale`, `computeTransforms()`, `initBehaviors`/`tickBehaviors`/`destroyBehaviors`, `show`/`hide`/`destroy` |
+| `modelengine/model/ModelOwner.kt` | `ModelOwner` interface (`position`, `isRemoved`, `ownerId`), `EntityModelOwner` adapter, `Entity.asModelOwner()` extension, `StandaloneModelOwner` (mutable position, no entity), `standAloneModel(pos) {}` DSL |
+| `modelengine/model/ModeledEntity.kt` | Wraps `ModelOwner`, holds multiple ActiveModels, per-player viewer tracking, `entityOrNull` for Entity-specific downcast, `tick()` (transforms → behaviors → renderer), `destroy()` calls behavior cleanup + unregisters from ModelEngine, `evictViewer()` propagates to behaviors. DSL builders |
+| `modelengine/animation/AnimationHandler.kt` | Sealed interface: `play`/`stop`/`stopAll`/`isPlaying`/`tick` |
+| `modelengine/animation/PriorityHandler.kt` | Priority-based per-bone blending. `boundModel` must be set before `play()`. Sorted priority iteration. Only resets animated bones (multi-layer safe). Weight lerp in/out |
+| `modelengine/animation/StateMachineHandler.kt` | Layered state machines via `TreeMap<Int, AnimationStateMachine>`. Resets all bones once, then ticks all layers (additive override) |
+| `modelengine/animation/AnimationStateMachine.kt` | States + conditional transitions. `animationStateMachine { state(); transition() }` DSL |
+| `modelengine/animation/AnimationProperty.kt` | Per-bone animation state (pos/rot/scale), `blend()`, `fromKeyframes()` |
+| `modelengine/animation/KeyframeInterpolator.kt` | Binary-search keyframe evaluation with pluggable interpolation (LINEAR/CATMULLROM/BEZIER/STEP) |
+| `modelengine/animation/InterpolationFunctions.kt` | `linearVec`, `stepVec`, `catmullromVec`, `bezierVec` |
+| `modelengine/behavior/BoneBehavior.kt` | Sealed interface: `bone`, `onAdd`/`tick`/`onRemove`/`evictViewer` |
+| `modelengine/behavior/HeadBehavior.kt` | Smooth look-at from `modeledEntity.headYaw/Pitch`, configurable maxPitch/maxYaw/smoothFactor |
+| `modelengine/behavior/MountBehavior.kt` | Passenger seat via virtual Interaction entity. `mount(player)`/`dismount()`. Seat auto-teleports in tick. Seat IDs from `-3,500,000` |
+| `modelengine/behavior/NameTagBehavior.kt` | Virtual TextDisplay at bone position. Reactive `text` property. Tag auto-teleports in tick. Tag IDs from `-3,600,000` |
+| `modelengine/behavior/HeldItemBehavior.kt` | Override bone model item, restores on remove |
+| `modelengine/behavior/GhostBehavior.kt` | Sets bone invisible, restores on remove |
+| `modelengine/behavior/SegmentBehavior.kt` | Chain IK constraint: direction from parent, configurable angleLimit/rollLock |
+| `modelengine/behavior/SubHitboxBehavior.kt` | OBB hitbox at bone position, scaled by transform, with damageMultiplier |
+| `modelengine/behavior/LeashBehavior.kt` | Leash anchor delegating to `EntityLeashManager`, `attachTo(entity)`/`detach()` |
+| `modelengine/behavior/PlayerLimbBehavior.kt` | Player skin on bone (HEAD/BODY/RIGHT_ARM/LEFT_ARM/RIGHT_LEG/LEFT_LEG). Limb IDs from `-3,700,000` |
+| `modelengine/behavior/BoneBehaviorFactory.kt` | Creates behaviors from `BoneBehaviorType` enum + config map |
+| `modelengine/interaction/ModelInteraction.kt` | Ray-cast against all model SubHitboxBehavior OBBs. `raycast(player)`/`raycastAll(player)` → `ModelHitResult` |
+| `modelengine/interaction/ModelDamageEvent.kt` | Custom event: attacker, modeledEntity, bone, hitbox, hitDistance, damage, cancelled |
+| `modelengine/mount/MountManager.kt` | Orchestrates driver/passenger sessions. Captures `ClientInputPacket` for WASD/jump. Auto-dismount on sneak |
+| `modelengine/mount/MountController.kt` | Sealed interface: `tick(modeledEntity, driver, input)`. `MountInput(forward, sideways, jump, sneak)` |
+| `modelengine/mount/WalkingController.kt` | Ground movement from player input. Configurable speed/jumpVelocity |
+| `modelengine/mount/FlyingController.kt` | Flying movement from player input. Configurable speed/verticalSpeed |
+| `modelengine/vfx/VFX.kt` | Standalone ItemDisplay effect. `vfx(item) { position(); scale(); lifetime() }` DSL. Per-player show/hide. VFX IDs from `-3,800,000` |
+| `modelengine/vfx/VFXRegistry.kt` | Lifecycle management, 1-tick loop, auto-remove on lifetime expiry |
+| `modelengine/lod/LODLevel.kt` | `lodConfig { level(16.0, tickRate=1); cullDistance(64.0) }` DSL. Per-level visible/hidden bone sets |
+| `modelengine/lod/LODHandler.kt` | Closest-viewer distance evaluation. Applies bone visibility per LOD level. Per-player culling beyond max distance |
+| `modelengine/advanced/RootMotion.kt` | Extracts root bone animation delta, applies to entity position. Configurable X/Y/Z axes |
+| `modelengine/advanced/ModelSerializer.kt` | Save/load ModeledEntity state as ByteArray. Versioned binary format |
+| `modelengine/generator/BlockbenchModel.kt` | Data classes: `BbElement`, `BbGroup`, `BbFace`, `BbTexture`, `BbAnimation`, `BbKeyframe` |
+| `modelengine/generator/BlockbenchParser.kt` | Parses `.bbmodel` JSON → `BlockbenchModel`. Handles outliner hierarchy, textures, animations |
+| `modelengine/generator/ModelGenerator.kt` | Orchestrator: parse `.bbmodel` → register `ModelBlueprint` + generate resource pack zip |
+| `modelengine/generator/AtlasManager.kt` | Texture atlas stitching from base64-encoded bbmodel textures. Preserves original index order. Power-of-2 dimensions. `entryByOriginalIndex()` for UV lookup |
+| `modelengine/generator/ModelIdRegistry.kt` | Persistent custom model data ID assignment. `computeIfAbsent`-based atomic assignment. Atomic file write via temp+rename |
+| `modelengine/generator/PackWriter.kt` | Writes `pack.mcmeta`, model JSONs, textures into zip. Configurable pack format |
 
 ### Spatial (1)
 | Util | Summary |
@@ -425,10 +543,10 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | Util | Summary |
 |---|---|
 | `gui/Gui.kt` | `gui(title, rows) {}` DSL, paginated GUI, event-based click handling |
-| `scoreboard/Scoreboard.kt` | `scoreboard(title) { line(); animatedLine(); dynamicLine {} }` DSL, `PerPlayerScoreboard`, `AnimatedScoreboard`, `TeamScoreboard`, `ObjectiveTracker`, show/hide/update |
+| `scoreboard/Scoreboard.kt` | `scoreboard(title) { line(); animatedLine(); dynamicLine {} }` DSL, `PerPlayerScoreboard`, `AnimatedScoreboard`, `TeamScoreboard`, `ObjectiveTracker`, `liveScoreboard { title(); line(); refreshEvery() }` auto-managed lifecycle DSL, show/hide/update |
 | `hologram/Hologram.kt` | TextDisplay holograms, `Instance.hologram {}` global + `Player.hologram {}` packet-based per-player, DSL builder, billboard/scale/background |
 | `bossbar/BossBarManager.kt` | `bossBar(name, color, overlay) {}` DSL, show/hide/update |
-| `tablist/TabList.kt` | `Player.tabList { header(); footer() }` DSL |
+| `tablist/TabList.kt` | `Player.tabList { header(); footer() }` DSL, `liveTabList { header(); footer(); refreshEvery() }` auto-managed lifecycle DSL |
 | `actionbar/ActionBar.kt` | `Player.showActionBar(msg, durationMs)`, `clearActionBar()` |
 | `title/Title.kt` | `Player.showTitle { title(); subtitle(); fadeIn(); stay(); fadeOut() }` DSL |
 | `healthdisplay/HealthDisplay.kt` | `healthDisplay { format { } }` DSL, periodic display name health suffix updates |
@@ -520,7 +638,7 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `particle/Particle.kt` | `particleEffect(type, count, offset) {}` DSL, shapes (Circle, Sphere, Helix, Line, Cuboid), `Instance.spawnParticle/spawnParticleLine/spawnParticleCircle/spawnBlockBreakParticle` (uses `sendGroupedPacket` for batched delivery), `Player.showParticleShape {}` DSL |
 | `sound/Sound.kt` | `soundEffect(type, source, volume, pitch) {}` DSL |
 | `team/Team.kt` | `TeamManager.create(name) {}` DSL, `Player.joinTeam()` |
-| `npc/Npc.kt` | Packet-based fake player NPCs, `npc(name) { skin(); onClick() }` DSL, TextDisplay name, per-player visibility, `Instance.spawnNpc()`, `Player.showNpc/hideNpc()` |
+| `npc/Npc.kt` | Packet-based fake NPCs with `NpcVisual` sealed interface: `SkinVisual` (player skin), `EntityVisual` (any EntityType + raw metadata), `ModelVisual` (model-only, invisible INTERACTION hitbox). `npc(name) { skin(); entityType(); modelOnly(); metadata(); model {} }` DSL, configurable `nameOffset`, TextDisplay name, per-player visibility, optional `StandaloneModelOwner` for Blockbench model attachment (visibility synced), `Instance.spawnNpc()`, `Player.showNpc/hideNpc()` |
 | `chat/Chat.kt` | `mm(text)`, `Player.sendMM()`, `Instance.broadcastMM()`, `message {}` builder |
 | `placeholder/Placeholder.kt` | `PlaceholderRegistry`, `Player.resolvePlaceholders(text)` |
 | `eventbus/EventBus.kt` | Custom `EventBus`, `on<T> {}`, `emit(event)`, `globalEventBus` |
@@ -561,7 +679,7 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 - `resolvePlayer(name): Pair<UUID, String>?` via online lookup then `PlayerStore`
 
 ## Translation System — `translation/`
-- `OrbitTranslations.register(translations)` registers all keys for mechanics and utilities in `en` locale.
+- `OrbitTranslations.register(translations)` registers all keys for mechanics and utilities in `en` locale. Hub text is config-driven (not translations).
 - `TranslationExtensions.kt` provides:
   - `Player.translate(key, vararg args)` — locale-aware translation returning `Component`
   - `Player.translateRaw(key, vararg args)` — locale-aware raw string translation

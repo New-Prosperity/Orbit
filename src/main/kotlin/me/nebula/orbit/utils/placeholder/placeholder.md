@@ -27,7 +27,7 @@ Dynamic placeholder registry that integrates with MiniMessage for per-player tex
 PlaceholderRegistry.register("player_name") { it.username }
 PlaceholderRegistry.register("player_health") { "%.0f".format(it.health) }
 PlaceholderRegistry.register("online") {
-    MinecraftServer.getConnectionManager().onlinePlayers.size.toString()
+    SessionStore.size.toString()
 }
 
 val component = player.resolvePlaceholders("<gold><player_name> <gray>HP: <red><player_health>")

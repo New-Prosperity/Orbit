@@ -4,11 +4,16 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
+import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.scoreboard.Sidebar
 import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 private val miniMessage = MiniMessage.miniMessage()
 
@@ -500,4 +505,102 @@ inline fun objective(name: String, block: ObjectiveBuilder.() -> Unit): Objectiv
     val config = ObjectiveBuilder(name).apply(block).build()
     ObjectiveTracker.register(config)
     return config
+}
+
+sealed interface LiveLine {
+
+    data class Static(val content: String) : LiveLine
+
+    data class Dynamic(val provider: (Player) -> String) : LiveLine
+}
+
+class LiveScoreboard @PublishedApi internal constructor(
+    private val titleProvider: (Player) -> String,
+    private val lines: List<LiveLine>,
+    refreshInterval: Duration,
+) {
+
+    private val sidebars = ConcurrentHashMap<UUID, Sidebar>()
+    private val lineIds = lines.indices.map { "line_$it" }
+    private val eventNode = EventNode.all("live-scoreboard-${System.nanoTime()}")
+    private val refreshTask: Task
+
+    init {
+        eventNode.addListener(PlayerSpawnEvent::class.java) { event ->
+            if (event.isFirstSpawn) show(event.player)
+        }
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            hide(event.player)
+        }
+        MinecraftServer.getGlobalEventHandler().addChild(eventNode)
+        refreshTask = MinecraftServer.getSchedulerManager()
+            .buildTask(::refreshAll)
+            .repeat(TaskSchedule.millis(refreshInterval.inWholeMilliseconds))
+            .schedule()
+    }
+
+    fun show(player: Player) {
+        sidebars.remove(player.uuid)?.removeViewer(player)
+        val sidebar = Sidebar(miniMessage.deserialize(titleProvider(player)))
+        lines.forEachIndexed { index, line ->
+            val content = when (line) {
+                is LiveLine.Static -> line.content
+                is LiveLine.Dynamic -> line.provider(player)
+            }
+            sidebar.createLine(
+                Sidebar.ScoreboardLine(lineIds[index], miniMessage.deserialize(content), lines.size - index)
+            )
+        }
+        sidebar.addViewer(player)
+        sidebars[player.uuid] = sidebar
+    }
+
+    fun hide(player: Player) {
+        sidebars.remove(player.uuid)?.removeViewer(player)
+    }
+
+    fun refresh(player: Player) {
+        val sidebar = sidebars[player.uuid] ?: return
+        sidebar.setTitle(miniMessage.deserialize(titleProvider(player)))
+        lines.forEachIndexed { index, line ->
+            if (line is LiveLine.Dynamic) {
+                sidebar.updateLineContent(lineIds[index], miniMessage.deserialize(line.provider(player)))
+            }
+        }
+    }
+
+    fun refreshAll() {
+        for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
+            if (sidebars.containsKey(player.uuid)) refresh(player)
+        }
+    }
+
+    fun uninstall() {
+        refreshTask.cancel()
+        MinecraftServer.getGlobalEventHandler().removeChild(eventNode)
+        sidebars.values.forEach { sb -> sb.viewers.toList().forEach(sb::removeViewer) }
+        sidebars.clear()
+    }
+}
+
+class LiveScoreboardBuilder @PublishedApi internal constructor() {
+
+    @PublishedApi internal var titleProvider: (Player) -> String = { "" }
+    @PublishedApi internal val lines = mutableListOf<LiveLine>()
+    @PublishedApi internal var refreshInterval: Duration = 5.seconds
+
+    fun title(text: String) { titleProvider = { text } }
+
+    fun title(provider: (Player) -> String) { titleProvider = provider }
+
+    fun line(content: String) { lines += LiveLine.Static(content) }
+
+    fun line(provider: (Player) -> String) { lines += LiveLine.Dynamic(provider) }
+
+    fun refreshEvery(duration: Duration) { refreshInterval = duration }
+}
+
+inline fun liveScoreboard(block: LiveScoreboardBuilder.() -> Unit): LiveScoreboard {
+    val builder = LiveScoreboardBuilder().apply(block)
+    return LiveScoreboard(builder.titleProvider, builder.lines.toList(), builder.refreshInterval)
 }

@@ -3,18 +3,20 @@ package me.nebula.orbit.utils.countdown
 import net.minestom.server.MinecraftServer
 import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
-import java.time.Duration
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class Countdown(
     private val duration: Duration,
     private val onTick: (remaining: Duration) -> Unit,
     private val onComplete: () -> Unit,
-    private val tickInterval: Duration = Duration.ofSeconds(1),
+    private val tickInterval: Duration = 1.seconds,
 ) {
     private var task: Task? = null
     private var startTime: Long = 0
-    private val durationMs = duration.toMillis()
-    private val intervalMs = tickInterval.toMillis()
+    private val durationMs = duration.inWholeMilliseconds
+    private val intervalMs = tickInterval.inWholeMilliseconds
 
     val isRunning: Boolean get() = task != null
 
@@ -23,7 +25,7 @@ class Countdown(
             if (!isRunning) return Duration.ZERO
             val elapsed = System.currentTimeMillis() - startTime
             val remaining = durationMs - elapsed
-            return if (remaining > 0) Duration.ofMillis(remaining) else Duration.ZERO
+            return if (remaining > 0) remaining.milliseconds else Duration.ZERO
         }
 
     fun start() {
@@ -38,7 +40,7 @@ class Countdown(
                     stop()
                     onComplete()
                 } else {
-                    onTick(Duration.ofMillis(remaining))
+                    onTick(remaining.milliseconds)
                 }
             }
             .repeat(TaskSchedule.millis(intervalMs))
@@ -60,7 +62,7 @@ class CountdownBuilder @PublishedApi internal constructor(private val duration: 
 
     @PublishedApi internal var tickHandler: (Duration) -> Unit = {}
     @PublishedApi internal var completeHandler: () -> Unit = {}
-    @PublishedApi internal var interval: Duration = Duration.ofSeconds(1)
+    @PublishedApi internal var interval: Duration = 1.seconds
 
     fun onTick(handler: (remaining: Duration) -> Unit) { tickHandler = handler }
     fun onComplete(handler: () -> Unit) { completeHandler = handler }

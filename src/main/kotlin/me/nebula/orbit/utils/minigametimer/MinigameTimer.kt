@@ -7,10 +7,10 @@ import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
-import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 private val miniMessage = MiniMessage.miniMessage()
 
@@ -39,7 +39,7 @@ class MinigameTimer @PublishedApi internal constructor(
     private var bossBar: BossBar? = null
 
     val remaining: Int get() = remainingTicks
-    val remainingDuration: Duration get() = Duration.ofMillis(remainingTicks * 50L)
+    val remainingDuration: Duration get() = (remainingTicks * 50L).milliseconds
     val elapsed: Int get() = totalDurationTicks - remainingTicks
     val isRunning: Boolean get() = task != null && !paused
     val isPaused: Boolean get() = paused
@@ -164,9 +164,9 @@ class MinigameTimer @PublishedApi internal constructor(
                                     component,
                                     Component.empty(),
                                     net.kyori.adventure.title.Title.Times.times(
-                                        Duration.ZERO,
-                                        Duration.ofMillis(1100),
-                                        Duration.ofMillis(200),
+                                        java.time.Duration.ZERO,
+                                        java.time.Duration.ofMillis(1100),
+                                        java.time.Duration.ofMillis(200),
                                     ),
                                 )
                             )
@@ -192,7 +192,7 @@ class MinigameTimerBuilder @PublishedApi internal constructor(private val name: 
     @PublishedApi internal var onEnd: () -> Unit = {}
     @PublishedApi internal val milestones = mutableListOf<MilestoneCallback>()
 
-    fun duration(duration: Duration) { durationTicks = (duration.toMillis() / 50).toInt() }
+    fun duration(duration: Duration) { durationTicks = (duration.inWholeMilliseconds / 50).toInt() }
     fun durationTicks(ticks: Int) { durationTicks = ticks }
     fun display(mode: DisplayMode) { displayMode = mode }
     fun displayFormat(format: (Int) -> String) { displayFormat = format }
@@ -212,7 +212,7 @@ class MinigameTimerBuilder @PublishedApi internal constructor(private val name: 
     }
 
     fun milestone(remaining: Duration, handler: (Int) -> Unit) {
-        milestones.add(MilestoneCallback((remaining.toMillis() / 50).toInt(), handler))
+        milestones.add(MilestoneCallback((remaining.inWholeMilliseconds / 50).toInt(), handler))
     }
 
     @PublishedApi internal fun build(): MinigameTimer = MinigameTimer(

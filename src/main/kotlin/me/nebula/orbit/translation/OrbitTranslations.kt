@@ -5,7 +5,7 @@ import me.nebula.ether.utils.translation.TranslationRegistry
 object OrbitTranslations {
 
     fun register(translations: TranslationRegistry) {
-        translations.putAll("en", mechanic() + utility() + hub())
+        translations.putAll("en", mechanic() + utility())
     }
 
     private fun mechanic(): Map<String, String> = mapOf(
@@ -88,15 +88,4 @@ object OrbitTranslations {
         "orbit.util.podium.third" to "3rd Place",
     )
 
-    private fun hub(): Map<String, String> = mapOf(
-        "orbit.hub.scoreboard.title" to "<gradient:#7B68EE:#00CED1><bold>NEBULA</bold></gradient>",
-        "orbit.hub.scoreboard.online" to "<gray>Online: <white><online>",
-        "orbit.hub.scoreboard.rank" to "<gray>Rank: <rank>",
-        "orbit.hub.scoreboard.server" to "<gray>Server: <white><server>",
-        "orbit.hub.scoreboard.website" to "<dark_gray>play.nebula.me",
-        "orbit.hub.tab.header" to "\n<gradient:#7B68EE:#00CED1><bold>NEBULA NETWORK</bold></gradient>\n",
-        "orbit.hub.tab.footer" to "\n<gray>Online: <white><online> <dark_gray>| <gray>Server: <white><server>\n",
-        "orbit.hub.selector.item" to "<green><bold>Server Selector",
-        "orbit.hub.selector.title" to "<gradient:#7B68EE:#00CED1><bold>Server Selector</bold></gradient>",
-    )
 }

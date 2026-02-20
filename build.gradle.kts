@@ -29,6 +29,7 @@ kotlin {
 }
 
 tasks.shadowJar {
+    archiveFileName.set("Orbit.jar")
     mergeServiceFiles()
 }
 

@@ -8,9 +8,11 @@ import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.event.player.PlayerMoveEvent
 import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
-import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 data class GracePeriodConfig(
     val name: String,
@@ -38,7 +40,7 @@ object GracePeriodManager {
     fun apply(player: Player, configName: String) {
         val config = requireNotNull(configs[configName]) { "Grace period config '$configName' not found" }
         active[player.uuid] = GraceEntry(
-            expiresAt = System.currentTimeMillis() + config.duration.toMillis(),
+            expiresAt = System.currentTimeMillis() + config.duration.inWholeMilliseconds,
             configName = configName,
         )
     }
@@ -74,7 +76,7 @@ object GracePeriodManager {
     fun remaining(player: Player): Duration {
         val entry = active[player.uuid] ?: return Duration.ZERO
         val remaining = entry.expiresAt - System.currentTimeMillis()
-        return if (remaining > 0) Duration.ofMillis(remaining) else Duration.ZERO
+        return if (remaining > 0) remaining.milliseconds else Duration.ZERO
     }
 
     fun clearAll() {
@@ -157,7 +159,7 @@ object GracePeriodManager {
 
 class GracePeriodBuilder @PublishedApi internal constructor(private val name: String) {
 
-    @PublishedApi internal var duration: Duration = Duration.ofSeconds(5)
+    @PublishedApi internal var duration: Duration = 5.seconds
     @PublishedApi internal var cancelOnMove: Boolean = false
     @PublishedApi internal var cancelOnAttack: Boolean = false
     @PublishedApi internal var onEndHandler: ((Player) -> Unit)? = null

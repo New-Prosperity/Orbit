@@ -21,7 +21,9 @@ import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.ranking.RankingReportStore
 import me.nebula.gravity.ranking.RankingStore
+import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.gravity.sanction.SanctionStore
+import me.nebula.gravity.server.ProtonClient
 import me.nebula.gravity.server.ProvisionStore
 import me.nebula.gravity.server.ServerStore
 import me.nebula.gravity.session.ServerOccupancyStore
@@ -58,8 +60,6 @@ object Orbit {
     private val miniMessage = MiniMessage.miniMessage()
     private val localeCache = ConcurrentHashMap<UUID, String>()
 
-    val isGameServer: Boolean get() = gameMode != null
-
     fun localeOf(playerId: UUID): String =
         localeCache[playerId] ?: translations.defaultLocale
 
@@ -86,14 +86,14 @@ object Orbit {
         Thread.currentThread().contextClassLoader = Orbit::class.java.classLoader
 
         val env = environment {
-            serverName = required("SERVER_NAME")
-            gameMode = optional("GAME_MODE", "").ifEmpty { null }
             required("HAZELCAST_LICENSE")
             required("VELOCITY_SECRET")
         }
 
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
         val serverUuid = env.optional("P_SERVER_UUID", "")
+        val protonUrl = env.optional("PROTON_URL", "")
+        val protonApiKey = env.optional("PROTON_API_KEY", "")
         val serverHost = env.optional("SERVER_HOST", "").ifEmpty { null } ?: detectContainerAddress()
 
         app = appDelegate("Orbit") {
@@ -124,6 +124,7 @@ object Orbit {
                         +RankingReportStore
                         +ServerStore
                         +ProvisionStore
+                        +ReconnectionStore
                     }
                 }
             }
@@ -139,9 +140,27 @@ object Orbit {
 
         app.start().join()
 
+        if (serverUuid.isNotEmpty()) {
+            require(protonUrl.isNotEmpty()) { "PROTON_URL is required when P_SERVER_UUID is set" }
+            require(protonApiKey.isNotEmpty()) { "PROTON_API_KEY is required when P_SERVER_UUID is set" }
+            val proton = ProtonClient(protonUrl, protonApiKey)
+            val result = proton.findProvisionByUuid(serverUuid)
+            if (result != null) {
+                val (provision, server) = result
+                gameMode = provision.metadata?.get("game_mode")
+                serverName = server?.name ?: "orbit-local"
+                logger.info { "Provision discovered: name=$serverName, gameMode=$gameMode, provisionUuid=${provision.uuid}" }
+            } else {
+                serverName = "orbit-local"
+                logger.warn { "No provision found for P_SERVER_UUID=$serverUuid, using fallback serverName=$serverName" }
+            }
+        } else {
+            serverName = "orbit-local"
+        }
+
         val server = MinecraftServer.init(Auth.Velocity(env.all["VELOCITY_SECRET"]!!))
 
-        val mode: ServerMode = resolveMode(env)
+        val mode: ServerMode = resolveMode()
         logger.info { "Server mode: ${mode::class.simpleName}" }
 
         val handler = MinecraftServer.getGlobalEventHandler()
@@ -181,14 +200,13 @@ object Orbit {
                 NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid))
             }
             mode.shutdown()
-            app.modules.disableAll()
             app.stop().join()
         })
     }
 
-    private fun resolveMode(env: me.nebula.ether.utils.environment.EnvironmentVariableBuilder): ServerMode =
+    private fun resolveMode(): ServerMode =
         when (gameMode) {
-            null -> HubMode(env)
+            null -> HubMode(app.resources)
             else -> error("Unknown game mode: $gameMode")
         }
 }

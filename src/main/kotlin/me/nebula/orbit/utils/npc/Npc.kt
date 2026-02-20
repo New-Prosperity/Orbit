@@ -1,11 +1,13 @@
 package me.nebula.orbit.utils.npc
 
+import me.nebula.orbit.utils.modelengine.model.ModeledEntityBuilder
+import me.nebula.orbit.utils.modelengine.model.StandaloneModelOwner
+import me.nebula.orbit.utils.modelengine.model.standAloneModel
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
-import net.minestom.server.entity.Entity
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.EquipmentSlot
 import net.minestom.server.entity.GameMode
@@ -39,88 +41,64 @@ private const val META_DISPLAY_BACKGROUND = 25
 private const val META_DISPLAY_OPACITY = 26
 private const val META_DISPLAY_FLAGS = 27
 
+sealed interface NpcVisual {
+    data class SkinVisual(val skin: PlayerSkin?) : NpcVisual
+    data class EntityVisual(
+        val type: EntityType,
+        val metadata: Map<Int, Metadata.Entry<*>> = emptyMap(),
+    ) : NpcVisual
+    data object ModelVisual : NpcVisual
+}
+
 class Npc internal constructor(
     val entityId: Int,
     val uuid: UUID,
     val name: Component,
     val nameRaw: String,
-    val skin: PlayerSkin?,
     val position: Pos,
+    val visual: NpcVisual,
     private val onClick: ((Player) -> Unit)?,
     private val equipment: Map<EquipmentSlot, ItemStack>,
     private val nameDisplayEntityId: Int,
     private val nameDisplayUuid: UUID,
     private val lookAtPlayer: Boolean,
+    private val nameOffset: Double,
 ) {
+    internal var standaloneModel: StandaloneModelOwner? = null
+
     private val _viewers = ConcurrentHashMap.newKeySet<UUID>()
     val viewers: Set<UUID> get() = _viewers.toSet()
 
     fun show(player: Player) {
         if (!_viewers.add(player.uuid)) return
 
-        val property = skin?.let {
-            PlayerInfoUpdatePacket.Property("textures", it.textures(), it.signature())
-        }
-
-        val infoPacket = PlayerInfoUpdatePacket(
-            EnumSet.of(
-                PlayerInfoUpdatePacket.Action.ADD_PLAYER,
-                PlayerInfoUpdatePacket.Action.UPDATE_LISTED,
-            ),
-            listOf(
-                PlayerInfoUpdatePacket.Entry(
-                    uuid,
-                    nameRaw,
-                    if (property != null) listOf(property) else emptyList(),
-                    false,
-                    0,
-                    GameMode.CREATIVE,
-                    null,
-                    null,
-                    0,
-                    true,
-                )
-            ),
-        )
-        player.sendPacket(infoPacket)
-
-        val spawnPacket = SpawnEntityPacket(
-            entityId, uuid, EntityType.PLAYER,
-            position, position.yaw(), 0, Vec.ZERO,
-        )
-        player.sendPacket(spawnPacket)
-
-        val skinFlags: Byte = 0x7F
-        player.sendPacket(EntityMetaDataPacket(entityId, mapOf(
-            META_NO_GRAVITY to Metadata.Boolean(true),
-            META_SKIN_PARTS to Metadata.Byte(skinFlags),
-        )))
-
-        player.sendPacket(EntityHeadLookPacket(entityId, position.yaw()))
-
-        if (equipment.isNotEmpty()) {
-            player.sendPacket(EntityEquipmentPacket(entityId, equipment))
+        when (visual) {
+            is NpcVisual.SkinVisual -> showSkin(player, visual)
+            is NpcVisual.EntityVisual -> showEntity(player, visual)
+            is NpcVisual.ModelVisual -> showModelHitbox(player)
         }
 
         showNameDisplay(player)
-
-        MinecraftServer.getSchedulerManager().buildTask {
-            player.sendPacket(PlayerInfoRemovePacket(listOf(uuid)))
-        }.delay(net.minestom.server.timer.TaskSchedule.tick(40)).schedule()
+        standaloneModel?.show(player)
     }
 
     fun hide(player: Player) {
         if (!_viewers.remove(player.uuid)) return
+        standaloneModel?.hide(player)
         player.sendPacket(DestroyEntitiesPacket(listOf(entityId, nameDisplayEntityId)))
-        player.sendPacket(PlayerInfoRemovePacket(listOf(uuid)))
+        if (visual is NpcVisual.SkinVisual) {
+            player.sendPacket(PlayerInfoRemovePacket(listOf(uuid)))
+        }
     }
 
     fun remove() {
+        standaloneModel?.remove()
+        standaloneModel = null
         val destroyPacket = DestroyEntitiesPacket(listOf(entityId, nameDisplayEntityId))
-        val infoRemovePacket = PlayerInfoRemovePacket(listOf(uuid))
+        val needsInfoRemove = visual is NpcVisual.SkinVisual
         forEachViewer { player ->
             player.sendPacket(destroyPacket)
-            player.sendPacket(infoRemovePacket)
+            if (needsInfoRemove) player.sendPacket(PlayerInfoRemovePacket(listOf(uuid)))
         }
         _viewers.clear()
         NpcRegistry.unregister(this)
@@ -133,17 +111,109 @@ class Npc internal constructor(
 
     fun lookAt(player: Player, target: Pos) {
         if (!_viewers.contains(player.uuid)) return
+        if (visual is NpcVisual.ModelVisual) return
         val dx = target.x() - position.x()
         val dz = target.z() - position.z()
         val yaw = (-Math.toDegrees(Math.atan2(dx, dz))).toFloat()
         player.sendPacket(EntityHeadLookPacket(entityId, yaw))
+    }
+
+    internal fun tickLookAt() {
+        if (!lookAtPlayer) return
+        val hasEntity = visual !is NpcVisual.ModelVisual
+        var lastYaw = 0f
+        var lastPitch = 0f
+        forEachViewer { player ->
+            val dx = player.position.x() - position.x()
+            val dz = player.position.z() - position.z()
+            val distSq = dx * dx + dz * dz
+            if (distSq <= 100.0) {
+                val yaw = (-Math.toDegrees(Math.atan2(dx, dz))).toFloat()
+                if (hasEntity) player.sendPacket(EntityHeadLookPacket(entityId, yaw))
+                lastYaw = yaw
+                val dy = (player.position.y() + 1.62) - (position.y() + 1.62)
+                val dist = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
+                if (dist > 0.01) lastPitch = (-Math.toDegrees(Math.atan2(dy, kotlin.math.sqrt(distSq)))).toFloat()
+            }
+        }
+        standaloneModel?.modeledEntity?.let {
+            it.headYaw = lastYaw
+            it.headPitch = lastPitch
+        }
+    }
+
+    private fun showSkin(player: Player, skin: NpcVisual.SkinVisual) {
+        val property = skin.skin?.let {
+            PlayerInfoUpdatePacket.Property("textures", it.textures(), it.signature())
+        }
+
+        player.sendPacket(PlayerInfoUpdatePacket(
+            EnumSet.of(
+                PlayerInfoUpdatePacket.Action.ADD_PLAYER,
+                PlayerInfoUpdatePacket.Action.UPDATE_LISTED,
+            ),
+            listOf(
+                PlayerInfoUpdatePacket.Entry(
+                    uuid, nameRaw,
+                    if (property != null) listOf(property) else emptyList(),
+                    false, 0, GameMode.CREATIVE, null, null, 0, true,
+                )
+            ),
+        ))
+
+        player.sendPacket(SpawnEntityPacket(
+            entityId, uuid, EntityType.PLAYER,
+            position, position.yaw(), 0, Vec.ZERO,
+        ))
+
         player.sendPacket(EntityMetaDataPacket(entityId, mapOf(
             META_NO_GRAVITY to Metadata.Boolean(true),
+            META_SKIN_PARTS to Metadata.Byte(0x7F),
+        )))
+
+        player.sendPacket(EntityHeadLookPacket(entityId, position.yaw()))
+
+        if (equipment.isNotEmpty()) {
+            player.sendPacket(EntityEquipmentPacket(entityId, equipment))
+        }
+
+        MinecraftServer.getSchedulerManager().buildTask {
+            player.sendPacket(PlayerInfoRemovePacket(listOf(uuid)))
+        }.delay(net.minestom.server.timer.TaskSchedule.tick(40)).schedule()
+    }
+
+    private fun showEntity(player: Player, entity: NpcVisual.EntityVisual) {
+        player.sendPacket(SpawnEntityPacket(
+            entityId, uuid, entity.type,
+            position, position.yaw(), 0, Vec.ZERO,
+        ))
+
+        val meta = buildMap<Int, Metadata.Entry<*>> {
+            put(META_NO_GRAVITY, Metadata.Boolean(true))
+            putAll(entity.metadata)
+        }
+        player.sendPacket(EntityMetaDataPacket(entityId, meta))
+
+        if (equipment.isNotEmpty()) {
+            player.sendPacket(EntityEquipmentPacket(entityId, equipment))
+        }
+    }
+
+    private fun showModelHitbox(player: Player) {
+        player.sendPacket(SpawnEntityPacket(
+            entityId, uuid, EntityType.INTERACTION,
+            position, 0f, 0, Vec.ZERO,
+        ))
+        player.sendPacket(EntityMetaDataPacket(entityId, mapOf(
+            META_NO_GRAVITY to Metadata.Boolean(true),
+            8 to Metadata.Float(1.0f),
+            9 to Metadata.Float(2.0f),
+            10 to Metadata.Boolean(true),
         )))
     }
 
     private fun showNameDisplay(player: Player) {
-        val displayPos = position.add(0.0, 2.05, 0.0)
+        val displayPos = position.add(0.0, nameOffset, 0.0)
         player.sendPacket(SpawnEntityPacket(
             nameDisplayEntityId, nameDisplayUuid, EntityType.TEXT_DISPLAY,
             displayPos, displayPos.yaw(), 0, Vec.ZERO,
@@ -158,19 +228,6 @@ class Npc internal constructor(
             META_DISPLAY_FLAGS to Metadata.Byte(0x00),
         )
         player.sendPacket(EntityMetaDataPacket(nameDisplayEntityId, entries))
-    }
-
-    internal fun tickLookAt() {
-        if (!lookAtPlayer) return
-        forEachViewer { player ->
-            val dx = player.position.x() - position.x()
-            val dz = player.position.z() - position.z()
-            val distSq = dx * dx + dz * dz
-            if (distSq <= 100.0) {
-                val yaw = (-Math.toDegrees(Math.atan2(dx, dz))).toFloat()
-                player.sendPacket(EntityHeadLookPacket(entityId, yaw))
-            }
-        }
     }
 
     private inline fun forEachViewer(action: (Player) -> Unit) {
@@ -230,17 +287,27 @@ object NpcRegistry {
 
 class NpcBuilder @PublishedApi internal constructor(private val nameRaw: String) {
 
-    @PublishedApi internal var skin: PlayerSkin? = null
+    @PublishedApi internal var visual: NpcVisual = NpcVisual.SkinVisual(null)
     @PublishedApi internal var position: Pos = Pos.ZERO
     @PublishedApi internal var onClickHandler: ((Player) -> Unit)? = null
     @PublishedApi internal var lookAtPlayer: Boolean = true
+    @PublishedApi internal var nameOffset: Double = 2.05
     @PublishedApi internal val equipment: MutableMap<EquipmentSlot, ItemStack> = mutableMapOf()
+    @PublishedApi internal val entityMetadata: MutableMap<Int, Metadata.Entry<*>> = mutableMapOf()
+    @PublishedApi internal var modelBlock: (ModeledEntityBuilder.() -> Unit)? = null
 
-    fun skin(skin: PlayerSkin) { this.skin = skin }
-    fun skin(textures: String, signature: String) { this.skin = PlayerSkin(textures, signature) }
+    fun skin(skin: PlayerSkin) { visual = NpcVisual.SkinVisual(skin) }
+    fun skin(textures: String, signature: String) { visual = NpcVisual.SkinVisual(PlayerSkin(textures, signature)) }
+    fun entityType(type: EntityType) { visual = NpcVisual.EntityVisual(type) }
+    fun modelOnly() { visual = NpcVisual.ModelVisual }
+
     fun position(pos: Pos) { this.position = pos }
     fun onClick(handler: (Player) -> Unit) { onClickHandler = handler }
     fun lookAtPlayer(enabled: Boolean) { lookAtPlayer = enabled }
+    fun nameOffset(offset: Double) { nameOffset = offset }
+
+    fun metadata(index: Int, entry: Metadata.Entry<*>) { entityMetadata[index] = entry }
+
     fun helmet(item: ItemStack) { equipment[EquipmentSlot.HELMET] = item }
     fun chestplate(item: ItemStack) { equipment[EquipmentSlot.CHESTPLATE] = item }
     fun leggings(item: ItemStack) { equipment[EquipmentSlot.LEGGINGS] = item }
@@ -248,21 +315,34 @@ class NpcBuilder @PublishedApi internal constructor(private val nameRaw: String)
     fun mainHand(item: ItemStack) { equipment[EquipmentSlot.MAIN_HAND] = item }
     fun offHand(item: ItemStack) { equipment[EquipmentSlot.OFF_HAND] = item }
 
+    fun model(block: ModeledEntityBuilder.() -> Unit) { modelBlock = block }
+
     @PublishedApi internal fun build(): Npc {
+        val resolvedVisual = when (val v = visual) {
+            is NpcVisual.EntityVisual -> if (entityMetadata.isNotEmpty()) {
+                v.copy(metadata = v.metadata + entityMetadata)
+            } else v
+            else -> v
+        }
+
         val name = miniMessage.deserialize(nameRaw)
         val npc = Npc(
             entityId = nextEntityId.getAndDecrement(),
             uuid = UUID.randomUUID(),
             name = name,
             nameRaw = nameRaw,
-            skin = skin,
             position = position,
+            visual = resolvedVisual,
             onClick = onClickHandler,
             equipment = equipment.toMap(),
             nameDisplayEntityId = nextEntityId.getAndDecrement(),
             nameDisplayUuid = UUID.randomUUID(),
             lookAtPlayer = lookAtPlayer,
+            nameOffset = nameOffset,
         )
+        modelBlock?.let { block ->
+            npc.standaloneModel = standAloneModel(position, block)
+        }
         NpcRegistry.register(npc)
         return npc
     }

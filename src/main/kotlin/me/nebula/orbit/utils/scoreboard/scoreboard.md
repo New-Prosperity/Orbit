@@ -1,6 +1,51 @@
 # Scoreboard
 
-Unified scoreboard system: basic `ManagedScoreboard`, `PerPlayerScoreboard` with placeholders, `AnimatedScoreboard` with frame cycling, `TeamScoreboard` with auto-assign, and `ObjectiveTracker` for score tracking with multiple display modes.
+Unified scoreboard system: basic `ManagedScoreboard`, `PerPlayerScoreboard` with placeholders, `AnimatedScoreboard` with frame cycling, `TeamScoreboard` with auto-assign, `ObjectiveTracker` for score tracking, and `LiveScoreboard` for auto-managed lifecycle.
+
+## LiveScoreboard
+
+Self-managing scoreboard with automatic show/hide/refresh lifecycle. Auto-shows on first spawn, hides on disconnect, refreshes on a configurable interval. No manual event wiring needed.
+
+```kotlin
+val board = liveScoreboard {
+    title("<gold>MY SERVER")
+    refreshEvery(5.seconds)
+
+    line("")
+    line { "Online: <white>${SessionStore.size}" }
+    line { player ->
+        val rank = PlayerRankStore.load(player.uuid)
+            ?.let { RankStore.load(it.rank)?.name } ?: "Member"
+        "Rank: <white>$rank"
+    }
+    line("")
+    line("<gray>play.example.com")
+}
+
+board.uninstall()
+```
+
+### LiveScoreboardBuilder API
+
+| Method | Description |
+|---|---|
+| `title(String)` | Static MiniMessage title |
+| `title((Player) -> String)` | Dynamic per-player title |
+| `line(String)` | Static line, evaluated once on show |
+| `line((Player) -> String)` | Dynamic line, re-evaluated every refresh |
+| `refreshEvery(Duration)` | Refresh interval (default 5s) |
+
+### LiveScoreboard API
+
+| Method | Description |
+|---|---|
+| `show(player)` | Manually show to a player |
+| `hide(player)` | Manually hide from a player |
+| `refresh(player)` | Re-evaluate dynamic lines for one player |
+| `refreshAll()` | Re-evaluate dynamic lines for all viewers |
+| `uninstall()` | Cancel task, remove event node, hide all |
+
+---
 
 ## ManagedScoreboard
 
