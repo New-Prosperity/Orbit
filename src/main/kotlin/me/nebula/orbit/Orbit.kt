@@ -7,6 +7,7 @@ import me.nebula.ether.utils.hazelcast.hazelcastModule
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
+import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.gravity.economy.EconomyStore
 import me.nebula.gravity.economy.EconomyTransactionStore
 import me.nebula.gravity.messaging.NetworkMessenger
@@ -23,7 +24,6 @@ import me.nebula.gravity.ranking.RankingReportStore
 import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.gravity.sanction.SanctionStore
-import me.nebula.gravity.server.ProtonClient
 import me.nebula.gravity.server.ProvisionStore
 import me.nebula.gravity.server.ServerStore
 import me.nebula.gravity.session.ServerOccupancyStore
@@ -31,11 +31,21 @@ import me.nebula.gravity.session.SessionStore
 import me.nebula.gravity.stats.StatsStore
 import me.nebula.orbit.utils.commandbuilder.OnlinePlayerCache
 import me.nebula.orbit.mode.ServerMode
+import me.nebula.orbit.mode.game.hoplite.HopliteMode
 import me.nebula.orbit.mode.hub.HubMode
 import me.nebula.orbit.translation.OrbitTranslations
 import me.nebula.orbit.utils.customcontent.CustomContentRegistry
 import me.nebula.orbit.utils.customcontent.customContentCommand
+import me.nebula.orbit.utils.modelengine.ModelEngine
+import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
+import me.nebula.orbit.utils.cinematic.cinematicTestCommand
 import me.nebula.orbit.utils.modelengine.modelEngineCommand
+import me.nebula.orbit.cosmetic.CosmeticListener
+import me.nebula.orbit.cosmetic.CosmeticMenu
+import me.nebula.orbit.cosmetic.CosmeticRegistry
+import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.orbit.utils.customcontent.armor.armorTestCommand
+import me.nebula.orbit.utils.screen.screenTestCommand
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
@@ -95,8 +105,6 @@ object Orbit {
 
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
         val serverUuid = env.optional("P_SERVER_UUID", "")
-        val protonUrl = env.optional("PROTON_URL", "")
-        val protonApiKey = env.optional("PROTON_API_KEY", "")
         val serverHost = env.optional("SERVER_HOST", "").ifEmpty { null } ?: detectContainerAddress()
 
         app = appDelegate("Orbit") {
@@ -128,6 +136,7 @@ object Orbit {
                         +ServerStore
                         +ProvisionStore
                         +ReconnectionStore
+                        +CosmeticStore
                     }
                 }
             }
@@ -144,18 +153,15 @@ object Orbit {
         app.start().join()
 
         if (serverUuid.isNotEmpty()) {
-            require(protonUrl.isNotEmpty()) { "PROTON_URL is required when P_SERVER_UUID is set" }
-            require(protonApiKey.isNotEmpty()) { "PROTON_API_KEY is required when P_SERVER_UUID is set" }
-            val proton = ProtonClient(protonUrl, protonApiKey)
-            val result = proton.findProvisionByUuid(serverUuid)
-            if (result != null) {
-                val (provision, server) = result
+            val cached = ProvisionStore.load(serverUuid)
+            if (cached != null) {
+                val (provision, server) = cached
                 gameMode = provision.metadata?.get("game_mode")
                 serverName = server?.name ?: "orbit-local"
                 logger.info { "Provision discovered: name=$serverName, gameMode=$gameMode, provisionUuid=${provision.uuid}" }
             } else {
                 serverName = "orbit-local"
-                logger.warn { "No provision found for P_SERVER_UUID=$serverUuid, using fallback serverName=$serverName" }
+                logger.warn { "No provision found in store for P_SERVER_UUID=$serverUuid, using fallback serverName=$serverName" }
             }
         } else {
             serverName = "orbit-local"
@@ -169,11 +175,32 @@ object Orbit {
         val handler = MinecraftServer.getGlobalEventHandler()
 
         app.resources.ensureDirectory("models")
+        ModelEngine.install()
+
         CustomContentRegistry.init(app.resources, handler)
+
+        app.resources.list("models", "bbmodel", recursive = true).forEach { path ->
+            val relativePath = path.removePrefix("models/")
+            logger.info { "Loading model: $relativePath" }
+            val raw = ModelGenerator.generateRaw(app.resources, relativePath)
+            ModelEngine.registerRaw(raw.blueprint.name, raw)
+        }
+
+        CustomContentRegistry.mergePack()
 
         val commandManager = MinecraftServer.getCommandManager()
         commandManager.register(modelEngineCommand(app.resources))
-        commandManager.register(customContentCommand(app.resources, serverHost))
+        commandManager.register(customContentCommand(app.resources))
+        commandManager.register(cinematicTestCommand())
+        commandManager.register(screenTestCommand())
+        commandManager.register(armorTestCommand())
+        commandManager.register(command("cosmetics") {
+            onPlayerExecute { CosmeticMenu.openCategoryMenu(player) }
+        })
+
+        CosmeticRegistry.loadFromResources(app.resources)
+        CosmeticListener.activeConfig = mode.cosmeticConfig
+        CosmeticListener.install(handler)
 
         mode.install(handler)
 
@@ -210,6 +237,7 @@ object Orbit {
                 logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
                 NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid))
             }
+            ModelEngine.uninstall()
             mode.shutdown()
             app.stop().join()
         })
@@ -218,6 +246,7 @@ object Orbit {
     private fun resolveMode(): ServerMode =
         when (gameMode) {
             null -> HubMode(app.resources)
+            "hoplite" -> HopliteMode(app.resources)
             else -> error("Unknown game mode: $gameMode")
         }
 }

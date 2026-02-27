@@ -1,5 +1,6 @@
 package me.nebula.orbit.mode.game
 
+import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.HotbarItemConfig
 import me.nebula.orbit.mode.config.LobbyConfig
 import me.nebula.orbit.mode.config.ScoreboardConfig
@@ -27,4 +28,5 @@ data class GameSettings(
     val lobby: LobbyConfig,
     val hotbar: List<HotbarItemConfig>,
     val timing: TimingConfig,
+    val cosmetics: CosmeticConfig? = null,
 )

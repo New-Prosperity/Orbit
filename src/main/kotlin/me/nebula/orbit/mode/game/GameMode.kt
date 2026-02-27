@@ -5,6 +5,7 @@ import me.nebula.gravity.reconnection.ReconnectionData
 import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.ServerMode
+import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.PlaceholderResolver
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
 import me.nebula.orbit.utils.countdown.Countdown
@@ -46,6 +47,9 @@ abstract class GameMode : ServerMode {
     private val logger = logger("GameMode")
 
     abstract val settings: GameSettings
+
+    override val cosmeticConfig: CosmeticConfig get() = settings.cosmetics ?: CosmeticConfig()
+
     abstract fun buildPlaceholderResolver(): PlaceholderResolver
     abstract fun onGameSetup(players: List<Player>)
     abstract fun checkWinCondition(): MatchResult?

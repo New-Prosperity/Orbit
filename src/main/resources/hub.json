@@ -47,5 +47,9 @@
     "title": "<gradient:#7B68EE:#00CED1><bold>Server Selector</bold></gradient>",
     "rows": 3,
     "border": "minecraft:gray_stained_glass_pane"
+  },
+  "cosmetics": {
+    "enabledCategories": ["ARMOR_SKIN", "KILL_EFFECT", "TRAIL", "WIN_EFFECT", "PROJECTILE_TRAIL"],
+    "blacklist": []
   }
 }

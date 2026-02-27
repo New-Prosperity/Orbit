@@ -11,12 +11,13 @@ Standalone Minestom game server for the Nebula network. Runs on every server —
 
 ## Entry — `Orbit.kt`
 - `object Orbit` with `@JvmStatic fun main()`.
-- Env vars: `HAZELCAST_LICENSE` (required), `VELOCITY_SECRET` (required), `SERVER_PORT` (default 25565), `P_SERVER_UUID` (optional), `PROTON_URL` (required when `P_SERVER_UUID` set), `PROTON_API_KEY` (required when `P_SERVER_UUID` set), `SERVER_HOST` (optional).
-- **Provision self-discovery**: When `P_SERVER_UUID` is set, Orbit calls `ProtonClient.findProvisionByUuid(serverUuid)` to fetch its own provision data, deriving `serverName` from the provision's server name and `gameMode` from `provision.metadata["game_mode"]`. When `P_SERVER_UUID` is empty or no provision found, `serverName` defaults to `"orbit-local"` and `gameMode` to `null` (hub mode).
+- Env vars: `HAZELCAST_LICENSE` (required), `VELOCITY_SECRET` (required), `SERVER_PORT` (default 25565), `P_SERVER_UUID` (optional), `SERVER_HOST` (optional).
+- **Provision self-discovery**: When `P_SERVER_UUID` is set, Orbit looks up `ProvisionStore.load(serverUuid)` from the distributed Hazelcast store (populated by Pulsar's `ServerSynchronizer.sync()`), deriving `serverName` from the provision's server name and `gameMode` from `provision.metadata["game_mode"]`. No direct Proton API call needed — Orbit relies on the cluster-synced store. When `P_SERVER_UUID` is empty or no provision found, `serverName` defaults to `"orbit-local"` and `gameMode` to `null` (hub mode).
 - Hazelcast: lite member with 18 stores (includes ReconnectionStore).
-- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `CustomContentRegistry.init()` → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
+- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `ModelEngine.install()` → `CustomContentRegistry.init()` (loads items, blocks, armors) → load `.bbmodel` model files → `CustomContentRegistry.mergePack()` (generates armor shaders, merges all) → register commands (model, cc, cinematic, screen, armor) → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
+- **Resource pack**: Pack is merged at startup but NOT sent from Orbit — pack distribution is delegated to the proxy.
 - Common listeners: `AsyncPlayerConfigurationEvent` (locale cache, set spawning instance/respawn from mode), `PlayerDisconnectEvent` (evict locale), `OnlinePlayerCache` refresh (5s).
-- `resolveMode()` selects `ServerMode` by `gameMode` (sourced from Proton provision `metadata["game_mode"]`, NOT an env var): `null` → `HubMode(app.resources)`, else → `error()` (extend here for minigames).
+- `resolveMode()` selects `ServerMode` by `gameMode` (sourced from Proton provision `metadata["game_mode"]`, NOT an env var): `null` → `HubMode(app.resources)`, `"hoplite"` → `HopliteMode(app.resources)`, else → `error()`.
 
 ## Server Mode System — `mode/`
 
@@ -25,11 +26,12 @@ Standalone Minestom game server for the Nebula network. Runs on every server —
 interface ServerMode {
     val defaultInstance: InstanceContainer
     val spawnPoint: Pos
+    val cosmeticConfig: CosmeticConfig  // default = all enabled
     fun install(handler: GlobalEventHandler)
     fun shutdown()
 }
 ```
-Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Orbit.kt` delegates to it.
+Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Orbit.kt` delegates to it. `cosmeticConfig` has a default implementation returning `CosmeticConfig()` (all categories enabled, empty blacklist) so existing/future modes work without changes.
 
 ### Config-Driven Mode System — `mode/config/`
 
@@ -39,6 +41,7 @@ Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Or
 - `TabListConfig(refreshSeconds, header, footer)` — tab list layout.
 - `LobbyConfig(gameMode, protectBlocks, disableDamage, disableHunger, lockInventory, voidTeleportY)` — lobby protection settings.
 - `HotbarItemConfig(slot, material, name, glowing, action)` — hotbar item definition.
+- `CosmeticConfig(enabledCategories, blacklist)` — per-mode cosmetic filtering. `enabledCategories` lists allowed `CosmeticCategory` names (default: all five). `blacklist` lists specific cosmetic IDs to block even if category is enabled. Both default to all-enabled / empty for backwards compatibility.
 
 #### Placeholder System (`mode/config/PlaceholderResolver.kt`)
 - `{placeholder}` syntax in config strings (curly braces, distinct from MiniMessage `<tag>`).
@@ -49,7 +52,7 @@ Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Or
 
 ### `HubMode` (`mode/hub/HubMode.kt`)
 - **Config-driven**: All settings loaded from `modes/hub.json` via `ResourceManager.loadOrCopyDefault<HubModeConfig>("hub.json", "modes/hub.json")`. First run copies bundled default from classpath to `data/modes/hub.json`. Operators edit the JSON file without code changes.
-- **Config data classes**: `HubModeConfig` (`mode/hub/HubModeConfig.kt`) wraps `SpawnConfig`, `ScoreboardConfig`, `TabListConfig`, `LobbyConfig`, `List<HotbarItemConfig>`, `SelectorConfig(title, rows, border)`.
+- **Config data classes**: `HubModeConfig` (`mode/hub/HubModeConfig.kt`) wraps `SpawnConfig`, `ScoreboardConfig`, `TabListConfig`, `LobbyConfig`, `List<HotbarItemConfig>`, `SelectorConfig(title, rows, border)`, `CosmeticConfig`.
 - **Default config**: `src/main/resources/hub.json` bundled in JAR.
 - **Placeholders**: Global `{online}` (SessionStore.cachedSize), `{server}` (Orbit.serverName). Per-player `{rank}` (PlayerRankStore/RankStore lookup).
 - **Action system**: Hotbar items reference click actions by string name (e.g., `"open_selector"`). Immutable actions map built locally in `install()`. Unknown actions and invalid material keys logged as warnings.
@@ -79,7 +82,7 @@ WAITING ──(minPlayers)──> STARTING ──(countdown)──> PLAYING ─�
 
 #### `GameSettings.kt`
 - `TimingConfig(countdownSeconds, gameDurationSeconds, endingDurationSeconds, gracePeriodSeconds, minPlayers, maxPlayers, allowReconnect, disconnectEliminationSeconds, reconnectWindowSeconds)` — 0 = unlimited/disabled for duration fields. `allowReconnect` (default `true`): when `false`, disconnecting during PLAYING immediately eliminates instead of allowing reconnection. `disconnectEliminationSeconds` (default `0`): per-player auto-elimination timer after disconnect; 0 = no auto-elimination. `reconnectWindowSeconds` (default `0`): game-wide window after PLAYING starts; after expiry, all disconnected players are eliminated and new disconnects are instant eliminations; 0 = unlimited.
-- `GameSettings(worldPath, preloadRadius, spawn, scoreboard, tabList, lobby, hotbar, timing)` — wraps all config types from `mode/config/`.
+- `GameSettings(worldPath, preloadRadius, spawn, scoreboard, tabList, lobby, hotbar, timing, cosmetics)` — wraps all config types from `mode/config/`. `cosmetics` defaults to `CosmeticConfig()` (all enabled).
 
 #### `PlayerTracker.kt`
 - `sealed interface PlayerState { Alive, Spectating, Disconnected(since) }`
@@ -107,6 +110,30 @@ Abstract `ServerMode` implementation. Lazy fields: `spawnPoint`, `defaultInstanc
 **Open** (default no-op): `onWaitingStart()`, `onPlayerJoinWaiting()`, `onPlayerLeaveWaiting()`, `onCountdownTick()`, `onPlayingStart()`, `onPlayerEliminated()`, `onPlayerDisconnected()`, `onPlayerReconnected()`, `onEndingStart()`, `onEndingComplete()`, `onGameReset()`, `buildLobbyHotbar(): Hotbar?`, `buildTimeExpiredResult(): MatchResult`.
 
 **Public API**: `eliminate(player)`, `forceEnd(result)`, `phase: GamePhase`, `tracker: PlayerTracker`, `gameStartTime: Long`.
+
+### `HopliteMode` (`mode/game/hoplite/HopliteMode.kt`)
+FFA last-player-standing battle royale. First concrete `GameMode` implementation.
+
+- **Config-driven**: Loaded from `modes/hoplite.json` via `ResourceManager.loadOrCopyDefault<HopliteModeConfig>("hoplite.json", "modes/hoplite.json")`.
+- **Config data classes**: `HopliteModeConfig` (`mode/game/hoplite/HopliteModeConfig.kt`) wraps `SpawnConfig`, `List<SpawnConfig>` (spawn points), `ScoreboardConfig`, `TabListConfig`, `LobbyConfig`, `List<HotbarItemConfig>`, `TimingConfig`, `BorderConfig`, `KitConfig`, `CosmeticConfig`.
+  - `BorderConfig(initialDiameter, finalDiameter, centerX, centerZ, shrinkStartSeconds, shrinkDurationSeconds)` — world border shrink phase.
+  - `KitConfig(helmet?, chestplate?, leggings?, boots?, items: List<KitItemConfig>)` — starter gear. Materials as key strings (`minecraft:iron_sword`).
+  - `KitItemConfig(slot, material, amount)` — inventory slot item.
+- **Default config**: `src/main/resources/hoplite.json` — flat world, 16 spread spawn points, iron gear kit, 200→20 border shrink over 5min after 1min delay, 10min game, 15s grace, 2-16 players, 10s countdown.
+- **Placeholders**: Global `{online}`, `{server}`, `{alive}`, `{phase}`. Per-player `{kills}`.
+- **Gameplay**:
+  - WAITING: lobby protection, scoreboard, tab list (all managed by base `GameMode`).
+  - STARTING: 10s countdown, cancels if players drop below minimum.
+  - PLAYING: players shuffled and teleported to spawn points, starter kit applied via `Kit` DSL, `ManagedWorldBorder` initialized. Grace period prevents damage for first 15s (managed by base `GracePeriodManager`). After `shrinkStartSeconds`, border shrinks to `finalDiameter` over `shrinkDurationSeconds`.
+  - Kill tracking: `EntityDamageEvent` listener via `EventNode.all()` on global handler (matches `DeathMessageHandler` / `OrbitModule` patterns). Tags target with `Tag<UUID>` of last attacker (same pattern as `DeathMessageHandler`). On lethal damage: cancels event, heals target, credits killer via `StatTracker`, calls `eliminate()`.
+  - Elimination: broadcasts per-player translated message (`orbit.game.hoplite.elimination` via `Player.translate()`), switches eliminated player to spectator.
+  - Win condition: `tracker.aliveCount <= 1` → winner is last alive. On timer expiry (`MinigameTimer`): player with most kills wins via `StatTracker.top()`.
+  - ENDING: `MatchResult` (via `matchResult {}` DSL) with winner, kill stats, game duration. `MatchResultDisplay` broadcasts titles + chat summary.
+- **Reconnection**: disabled (`allowReconnect = false`). Disconnect during PLAYING = immediate elimination.
+- **Mechanics**: delegates to Orbit's mechanic system (`combat`, `armor`, `fall-damage`, `food`, `projectile`, `shield`, `sprint`, `void-damage` etc. — all enabled when `GAME_MODE` is set).
+- **Translation keys**: `orbit.game.hoplite.elimination` — registered in `OrbitTranslations.game()`.
+- **Utilities reused**: `GameMode` (base), `Kit` DSL, `ManagedWorldBorder` DSL, `StatTracker`, `PlaceholderResolver` DSL, `MatchResult` DSL, `delay()` scheduler, `TranslationRegistry` via `Player.translate()`, `Tag<UUID>` (DeathMessageHandler pattern), `EventNode.all()` (OrbitModule pattern).
+- **Activation**: `resolveMode()` in `Orbit.kt` maps `"hoplite"` → `HopliteMode(app.resources)`. Set via Proton provision `metadata["game_mode"] = "hoplite"`.
 
 ## Module System — `module/OrbitModule.kt`
 Extends Ether's `Module(name, canReload = true)`. Scoped `EventNode<Event>` attaches/detaches in one operation. Override `commands()` to provide commands. Managed via `app.modules`.
@@ -481,8 +508,8 @@ Modular vanilla Minecraft mechanics. Each is an `OrbitModule` subclass using sco
 | `polar-bear` | Polar bear neutral behavior: attacks when baby nearby is hit, 6 damage, 12-block aggro range |
 | `axolotl-behavior` | Axolotl attacks drowned/guardians via `EntitySpawnEvent` tracking + `nearbyEntities`, plays dead at low HP (regenerates), grants Regeneration I to nearby players |
 
-## Custom Content System — `utils/customcontent/` (15 files)
-Custom item and block system with JSON config or code DSL definitions, Blockbench `.bbmodel` model source, and resource pack merging.
+## Custom Content System — `utils/customcontent/` (23 files)
+Custom item, block, and 3D armor system with JSON config or code DSL definitions, Blockbench `.bbmodel` model source, GLSL shader generation, and resource pack merging.
 
 ### Architecture
 | File | Summary |
@@ -499,7 +526,7 @@ Custom item and block system with JSON config or code DSL definitions, Blockbenc
 | `event/CustomBlockPlaceHandler.kt` | `PlayerBlockPlaceEvent` listener: detects held CustomModelData item → sets allocated vanilla block state, decrements item, plays place sound |
 | `event/CustomBlockBreakHandler.kt` | `PlayerBlockBreakEvent` listener: detects custom block → spawns drops (self or loot table), plays break sound |
 | `event/CustomBlockInteractHandler.kt` | `PlayerBlockInteractEvent` listener: cancels vanilla interactions on custom block states |
-| `pack/PackMerger.kt` | Merges ModelEngine bones + custom item/block models into single ZIP with SHA-1. `merge(modelsDir, rawResults)` → `MergeResult(packBytes, sha1)` |
+| `pack/PackMerger.kt` | Merges ModelEngine bones + custom item/block models + armor shader entries into single ZIP with SHA-1. `merge(modelsDir, rawResults, armorShaderEntries)` → `MergeResult(packBytes, sha1)`. All ModelEngine assets under `modelengine` namespace. Armor shader entries injected as-is (paths like `assets/minecraft/shaders/...`) |
 | `pack/ItemModelOverrideWriter.kt` | Generates `models/item/{material}.json` with sorted CustomModelData override entries |
 | `pack/BlockStateWriter.kt` | Generates `blockstates/{block}.json` with complete `variants` for `full` (note_block/mushroom) and `thin` (carpet) hitbox types. Non-allocated states fall back to vanilla model. Other hitbox types skip blockstate generation (placed block renders as vanilla material) |
 
@@ -527,16 +554,49 @@ Non-`full`/`thin` hitbox types provide the correct collision shape but render as
 data/customcontent/
 ├── items/           (JSON item definitions)
 ├── blocks/          (JSON block definitions)
-├── models/          (.bbmodel files)
+├── models/          (.bbmodel files for items/blocks)
+├── armors/          (.bbmodel files for 3D armor sets)
 ├── allocations.dat  (persistent block state allocations)
 ├── model_ids.dat    (persistent CustomModelData IDs)
 └── pack.zip         (merged resource pack output)
 ```
 
+### Custom 3D Armor — `armor/` (8 files)
+Shader-based 3D armor rendering. Players equip dyed leather armor; client-side GLSL raycasting replaces flat leather texture with 3D cubes defined in `.bbmodel` files.
+
+| File | Summary |
+|---|---|
+| `ArmorPart.kt` | Sealed class: 9 armor body parts (`Helmet`, `Chestplate`, `RightArm`, `LeftArm`, `InnerArmor`, `RightLeg`, `LeftLeg`, `RightBoot`, `LeftBoot`) with bone prefix, STASIS constant, layer, `isLeft`. `fromBoneName()` auto-detection |
+| `ArmorDefinition.kt` | Data classes: `ArmorCube` (center, halfSize, rotation, pivot, uvFaces), `ArmorCubeUv`, `ParsedArmorPiece`, `ParsedArmor`, `RegisteredArmor` (id, colorId, RGB, parsed data) |
+| `ArmorParser.kt` | Parses `.bbmodel` via `BlockbenchParser`, walks bone hierarchy, auto-detects armor pieces by prefix. Coordinate transform: BB → TBN space (bone-relative positioning). Left-part 180° mirror via sign multiplier. Handles nested prefixed sub-groups, multi-level rotations |
+| `ArmorGlslGenerator.kt` | Converts parsed cubes → GLSL `ADD_BOX_WITH_ROTATION_ROTATE` macros. `generateArmorGlsl()` produces dual-section file (`#ifdef VSH`/`#ifdef FSH`). `generateArmorcordsGlsl()` produces RGB → armorId mapping |
+| `ArmorShaderPack.kt` | Assembles all shader pack entries: 16 static shader files from classpath + generated `armor.glsl` + `armorcords.glsl` + leather layer textures with marker pixels. Returns `Map<String, ByteArray>` |
+| `CustomArmorRegistry.kt` | Registry with `ConcurrentHashMap`. `loadFromResources(resources, dir)` auto-detects `.bbmodel` files. `register()` assigns color IDs via `ModelIdRegistry`. Extension functions: `createItem(ArmorPart)`, `equipFullSet(Player)` |
+| `ArmorTestCommand.kt` | `/armor list` (show registered armors), `/armor equip <id>` (full set), `/armor give <id> <slot>` (single piece) |
+
+**Bone prefix convention** (case-insensitive):
+| Prefix | Part | STASIS | Layer |
+|---|---|---|---|
+| `h_` | Helmet | 199 | 1 |
+| `c_` | Chestplate | 299 | 1 |
+| `ra_` | Right Arm | 399 | 1 |
+| `la_` | Left Arm | 499 | 1 |
+| `ia_` | Inner Armor | 999 | 2 |
+| `rl_` | Right Leg | 599 | 2 |
+| `ll_` | Left Leg | 699 | 2 |
+| `rb_` | Right Boot | 799 | 1 |
+| `lb_` | Left Boot | 899 | 1 |
+
+**How it works**: Each armor gets a unique RGB via `ModelIdRegistry`. Server equips leather armor dyed to that RGB. Vertex shader (`entity.vsh`) reads pixel `(63,31)` of the leather texture to identify custom armor. Fragment shader (`entity.fsh`) raycasts 3D cubes via `ADD_BOX` macros instead of rendering flat texture.
+
+**Static shaders**: 16 files in `src/main/resources/shaders/armor/` from MC 1.21.6 overlay (compatible with 1.21.11). Key files: `entity.vsh`/`entity.fsh` (core pipeline), `frag_funcs.glsl` (CEM raycasting library), `armorparts.glsl` (STASIS constants), `setup.glsl` (UV-based part detection).
+
 ### Modified Existing Files
 - `modelengine/generator/ModelIdRegistry.kt` — added `assignId(key: String)` single-arg overload, `getId(key: String)` overload
-- `modelengine/generator/ModelGenerator.kt` — added `generateRaw()` returning `RawGenerationResult(blueprint, boneModels, textureBytes)`, `buildBoneElements()` and `buildFlatModel()` helpers
-- `Orbit.kt` — calls `CustomContentRegistry.init()` before mode install
+- `modelengine/generator/ModelGenerator.kt` — added `generateRaw()` returning `RawGenerationResult(blueprint, boneModels, textureBytes)`, `buildBoneElements()` and `buildFlatModel()` helpers. Bone offsets are parent-relative (not absolute). `buildBoneElements(centerOffset)`: ModelEngine bones use `centerOffset=0f` so element [0,0,0] maps to entity position (correct rotation pivot for item_display transforms); custom content flat models use default `centerOffset=8f` (standard MC model centering). All pack paths and `ITEM_MODEL` values lowercased for Minecraft resource location compliance. Bone items use `DataComponents.ITEM_MODEL` (`"minecraft:me_<model>_<bone>"` flat naming — all under `minecraft` namespace with `me_` prefix) instead of `CUSTOM_MODEL_DATA`. All pack assets (textures, models, items) placed under `assets/minecraft/` for guaranteed client-side resolution
+- `modelengine/bone/BoneTransform.kt` — `toRelativePosition()` uses 3D Y-axis rotation matrix (not 2D rotation) to correctly position bones when the model has non-zero yaw
+- `Orbit.kt` — calls `CustomContentRegistry.init()` before mode install, auto-merges pack (pack distribution delegated to proxy)
+- `customcontent/CustomContentCommand.kt` — removed `PackServer` and `/cc send` (pack sending delegated to proxy)
 
 ## Utility Framework — `utils/` (189 files)
 
@@ -547,17 +607,17 @@ data/customcontent/
 | `modelengine/math/ModelMath.kt` | `data class Quat(x,y,z,w)` with `operator get`/`toFloatArray()`, `eulerToQuat`/`quatToEuler` (gimbal-lock safe)/`quatSlerp`/`quatMultiply`/`quatRotateVec`/`quatInverse`/`quatNormalize`/`wrapDegrees`, `OrientedBoundingBox` (containsPoint/intersects/rayTrace), `clamp`/`lerp`/`lerpVec`/`colorArgb` |
 | `modelengine/blueprint/ModelBlueprint.kt` | Immutable model data: bone tree, animations, hitbox dimensions. `traverseDepthFirst()` visitor. `AnimationBlueprint`, `BoneKeyframes`, `Keyframe`, `InterpolationType`, `LoopMode` |
 | `modelengine/blueprint/BlueprintBone.kt` | Static bone definition: name, parent, children, offset, rotation, scale, modelItem, behaviors map, visibility |
-| `modelengine/bone/BoneTransform.kt` | Immutable `BoneTransform(position, leftRotation, rightRotation, scale)`. `combine(parent)` chain, `toWorldPosition(modelPos)`, `toWorldRotation(yaw)`, `lerp()` |
+| `modelengine/bone/BoneTransform.kt` | Immutable `BoneTransform(position, leftRotation, rightRotation, scale)`. `combine(parent)` chain, `toRelativePosition(yaw)` (bone offset rotated by model yaw — for display entity translation), `toWorldPosition(modelPos)` (absolute world coords — for behaviors), `toWorldRotation(yaw)`, `lerp()` |
 | `modelengine/bone/ModelBone.kt` | Runtime mutable bone: local + animated transforms, `computeTransform()` recurses children, dirty-check. `behaviors` list, `addBehavior()`/`removeBehavior()`, inline `behavior<T>()`/`behaviorsOf<T>()` |
-| `modelengine/render/BoneRenderer.kt` | Per-player `ITEM_DISPLAY` packet renderer. Entity IDs from `-3,000,000`. Spawn/update/destroy with dirty-checking (only changed metadata). `show`/`hide`/`update`/`destroy` |
-| `modelengine/model/ActiveModel.kt` | Model instance from blueprint, owns bone map + renderer. Auto-creates behaviors from blueprint. `modelScale`, `computeTransforms()`, `initBehaviors`/`tickBehaviors`/`destroyBehaviors`, `show`/`hide`/`destroy` |
+| `modelengine/render/BoneRenderer.kt` | Per-player `ITEM_DISPLAY` packet renderer. Entity IDs from `-3,000,000`. Spawn/update/destroy with dirty-checking (only changed metadata). Uses `toRelativePosition()` for META_TRANSLATION (relative to entity spawn). Teleports all bone entities to model position on movement via `EntityTeleportPacket`. `show`/`hide`/`update`/`destroy` |
+| `modelengine/model/ActiveModel.kt` | Model instance from blueprint, owns bone map + renderer + `animationHandler: PriorityHandler`. Auto-creates behaviors from blueprint. Auto-plays first animation containing "idle" at init. `modelScale`, `computeTransforms()`, `tickAnimations(deltaSeconds)`, `playAnimation(name, lerpIn, lerpOut, speed)`, `stopAnimation(name)`, `stopAllAnimations()`, `isPlayingAnimation(name)`, `initBehaviors`/`tickBehaviors`/`destroyBehaviors`, `show`/`hide`/`destroy` |
 | `modelengine/model/ModelOwner.kt` | `ModelOwner` interface (`position`, `isRemoved`, `ownerId`), `EntityModelOwner` adapter, `Entity.asModelOwner()` extension, `StandaloneModelOwner` (mutable position, no entity), `standAloneModel(pos) {}` DSL |
-| `modelengine/model/ModeledEntity.kt` | Wraps `ModelOwner`, holds multiple ActiveModels, per-player viewer tracking, `entityOrNull` for Entity-specific downcast, `tick()` (transforms → behaviors → renderer), `destroy()` calls behavior cleanup + unregisters from ModelEngine, `evictViewer()` propagates to behaviors. DSL builders |
+| `modelengine/model/ModeledEntity.kt` | Wraps `ModelOwner`, holds multiple ActiveModels, per-player viewer tracking, `entityOrNull` for Entity-specific downcast, `tick()` (animations → transforms → behaviors → renderer at 1/20s delta), `destroy()` calls behavior cleanup + unregisters from ModelEngine, `evictViewer()` propagates to behaviors. DSL builders: `ActiveModelBuilder.animation(name, lerpIn, lerpOut, speed)` |
 | `modelengine/animation/AnimationHandler.kt` | Sealed interface: `play`/`stop`/`stopAll`/`isPlaying`/`tick` |
 | `modelengine/animation/PriorityHandler.kt` | Priority-based per-bone blending. `boundModel` must be set before `play()`. Sorted priority iteration. Only resets animated bones (multi-layer safe). Weight lerp in/out |
 | `modelengine/animation/StateMachineHandler.kt` | Layered state machines via `TreeMap<Int, AnimationStateMachine>`. Resets all bones once, then ticks all layers (additive override) |
 | `modelengine/animation/AnimationStateMachine.kt` | States + conditional transitions. `animationStateMachine { state(); transition() }` DSL |
-| `modelengine/animation/AnimationProperty.kt` | Per-bone animation state (pos/rot/scale), `blend()`, `fromKeyframes()` |
+| `modelengine/animation/AnimationProperty.kt` | Per-bone animation state (pos/rot/scale), `blend()`, `fromKeyframes()` (positions divided by 16 for pixel→block conversion) |
 | `modelengine/animation/KeyframeInterpolator.kt` | Binary-search keyframe evaluation with pluggable interpolation (LINEAR/CATMULLROM/BEZIER/STEP) |
 | `modelengine/animation/InterpolationFunctions.kt` | `linearVec`, `stepVec`, `catmullromVec`, `bezierVec` |
 | `modelengine/behavior/BoneBehavior.kt` | Sealed interface: `bone`, `onAdd`/`tick`/`onRemove`/`evictViewer` |
@@ -585,7 +645,7 @@ data/customcontent/
 | `modelengine/advanced/ModelSerializer.kt` | Save/load ModeledEntity state as ByteArray. Versioned binary format |
 | `modelengine/generator/BlockbenchModel.kt` | Data classes: `BbElement`, `BbGroup`, `BbFace`, `BbTexture`, `BbAnimation`, `BbKeyframe` |
 | `modelengine/generator/BlockbenchParser.kt` | Parses `.bbmodel` JSON → `BlockbenchModel`. Handles outliner hierarchy, textures, animations |
-| `modelengine/generator/ModelGenerator.kt` | Orchestrator: parse `.bbmodel` → register `ModelBlueprint` + generate resource pack zip |
+| `modelengine/generator/ModelGenerator.kt` | Orchestrator: parse `.bbmodel` → register `ModelBlueprint` + generate resource pack zip. Bone items use `ITEM_MODEL` component (`"minecraft:me_<model>_<bone>"` flat naming under `minecraft` namespace) for direct model resolution. All pack assets placed under `assets/minecraft/` (textures, models, items) with `me_` prefix to avoid collisions |
 | `modelengine/generator/AtlasManager.kt` | Texture atlas stitching from base64-encoded bbmodel textures. Preserves original index order. Power-of-2 dimensions. `entryByOriginalIndex()` for UV lookup |
 | `modelengine/generator/ModelIdRegistry.kt` | Persistent custom model data ID assignment. `computeIfAbsent`-based atomic assignment. Atomic file write via temp+rename |
 | `modelengine/generator/PackWriter.kt` | Writes `pack.mcmeta`, model JSONs, textures into zip. Configurable pack format |
@@ -720,7 +780,7 @@ data/customcontent/
 | `raytrace/RayTrace.kt` | `rayTraceBlock()`, `rayTraceEntity()`, `raycast()` (entity+block in one pass with bounding box checks), `Player.lookDirection/rayTraceBlock/rayTraceEntity/lookingAt/getLookedAtEntity/getLookedAtBlock` extensions |
 | `hotbar/Hotbar.kt` | `hotbar(name) { slot(0, item) { ... } }` DSL, apply/remove/install |
 | `portal/Portal.kt` | `portal(name) { region(); destination }` DSL, `PortalManager` |
-| `resourcepack/ResourcePack.kt` | `ResourcePackManager`, pack registration, auto-send on join |
+| ~~`resourcepack/`~~ | Removed — pack sending delegated to proxy |
 | `animation/Animation.kt` | `blockAnimation {}` / `entityAnimation {}` DSL, keyframes, interpolation, `packetOnly` mode for visual-only block animations via `BlockChangePacket` |
 | `inventorylayout/InventoryLayout.kt` | `inventoryLayout { border(); slot(); pattern(); centerItems() }` DSL |
 | `entityai/EntityAI.kt` | `creature.configureAI { hostile(); passive(); neutral() }` DSL, AI presets |
@@ -732,6 +792,8 @@ data/customcontent/
 | `podium/Podium.kt` | `podium(instance) { first(); second(); third(); displayDuration() }` DSL, pedestal blocks, firework, auto-cleanup |
 | `coinflip/CoinFlip.kt` | `coinFlip { onHeads {}; onTails {} }`, `diceRoll(sides) {}`, `weightedRandom<T> {}` DSL, animated reveal |
 | `spectatorcam/SpectatorCam.kt` | `spectatorCam(player) { target(); mode(FIRST_PERSON/FREE_CAM/ORBIT) }` DSL, orbit camera, player cycling |
+| `cinematic/CinematicCamera.kt` | `cinematic(player) { node(time, pos); lookAt(entity); loop(); onComplete {} }` DSL, keyframe path with catmull-rom/bezier/linear position interpolation, quaternion slerp rotation, dynamic lookAt target tracking, reuses `KeyframeInterpolator` + `quatSlerp` |
+| `screen/Screen.kt` | `screen(player, cameraPos) { cursor {}; button(id, x, y, w, h) { onClick {}; hoverScale() }; label(id, x, y) { text() } }` DSL, packet-only 2D screen projection with ITEM_DISPLAY cursor, AABB hit-testing, hover feedback, delta-based mouse input via OAK_BOAT mount, `ScreenProjection.kt` math engine |
 | `chestloot/ChestLoot.kt` | `chestLoot(name) { tier("common") { item() }; fillChestsInRegion() }` DSL, weighted tiers, amount ranges |
 | `npcdialog/NPCDialog.kt` | `npcDialog(npcName) { page("greeting") { text(); option("quest") {} } }` DSL, tree-structured dialog, clickable chat options |
 | `autorestart/AutoRestart.kt` | `autoRestart { after(6.hours); warnings(30.minutes, 10.minutes); warningMessage(); onRestart {} }` DSL, `AutoRestartManager.scheduleRestart/cancelRestart/getTimeRemaining`, broadcast warnings, kick on restart |
@@ -745,6 +807,69 @@ data/customcontent/
 | `broadcastscheduler/BroadcastScheduler.kt` | `broadcastScheduler { intervalSeconds(300); shuffled = true; message("<gold>Welcome!") }` DSL, `BroadcastScheduler` with `start()`/`stop()`/`isRunning`, cyclic message rotation to all online players |
 | `motd/Motd.kt` | `motd { line1 = "<gradient:gold:yellow>Nebula"; line2 = "<gray>Play now!" }` DSL, `MotdManager` singleton with `AtomicReference<MotdConfig>`, `ServerListPingEvent` listener, MiniMessage rendering |
 | `pagination/Pagination.kt` | `paginatedView<T> { items(); pageSize = 10; render { item, index -> }; header {}; footer {} }` DSL, `PaginatedView.send(player, page)`, translated header/footer, auto page clamping |
+
+## Cosmetics System — `cosmetic/`
+Player visual customization system with persistent ownership/equip state via Hazelcast stores and GUI menus.
+
+### Categories
+| Category | Visual Effect | Utility |
+|---|---|---|
+| `ARMOR_SKIN` | Custom armor texture/model on player | `CustomArmorRegistry.equipFullSet()` |
+| `KILL_EFFECT` | Particle burst at victim's death location | `Instance.showParticleShape {}` |
+| `TRAIL` | Particle trail behind player while moving | Scheduled + `Instance.spawnParticleAt()` |
+| `WIN_EFFECT` | Celebratory particles around winner | `Player.showParticleShape {}` |
+| `PROJECTILE_TRAIL` | Particles along arrow flight path | Tick task + `Instance.spawnParticleAt()` |
+
+### CosmeticDefinition (`CosmeticDefinition.kt`)
+- `CosmeticRarity` enum: `COMMON` (`<gray>`), `RARE` (`<blue>`), `EPIC` (`<dark_purple>`), `LEGENDARY` (`<gold>`)
+- `CosmeticDefinition` data class: `id`, `category` (CosmeticCategory), `nameKey`, `descriptionKey`, `rarity`, `material` (GUI display), `data` (category-specific config map)
+
+### CosmeticRegistry (`CosmeticRegistry.kt`)
+In-memory `object` singleton backed by `ConcurrentHashMap`:
+- `register(definition)` — adds to registry
+- `get(id)` / `operator []` — lookup by ID
+- `byCategory(category)` — filter by category
+- `all()` — all definitions
+- `loadFromResources(resources)` — loads `cosmetics.json` via `ResourceManager.loadOrCopyDefault`
+
+### CosmeticMenu (`CosmeticMenu.kt`)
+GUI menus using `gui {}` and `paginatedGui {}` DSL:
+- `openCategoryMenu(player)` — 3-row GUI with one icon per category
+- `openCosmeticList(player, category)` — paginated list, items show owned/equipped status via glowing/lore, click to equip/unequip
+- Equip/unequip via `CosmeticStore.executeOnKey(uuid, EquipCosmeticProcessor(...))`
+
+### CosmeticApplier (`CosmeticApplier.kt`)
+Applies visual effects based on equipped cosmetics:
+- `applyArmorSkin(player, cosmeticId)` — `data["armorId"]` → `CustomArmorRegistry[armorId]?.equipFullSet(player)`
+- `clearArmorSkin(player)` — removes all armor equipment
+- `playKillEffect(instance, position, cosmeticId)` — reads `data["particle"]` + `data["shape"]`, calls `instance.showParticleShape {}`
+- `playWinEffect(player, cosmeticId)` — same pattern on player
+- `spawnTrailParticle(instance, position, cosmeticId)` — single particle spawn per tick
+- `spawnProjectileTrailParticle(instance, position, cosmeticId)` — projectile particle spawn
+
+### CosmeticListener (`CosmeticListener.kt`)
+Event listeners via `EventNode.all("cosmetic-listeners")`:
+- **Per-mode filtering**: `@Volatile var activeConfig: CosmeticConfig` — set by `Orbit.kt` from `mode.cosmeticConfig` before `install()`. Every cosmetic operation checks `isAllowed(category, cosmeticId)` which verifies `category.name in activeConfig.enabledCategories && cosmeticId !in activeConfig.blacklist`.
+- **Trail**: `PlayerMoveEvent` — throttled to 200ms, spawns trail particle at player position (gated by TRAIL category + blacklist)
+- **Projectile trail**: 2-tick scheduled task — scans arrows, reads shooter tag, spawns particle (gated by PROJECTILE_TRAIL category + blacklist)
+- **Kill effect**: `onPlayerEliminated(killer, victimPosition)` — hook from game modes (gated by KILL_EFFECT category + blacklist)
+- **Win effect**: `onGameWon(winner)` — hook from game modes (gated by WIN_EFFECT category + blacklist)
+- **Armor skin**: `PlayerSpawnEvent` — applies saved armor skin on join (gated by ARMOR_SKIN category + blacklist)
+
+### Config — `cosmetics.json`
+JSON array of `CosmeticDefinition` objects. Bundled default has 10 sample cosmetics:
+- `armor_knight` (ARMOR_SKIN/RARE), `kill_flame_burst` (KILL_EFFECT/COMMON), `kill_heart_explosion` (KILL_EFFECT/EPIC)
+- `trail_flame` (TRAIL/COMMON), `trail_soul` (TRAIL/RARE), `trail_enchant` (TRAIL/EPIC)
+- `win_firework_helix` (WIN_EFFECT/RARE), `win_totem` (WIN_EFFECT/LEGENDARY)
+- `projectile_flame` (PROJECTILE_TRAIL/COMMON), `projectile_dragon` (PROJECTILE_TRAIL/LEGENDARY)
+
+### Integration
+- Store registered in `hazelcastModule { stores { +CosmeticStore } }` in Orbit.kt
+- Registry loaded after `app.start()`: `CosmeticRegistry.loadFromResources(app.resources)`
+- Active config wired from mode: `CosmeticListener.activeConfig = mode.cosmeticConfig`
+- Listener installed on global handler: `CosmeticListener.install(handler)`
+- Command: `/cosmetics` opens `CosmeticMenu.openCategoryMenu(player)`
+- JSON configs (`hub.json`, `hoplite.json`) include `cosmetics` section with `enabledCategories` and `blacklist`. Omitting the section uses Gson defaults (all categories enabled, empty blacklist).
 
 ## Translation System — `translation/`
 - `OrbitTranslations.register(translations)` registers all keys for mechanics and utilities in `en` locale. Hub text is config-driven (not translations).
@@ -825,9 +950,7 @@ Permission: `orbit.customcontent`
 | `info <id>` | `id: Word` | Show full details of item or block (checks both registries) |
 | `pack` | — | Trigger `CustomContentRegistry.mergePack()`, report size + SHA-1 |
 | `allocations` | — | Show per-hitbox pool usage: used/total for each `BlockHitbox` type |
-| `send` | — | Start embedded HTTP server (port 8080) serving `packBytes`, send resource pack URL to player |
 
 - Tab completion for `<item>` from `CustomItemRegistry.all().map { it.id }`
 - Tab completion for `<id>` from combined item + block IDs
-- `send` starts a JDK `HttpServer` on a random port (9100-9200) serving `CustomContentRegistry.packBytes` at `/pack.zip`, then sends the URL via Adventure `sendResourcePacks`. Server address from `SERVER_HOST` env var or auto-detected, fallback `127.0.0.1`
-- Registered in `Orbit.kt` after `CustomContentRegistry.init()`, receives `serverHost` for pack URL construction
+- Registered in `Orbit.kt` after `CustomContentRegistry.init()`. Pack sending removed — delegated to proxy.

@@ -1,5 +1,6 @@
 package me.nebula.orbit.mode.hub
 
+import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.HotbarItemConfig
 import me.nebula.orbit.mode.config.LobbyConfig
 import me.nebula.orbit.mode.config.ScoreboardConfig
@@ -15,6 +16,7 @@ data class HubModeConfig(
     val lobby: LobbyConfig,
     val hotbar: List<HotbarItemConfig>,
     val selector: SelectorConfig,
+    val cosmetics: CosmeticConfig? = null,
 )
 
 data class SelectorConfig(

@@ -8,6 +8,7 @@ import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.session.SessionStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.ServerMode
+import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.placeholderResolver
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
 import me.nebula.orbit.utils.gui.gui
@@ -49,6 +50,8 @@ class HubMode(private val resources: ResourceManager) : ServerMode {
             rankData?.let { RankStore.load(it.rank)?.name } ?: "Member"
         }
     }
+
+    override val cosmeticConfig: CosmeticConfig = config.cosmetics ?: CosmeticConfig()
 
     override val spawnPoint: Pos = config.spawn.toPos()
 
@@ -152,24 +155,13 @@ class HubMode(private val resources: ResourceManager) : ServerMode {
         }
         lobby.install()
 
-
-        val raw = ModelGenerator.generateRaw(resources, "cimetery_monster.bbmodel")
-        ModelEngine.registerBlueprint("cimetery_monster", raw.blueprint)
-
-        val cimeteryMonster = standAloneModel(Pos(0.0, 65.0, 0.0)) {
-            model("cimetery_monster") { scale(.5f) }
-        }
-
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
             if (!event.isFirstSpawn) return@addListener
             hotbar.apply(event.player)
-            cimeteryMonster.position = event.player.position
-            cimeteryMonster.show(event.player)
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             hotbar.remove(event.player)
-            cimeteryMonster.hide(event.player)
         }
 
         logger.info { "Hub mode installed" }

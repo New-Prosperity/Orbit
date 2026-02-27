@@ -1,0 +1,94 @@
+{
+  "worldPath": "worlds/hoplite",
+  "preloadRadius": 8,
+  "spawn": {
+    "x": 0.5,
+    "y": 65.0,
+    "z": 0.5,
+    "yaw": 0.0,
+    "pitch": 0.0
+  },
+  "spawnPoints": [
+    { "x": 20.5, "y": 65.0, "z": 0.5, "yaw": -90.0, "pitch": 0.0 },
+    { "x": -20.5, "y": 65.0, "z": 0.5, "yaw": 90.0, "pitch": 0.0 },
+    { "x": 0.5, "y": 65.0, "z": 20.5, "yaw": 180.0, "pitch": 0.0 },
+    { "x": 0.5, "y": 65.0, "z": -20.5, "yaw": 0.0, "pitch": 0.0 },
+    { "x": 14.5, "y": 65.0, "z": 14.5, "yaw": -135.0, "pitch": 0.0 },
+    { "x": -14.5, "y": 65.0, "z": 14.5, "yaw": 135.0, "pitch": 0.0 },
+    { "x": 14.5, "y": 65.0, "z": -14.5, "yaw": -45.0, "pitch": 0.0 },
+    { "x": -14.5, "y": 65.0, "z": -14.5, "yaw": 45.0, "pitch": 0.0 },
+    { "x": 25.5, "y": 65.0, "z": 10.5, "yaw": -112.0, "pitch": 0.0 },
+    { "x": -25.5, "y": 65.0, "z": 10.5, "yaw": 112.0, "pitch": 0.0 },
+    { "x": 25.5, "y": 65.0, "z": -10.5, "yaw": -68.0, "pitch": 0.0 },
+    { "x": -25.5, "y": 65.0, "z": -10.5, "yaw": 68.0, "pitch": 0.0 },
+    { "x": 10.5, "y": 65.0, "z": 25.5, "yaw": -158.0, "pitch": 0.0 },
+    { "x": -10.5, "y": 65.0, "z": 25.5, "yaw": 158.0, "pitch": 0.0 },
+    { "x": 10.5, "y": 65.0, "z": -25.5, "yaw": -22.0, "pitch": 0.0 },
+    { "x": -10.5, "y": 65.0, "z": -25.5, "yaw": 22.0, "pitch": 0.0 }
+  ],
+  "scoreboard": {
+    "title": "<gradient:#CD7F32:#FFD700><bold>HOPLITE</bold></gradient>",
+    "refreshSeconds": 2,
+    "lines": [
+      "",
+      "<gray>Phase: <white>{phase}",
+      "<gray>Alive: <green>{alive}",
+      "",
+      "<gray>Kills: <yellow>{kills}",
+      "",
+      "<gray>Server: <white>{server}",
+      "",
+      "<dark_gray>play.nebula.me"
+    ]
+  },
+  "tabList": {
+    "refreshSeconds": 3,
+    "header": "<newline><gradient:#CD7F32:#FFD700><bold>HOPLITE BATTLE ROYALE</bold></gradient><newline>",
+    "footer": "<newline><gray>Alive: <green>{alive} <dark_gray>| <gray>Kills: <yellow>{kills}<newline>"
+  },
+  "lobby": {
+    "gameMode": "ADVENTURE",
+    "protectBlocks": true,
+    "disableDamage": true,
+    "disableHunger": true,
+    "lockInventory": true,
+    "voidTeleportY": -64.0
+  },
+  "hotbar": [],
+  "timing": {
+    "countdownSeconds": 10,
+    "gameDurationSeconds": 600,
+    "endingDurationSeconds": 10,
+    "gracePeriodSeconds": 15,
+    "minPlayers": 2,
+    "maxPlayers": 16,
+    "allowReconnect": false,
+    "disconnectEliminationSeconds": 0,
+    "reconnectWindowSeconds": 0
+  },
+  "border": {
+    "initialDiameter": 200.0,
+    "finalDiameter": 20.0,
+    "centerX": 0.0,
+    "centerZ": 0.0,
+    "shrinkStartSeconds": 60,
+    "shrinkDurationSeconds": 300
+  },
+  "kit": {
+    "helmet": "minecraft:iron_helmet",
+    "chestplate": "minecraft:iron_chestplate",
+    "leggings": "minecraft:iron_leggings",
+    "boots": "minecraft:iron_boots",
+    "items": [
+      { "slot": 0, "material": "minecraft:iron_sword", "amount": 1 },
+      { "slot": 1, "material": "minecraft:bow", "amount": 1 },
+      { "slot": 2, "material": "minecraft:shield", "amount": 1 },
+      { "slot": 8, "material": "minecraft:arrow", "amount": 16 },
+      { "slot": 7, "material": "minecraft:golden_apple", "amount": 3 }
+    ]
+  },
+  "cosmetics": {
+    "enabledCategories": ["ARMOR_SKIN", "KILL_EFFECT", "TRAIL", "WIN_EFFECT", "PROJECTILE_TRAIL"],
+    "blacklist": []
+  }
+}
