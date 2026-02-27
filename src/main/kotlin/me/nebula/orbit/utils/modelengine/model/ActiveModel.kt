@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.modelengine.model
 
+import me.nebula.orbit.utils.modelengine.animation.PriorityHandler
 import me.nebula.orbit.utils.modelengine.behavior.BoneBehaviorFactory
 import me.nebula.orbit.utils.modelengine.blueprint.ModelBlueprint
 import me.nebula.orbit.utils.modelengine.bone.ModelBone
@@ -8,11 +9,12 @@ import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Player
 
-class ActiveModel(val blueprint: ModelBlueprint) {
+class ActiveModel(val blueprint: ModelBlueprint, autoPlayIdle: Boolean = true) {
 
     val bones: Map<String, ModelBone>
     val rootBones: List<ModelBone>
     val renderer = BoneRenderer()
+    val animationHandler: PriorityHandler = PriorityHandler()
 
     var modelScale: Float = 1.0f
         set(value) {
@@ -47,6 +49,13 @@ class ActiveModel(val blueprint: ModelBlueprint) {
 
         bones = boneMap
         rootBones = blueprint.rootBoneNames.mapNotNull { boneMap[it] }
+
+        animationHandler.boundModel = this
+        if (autoPlayIdle) {
+            blueprint.animations.keys
+                .firstOrNull { "idle" in it.lowercase() }
+                ?.let { playAnimation(it) }
+        }
     }
 
     fun bone(name: String): ModelBone = requireNotNull(bones[name]) { "Bone '$name' not found in model '${blueprint.name}'" }
@@ -99,4 +108,23 @@ class ActiveModel(val blueprint: ModelBlueprint) {
     fun resetAllAnimations() {
         bones.values.forEach { it.resetAnimation() }
     }
+
+    fun tickAnimations(deltaSeconds: Float) {
+        resetAllAnimations()
+        animationHandler.tick(this, deltaSeconds)
+    }
+
+    fun playAnimation(name: String, lerpIn: Float = 0f, lerpOut: Float = 0f, speed: Float = 1f) {
+        animationHandler.play(name, lerpIn, lerpOut, speed)
+    }
+
+    fun stopAnimation(name: String) {
+        animationHandler.stop(name)
+    }
+
+    fun stopAllAnimations() {
+        animationHandler.stopAll()
+    }
+
+    fun isPlayingAnimation(name: String): Boolean = animationHandler.isPlaying(name)
 }

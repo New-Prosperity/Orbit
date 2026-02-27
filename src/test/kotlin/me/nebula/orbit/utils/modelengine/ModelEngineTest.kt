@@ -156,11 +156,14 @@ class ModelEngineTest {
                 val elements = group.children.filterIsInstance<BbGroupChild.ElementRef>()
                     .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
                 if (elements.isNotEmpty()) {
-                    val generated = assertDoesNotThrow<List<GeneratedElement>>(
+                    val result = assertDoesNotThrow<ModelGenerator.BoneElementResult>(
                         "Failed to build bone elements for ${model.name}/${group.name}"
                     ) {
-                        ModelGenerator.buildBoneElements(elements, group, atlas)
+                        ModelGenerator.buildBoneElements(elements, group, atlas, model.resolution)
                     }
+                    val generated = result.elements
+                    assertTrue(result.modelScale >= 1f,
+                        "${model.name}/${group.name}: modelScale should be >= 1")
                     assertEquals(elements.size, generated.size,
                         "${model.name}/${group.name}: generated element count mismatch")
                     generated.forEach { elem ->
@@ -257,12 +260,12 @@ class ModelEngineTest {
 
             val entries = readZipEntries(packBytes)
             assertTrue("pack.mcmeta" in entries, "${file.name}: missing pack.mcmeta")
-            assertTrue(entries.any { it.startsWith("assets/minecraft/models/modelengine/") },
+            assertTrue(entries.any { it.startsWith("assets/minecraft/models/") && it.endsWith(".json") },
                 "${file.name}: no model files in pack")
-            assertTrue(entries.any { it.startsWith("assets/minecraft/textures/modelengine/") },
+            assertTrue(entries.any { it.startsWith("assets/minecraft/textures/") && it.endsWith(".png") },
                 "${file.name}: no texture files in pack")
 
-            val modelEntries = entries.filter { it.endsWith(".json") && it.contains("modelengine") }
+            val modelEntries = entries.filter { it.startsWith("assets/minecraft/models/") && it.endsWith(".json") }
             assertEquals(raw.boneModels.size, modelEntries.size - (if ("pack.mcmeta" in modelEntries) 1 else 0),
                 "${file.name}: model file count doesn't match bone count")
 

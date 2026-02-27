@@ -3,12 +3,10 @@ package me.nebula.orbit.utils.modelengine.generator
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.blueprint.*
-import me.nebula.orbit.utils.modelengine.math.eulerToQuat
 import net.minestom.server.component.DataComponents
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
-import net.minestom.server.item.component.CustomModelData
 
 object ModelGenerator {
 
@@ -39,62 +37,60 @@ object ModelGenerator {
     }
 
     fun generateRaw(model: BlockbenchModel): RawGenerationResult {
-        val atlas = AtlasManager.stitch(model.textures)
+        val atlas = AtlasManager.stitch(model.textures, cropTo = model.resolution)
         val atlasBytes = AtlasManager.toBytes(atlas.image)
         val boneModels = mutableMapOf<String, GeneratedBoneModel>()
         val blueprintBones = mutableMapOf<String, BlueprintBone>()
         val rootBoneNames = mutableListOf<String>()
         val flatGroups by lazy { model.groups.flatMap { flattenGroups(it) } }
 
-        fun processGroup(group: BbGroup, parentName: String?) {
-            val childNames = group.children.filterIsInstance<BbGroupChild.SubGroup>().map { it.group.name }
+        fun processGroup(group: BbGroup, parentName: String?, parentOrigin: Vec) {
+            val childNames = group.children.filterIsInstance<BbGroupChild.SubGroup>()
+                .filter { it.group.visibility }
+                .map { it.group.name }
             val elements = group.children.filterIsInstance<BbGroupChild.ElementRef>()
                 .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
+                .filter { it.visibility }
 
-            val boneElements = buildBoneElements(elements, group, atlas)
+            val (boneElements, boneModelScale) = buildBoneElements(elements, group, atlas, model.resolution)
 
-            val texturePath = "modelengine/${model.name}_atlas"
-            boneModels["${model.name}/${group.name}"] = GeneratedBoneModel(
-                textures = listOf(texturePath),
-                elements = boneElements,
-            )
+            val modelItem = if (boneElements.isNotEmpty()) {
+                val lowerModelName = model.name.lowercase()
+                val lowerBoneName = group.name.lowercase()
+                val boneKey = "me_${lowerModelName}_${lowerBoneName}"
+                val texturePath = "minecraft:me_${lowerModelName}_atlas"
+                boneModels[boneKey] = GeneratedBoneModel(
+                    textures = listOf(texturePath),
+                    elements = boneElements,
+                )
+                val itemModelValue = "minecraft:$boneKey"
+                ItemStack.of(Material.PAPER).with(DataComponents.ITEM_MODEL, itemModelValue)
+            } else null
 
-            val customModelDataId = ModelIdRegistry.assignId(model.name, group.name)
-            val modelItem = ItemStack.of(Material.PAPER).with(
-                DataComponents.CUSTOM_MODEL_DATA,
-                CustomModelData(listOf(customModelDataId.toFloat()), emptyList(), emptyList(), emptyList()),
-            )
-
-            val offset = Vec(
-                group.origin.x() / 16.0,
-                group.origin.y() / 16.0,
-                group.origin.z() / 16.0,
-            )
+            val convertedEuler = Vec(-group.rotation.x(), group.rotation.y(), -group.rotation.z())
 
             blueprintBones[group.name] = BlueprintBone(
                 name = group.name,
                 parentName = parentName,
                 childNames = childNames,
-                offset = offset,
-                rotation = eulerToQuat(
-                    group.rotation.x().toFloat(),
-                    group.rotation.y().toFloat(),
-                    group.rotation.z().toFloat(),
-                ),
+                offset = BbConverter.boneOffset(group.origin, parentOrigin),
+                rotation = BbConverter.boneRotation(group.rotation),
+                rotationEuler = convertedEuler,
                 scale = Vec(1.0, 1.0, 1.0),
                 modelItem = modelItem,
                 behaviors = emptyMap(),
                 visible = group.visibility,
+                modelScale = boneModelScale,
             )
 
             if (parentName == null) rootBoneNames += group.name
 
-            group.children.filterIsInstance<BbGroupChild.SubGroup>().forEach {
-                processGroup(it.group, group.name)
-            }
+            group.children.filterIsInstance<BbGroupChild.SubGroup>()
+                .filter { it.group.visibility }
+                .forEach { processGroup(it.group, group.name, group.origin) }
         }
 
-        model.groups.forEach { processGroup(it, null) }
+        model.groups.filter { it.visibility }.forEach { processGroup(it, null, Vec.ZERO) }
 
         val animations = model.animations.associate { anim ->
             anim.name to convertAnimation(anim, flatGroups)
@@ -107,56 +103,94 @@ object ModelGenerator {
             animations = animations,
         )
 
-        val textureBytes = mapOf("${model.name}_atlas.png" to atlasBytes)
+        val textureBytes = mapOf("me_${model.name.lowercase()}_atlas.png" to atlasBytes)
         return RawGenerationResult(blueprint, boneModels, textureBytes)
     }
+
+    private const val MAX_ELEMENT_EXTENT = 24f
+
+    data class BoneElementResult(val elements: List<GeneratedElement>, val modelScale: Float)
 
     fun buildBoneElements(
         elements: List<BbElement>,
         group: BbGroup,
         atlas: AtlasResult,
-    ): List<GeneratedElement> = elements.map { element ->
-        val from = floatArrayOf(
-            (element.from.x() - group.origin.x()).toFloat() + 8f,
-            (element.from.y() - group.origin.y()).toFloat(),
-            (element.from.z() - group.origin.z()).toFloat() + 8f,
-        )
-        val to = floatArrayOf(
-            (element.to.x() - group.origin.x()).toFloat() + 8f,
-            (element.to.y() - group.origin.y()).toFloat(),
-            (element.to.z() - group.origin.z()).toFloat() + 8f,
-        )
+        resolution: BbResolution,
+        centerOffset: Float = 8f,
+    ): BoneElementResult {
+        if (elements.isEmpty()) return BoneElementResult(emptyList(), 1f)
 
-        val rotation = if (element.rotation != Vec.ZERO) {
-            val origin = floatArrayOf(
-                (element.origin.x() - group.origin.x()).toFloat() + 8f,
-                (element.origin.y() - group.origin.y()).toFloat(),
-                (element.origin.z() - group.origin.z()).toFloat() + 8f,
+        var maxAbs = 0f
+        elements.forEach { element ->
+            val inf = element.inflate.toDouble()
+            val rel = element.from.sub(inf, inf, inf).sub(group.origin)
+            val relTo = element.to.add(inf, inf, inf).sub(group.origin)
+            maxAbs = maxOf(maxAbs,
+                kotlin.math.abs(rel.x().toFloat()), kotlin.math.abs(rel.y().toFloat()), kotlin.math.abs(rel.z().toFloat()),
+                kotlin.math.abs(relTo.x().toFloat()), kotlin.math.abs(relTo.y().toFloat()), kotlin.math.abs(relTo.z().toFloat()),
             )
-            val (axis, angle) = dominantAxis(element.rotation)
-            GeneratedRotation(angle, axis, origin)
-        } else null
-
-        val faces = element.faces.mapValues { (_, face) ->
-            val uv = if (atlas.entries.isNotEmpty() && face.texture >= 0) {
-                val entry = AtlasManager.entryByOriginalIndex(atlas.entries, face.texture)
-                if (entry != null) {
-                    val texW = entry.image.width.toFloat()
-                    val texH = entry.image.height.toFloat()
-                    val scaleX = 16f / atlas.width
-                    val scaleY = 16f / atlas.height
-                    floatArrayOf(
-                        face.uv[0] / texW * entry.image.width * scaleX + entry.offsetX * scaleX,
-                        face.uv[1] / texH * entry.image.height * scaleY + entry.offsetY * scaleY,
-                        face.uv[2] / texW * entry.image.width * scaleX + entry.offsetX * scaleX,
-                        face.uv[3] / texH * entry.image.height * scaleY + entry.offsetY * scaleY,
-                    )
-                } else face.uv
-            } else face.uv
-            GeneratedFace(uv, 0, face.rotation)
         }
 
-        GeneratedElement(from, to, rotation, faces)
+        val modelScale = if (maxAbs > MAX_ELEMENT_EXTENT) maxAbs / MAX_ELEMENT_EXTENT else 1f
+        val inv = 1f / modelScale
+
+        val maxU = resolution.width.toFloat()
+        val maxV = resolution.height.toFloat()
+
+        val generated = elements.map { element ->
+            val inf = element.inflate.toDouble()
+            val inflatedFrom = element.from.sub(inf, inf, inf)
+            val inflatedTo = element.to.add(inf, inf, inf)
+            val (from, to) = BbConverter.elementCoords(inflatedFrom, inflatedTo, group.origin, inv, centerOffset)
+
+            val rotation = if (element.rotation != Vec.ZERO) {
+                val origin = BbConverter.rotationOrigin(element.origin, group.origin, inv, centerOffset)
+                val (axis, angle) = dominantAxis(element.rotation)
+                GeneratedRotation(angle, axis, origin)
+            } else null
+
+            val faces = element.faces
+                .filter { (_, face) ->
+                    face.texture >= 0 &&
+                        kotlin.math.abs(face.uv[2] - face.uv[0]) > 0.001f &&
+                        kotlin.math.abs(face.uv[3] - face.uv[1]) > 0.001f &&
+                        face.uv[0] in 0f..maxU && face.uv[1] in 0f..maxV &&
+                        face.uv[2] in 0f..maxU && face.uv[3] in 0f..maxV
+                }
+                .mapValues { (_, face) ->
+                    val uv = bbUvToMcUv(face, atlas, resolution)
+                    GeneratedFace(uv, 0, face.rotation)
+                }
+
+            GeneratedElement(from, to, rotation, faces)
+        }
+
+        return BoneElementResult(generated, modelScale)
+    }
+
+    private fun bbUvToMcUv(face: BbFace, atlas: AtlasResult, resolution: BbResolution): FloatArray {
+        if (atlas.entries.isEmpty()) {
+            val sx = 16f / resolution.width
+            val sy = 16f / resolution.height
+            return floatArrayOf(face.uv[0] * sx, face.uv[1] * sy, face.uv[2] * sx, face.uv[3] * sy)
+        }
+
+        val entry = AtlasManager.entryByOriginalIndex(atlas.entries, face.texture) ?: run {
+            val sx = 16f / resolution.width
+            val sy = 16f / resolution.height
+            return floatArrayOf(face.uv[0] * sx, face.uv[1] * sy, face.uv[2] * sx, face.uv[3] * sy)
+        }
+
+        val imgScaleX = entry.image.width.toFloat() / resolution.width
+        val imgScaleY = entry.image.height.toFloat() / resolution.height
+        val sx = 16f / atlas.width
+        val sy = 16f / atlas.height
+        return floatArrayOf(
+            (face.uv[0] * imgScaleX + entry.offsetX) * sx,
+            (face.uv[1] * imgScaleY + entry.offsetY) * sy,
+            (face.uv[2] * imgScaleX + entry.offsetX) * sx,
+            (face.uv[3] * imgScaleY + entry.offsetY) * sy,
+        )
     }
 
     fun buildFlatModel(model: BlockbenchModel): Pair<GeneratedBoneModel, ByteArray> {
@@ -167,13 +201,16 @@ object ModelGenerator {
         fun collectElements(group: BbGroup) {
             val elements = group.children.filterIsInstance<BbGroupChild.ElementRef>()
                 .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
-            allElements += buildBoneElements(elements, group, atlas)
-            group.children.filterIsInstance<BbGroupChild.SubGroup>().forEach { collectElements(it.group) }
+                .filter { it.visibility }
+            allElements += buildBoneElements(elements, group, atlas, model.resolution).elements
+            group.children.filterIsInstance<BbGroupChild.SubGroup>()
+                .filter { it.group.visibility }
+                .forEach { collectElements(it.group) }
         }
 
-        model.groups.forEach { collectElements(it) }
+        model.groups.filter { it.visibility }.forEach { collectElements(it) }
 
-        val texturePath = "customcontent/${model.name}_atlas"
+        val texturePath = "customcontent/${model.name.lowercase()}_atlas"
         val boneModel = GeneratedBoneModel(
             textures = listOf(texturePath),
             elements = allElements,

@@ -13,6 +13,7 @@ import net.minestom.server.entity.metadata.display.AbstractDisplayMeta
 import net.minestom.server.item.ItemStack
 import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
 import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
+import net.minestom.server.network.packet.server.play.EntityTeleportPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -40,8 +41,7 @@ class BoneEntity(
     val bone: ModelBone,
 ) {
     var lastPosition: Vec = Vec.ZERO
-    var lastLeftRotation: Quat = QUAT_IDENTITY
-    var lastRightRotation: Quat = QUAT_IDENTITY
+    var lastRotation: Quat = QUAT_IDENTITY
     var lastScale: Vec = Vec(1.0, 1.0, 1.0)
     var lastItem: ItemStack? = null
     var lastVisible: Boolean = true
@@ -55,6 +55,7 @@ class BoneRenderer(
     val viewers: Set<UUID> get() = _viewers
 
     private val boneEntities = ConcurrentHashMap<String, BoneEntity>()
+    private var lastModelPosition: Pos? = null
 
     fun registerBone(bone: ModelBone) {
         boneEntities.computeIfAbsent(bone.blueprint.name) { BoneEntity(bone = bone) }
@@ -86,6 +87,19 @@ class BoneRenderer(
     }
 
     fun update(modelPosition: Pos) {
+        val prev = lastModelPosition
+        lastModelPosition = modelPosition
+
+        val basePos = Pos(modelPosition.x(), modelPosition.y(), modelPosition.z())
+        if (prev != null && (prev.x() != modelPosition.x() || prev.y() != modelPosition.y() || prev.z() != modelPosition.z())) {
+            boneEntities.values.forEach { boneEntity ->
+                if (boneEntity.spawned) {
+                    val packet = EntityTeleportPacket(boneEntity.entityId, basePos, Vec.ZERO, 0, false)
+                    forEachViewer { it.sendPacket(packet) }
+                }
+            }
+        }
+
         boneEntities.values.forEach { boneEntity ->
             val bone = boneEntity.bone
             val shouldBeVisible = bone.visible && bone.modelItem != null
@@ -105,10 +119,11 @@ class BoneRenderer(
             if (!boneEntity.spawned) return@forEach
 
             val transform = bone.globalTransform
-            val worldPos = transform.toWorldPosition(modelPosition)
-            val worldLeftRot = transform.toWorldRotation(modelPosition.yaw())
+            val relPos = transform.toRelativePosition(modelPosition.yaw())
+            val worldRot = transform.toWorldRotation(modelPosition.yaw())
+            val effectiveScale = applyModelScale(transform.scale, bone.blueprint.modelScale)
 
-            val meta = buildDirtyMetadata(boneEntity, worldPos, worldLeftRot, transform.rightRotation, transform.scale, bone.modelItem)
+            val meta = buildDirtyMetadata(boneEntity, relPos, worldRot, effectiveScale, bone.modelItem)
             if (meta.isNotEmpty()) {
                 val packet = EntityMetaDataPacket(boneEntity.entityId, meta)
                 forEachViewer { it.sendPacket(packet) }
@@ -133,32 +148,33 @@ class BoneRenderer(
     fun boneEntity(boneName: String): BoneEntity? = boneEntities[boneName]
 
     private fun spawnBoneFor(player: Player, boneEntity: BoneEntity, modelPosition: Pos) {
-        val transform = boneEntity.bone.globalTransform
-        val worldPos = transform.toWorldPosition(modelPosition)
+        val bone = boneEntity.bone
+        val transform = bone.globalTransform
+        val relPos = transform.toRelativePosition(modelPosition.yaw())
+        val effectiveScale = applyModelScale(transform.scale, bone.blueprint.modelScale)
 
+        val spawnPos = Pos(modelPosition.x(), modelPosition.y(), modelPosition.z())
         player.sendPacket(SpawnEntityPacket(
             boneEntity.entityId, boneEntity.uuid, EntityType.ITEM_DISPLAY,
-            Pos.ZERO, 0f, 0, Vec.ZERO,
+            spawnPos, 0f, 0, Vec.ZERO,
         ))
 
-        val worldLeftRot = transform.toWorldRotation(modelPosition.yaw())
-        val meta = buildFullMetadata(boneEntity, worldPos, worldLeftRot, transform.rightRotation, transform.scale, boneEntity.bone.modelItem)
+        val worldRot = transform.toWorldRotation(modelPosition.yaw())
+        val meta = buildFullMetadata(boneEntity, relPos, worldRot, effectiveScale, bone.modelItem)
         player.sendPacket(EntityMetaDataPacket(boneEntity.entityId, meta))
 
-        boneEntity.lastPosition = worldPos
-        boneEntity.lastLeftRotation = worldLeftRot
-        boneEntity.lastRightRotation = transform.rightRotation
-        boneEntity.lastScale = transform.scale
-        boneEntity.lastItem = boneEntity.bone.modelItem
-        boneEntity.lastVisible = boneEntity.bone.visible
+        boneEntity.lastPosition = relPos
+        boneEntity.lastRotation = worldRot
+        boneEntity.lastScale = effectiveScale
+        boneEntity.lastItem = bone.modelItem
+        boneEntity.lastVisible = bone.visible
         boneEntity.spawned = true
     }
 
     private fun buildFullMetadata(
         entity: BoneEntity,
         position: Vec,
-        leftRotation: Quat,
-        rightRotation: Quat,
+        boneRotation: Quat,
         scale: Vec,
         item: ItemStack?,
     ): Map<Int, Metadata.Entry<*>> = buildMap {
@@ -167,21 +183,19 @@ class BoneRenderer(
         put(META_TRANSFORM_DURATION, Metadata.VarInt(interpolationDuration))
         put(META_TRANSLATION, Metadata.Vector3(position))
         put(META_SCALE, Metadata.Vector3(scale))
-        put(META_ROTATION_LEFT, Metadata.Quaternion(leftRotation.toFloatArray()))
-        put(META_ROTATION_RIGHT, Metadata.Quaternion(rightRotation.toFloatArray()))
+        put(META_ROTATION_RIGHT, Metadata.Quaternion(boneRotation.toFloatArray()))
         put(META_BILLBOARD, Metadata.Byte(AbstractDisplayMeta.BillboardConstraints.FIXED.ordinal.toByte()))
         put(META_VIEW_RANGE, Metadata.Float(1.0f))
         if (item != null) {
             put(META_DISPLAYED_ITEM, Metadata.ItemStack(item))
-            put(META_DISPLAY_TYPE, Metadata.Byte(0))
+            put(META_DISPLAY_TYPE, Metadata.Byte(2))
         }
     }
 
     private fun buildDirtyMetadata(
         entity: BoneEntity,
         position: Vec,
-        leftRotation: Quat,
-        rightRotation: Quat,
+        rotation: Quat,
         scale: Vec,
         item: ItemStack?,
     ): Map<Int, Metadata.Entry<*>> = buildMap {
@@ -192,14 +206,9 @@ class BoneRenderer(
             entity.lastPosition = position
             hasChange = true
         }
-        if (leftRotation != entity.lastLeftRotation) {
-            put(META_ROTATION_LEFT, Metadata.Quaternion(leftRotation.toFloatArray()))
-            entity.lastLeftRotation = leftRotation
-            hasChange = true
-        }
-        if (rightRotation != entity.lastRightRotation) {
-            put(META_ROTATION_RIGHT, Metadata.Quaternion(rightRotation.toFloatArray()))
-            entity.lastRightRotation = rightRotation
+        if (rotation != entity.lastRotation) {
+            put(META_ROTATION_RIGHT, Metadata.Quaternion(rotation.toFloatArray()))
+            entity.lastRotation = rotation
             hasChange = true
         }
         if (scale != entity.lastScale) {
@@ -226,5 +235,11 @@ class BoneRenderer(
             MinecraftServer.getConnectionManager()
                 .onlinePlayers.firstOrNull { it.uuid == uuid }?.let(action)
         }
+    }
+
+    private fun applyModelScale(transformScale: Vec, modelScale: Float): Vec {
+        if (modelScale == 1f) return transformScale
+        val ms = modelScale.toDouble()
+        return Vec(transformScale.x() * ms, transformScale.y() * ms, transformScale.z() * ms)
     }
 }

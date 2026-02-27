@@ -1,0 +1,18 @@
+#define STASIS_HELMET 199
+#define STASIS_CHESTPLATE 299
+#define STASIS_RIGHT_ARM 399
+#define STASIS_LEFT_ARM 499
+#define STASIS_RIGHT_LEG 599
+#define STASIS_LEFT_LEG 699
+#define STASIS_RIGHT_BOOT 799
+#define STASIS_LEFT_BOOT 899
+#define STASIS_INNER_ARMOR 999
+
+
+#define ARMOR_RIGHT_ARM 0
+#define ARMOR_LEFT_ARM 1
+#define ARMOR_CHESTPLATE 2
+#define ARMOR_LEFT_FEET 3
+#define ARMOR_RIGHT_FEET 4
+
+#moj_import<mods/armor/parts.glsl>

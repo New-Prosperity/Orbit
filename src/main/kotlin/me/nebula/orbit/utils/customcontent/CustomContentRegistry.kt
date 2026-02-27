@@ -2,14 +2,18 @@ package me.nebula.orbit.utils.customcontent
 
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
+import me.nebula.orbit.utils.customcontent.armor.ArmorShaderPack
+import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
+import me.nebula.orbit.utils.screen.shader.MapShaderPack
 import me.nebula.orbit.utils.customcontent.block.*
 import me.nebula.orbit.utils.customcontent.event.CustomBlockBreakHandler
 import me.nebula.orbit.utils.customcontent.event.CustomBlockInteractHandler
 import me.nebula.orbit.utils.customcontent.event.CustomBlockPlaceHandler
 import me.nebula.orbit.utils.customcontent.item.*
 import me.nebula.orbit.utils.customcontent.pack.PackMerger
+import me.nebula.orbit.utils.modelengine.ModelEngine
+import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.generator.ModelIdRegistry
-import me.nebula.orbit.utils.modelengine.generator.RawGenerationResult
 import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
 
@@ -23,6 +27,7 @@ object CustomContentRegistry {
     private const val MODELS_DIR = "$BASE_DIR/models"
     private const val ITEMS_DIR = "$BASE_DIR/items"
     private const val BLOCKS_DIR = "$BASE_DIR/blocks"
+    private const val ARMORS_DIR = "$BASE_DIR/armors"
 
     val packBytes: ByteArray? get() = mergeResult?.packBytes
     val packSha1: String? get() = mergeResult?.sha1
@@ -34,6 +39,7 @@ object CustomContentRegistry {
         resources.ensureDirectory(MODELS_DIR)
         resources.ensureDirectory(ITEMS_DIR)
         resources.ensureDirectory(BLOCKS_DIR)
+        resources.ensureDirectory(ARMORS_DIR)
 
         ModelIdRegistry.init(resources, "$BASE_DIR/model_ids.dat")
         BlockStateAllocator.init(resources, "$BASE_DIR/allocations.dat")
@@ -44,14 +50,17 @@ object CustomContentRegistry {
         itemDefs.forEach { def -> registerItem(def) }
         blockDefs.forEach { def -> registerBlock(def) }
 
-        if (!CustomItemRegistry.isEmpty() || !CustomBlockRegistry.isEmpty()) {
+        CustomArmorRegistry.loadFromResources(resources, ARMORS_DIR)
+
+        if (!CustomItemRegistry.isEmpty() || !CustomBlockRegistry.isEmpty() || !CustomArmorRegistry.isEmpty()) {
             CustomBlockPlaceHandler.install(eventNode)
             CustomBlockBreakHandler.install(eventNode)
             CustomBlockInteractHandler.install(eventNode)
 
             logger.info {
                 "Registered ${CustomItemRegistry.all().size} custom items, " +
-                    "${CustomBlockRegistry.all().size} custom blocks"
+                    "${CustomBlockRegistry.all().size} custom blocks, " +
+                    "${CustomArmorRegistry.all().size} custom armors"
             }
         }
     }
@@ -97,14 +106,62 @@ object CustomContentRegistry {
         return block
     }
 
-    fun mergePack(modelEngineRawResults: List<RawGenerationResult> = emptyList()): PackMerger.MergeResult {
-        val result = PackMerger.merge(resources, MODELS_DIR, modelEngineRawResults)
+    fun reload() {
+        CustomItemRegistry.clear()
+        CustomBlockRegistry.clear()
+        CustomArmorRegistry.clear()
+
+        val itemDefs = CustomItemLoader.loadAll(resources, ITEMS_DIR)
+        val blockDefs = CustomBlockLoader.loadAll(resources, BLOCKS_DIR)
+
+        itemDefs.forEach { def -> registerItem(def) }
+        blockDefs.forEach { def -> registerBlock(def) }
+
+        CustomArmorRegistry.loadFromResources(resources, ARMORS_DIR)
+
+        logger.info {
+            "Reloaded ${CustomItemRegistry.all().size} custom items, " +
+                "${CustomBlockRegistry.all().size} custom blocks, " +
+                "${CustomArmorRegistry.all().size} custom armors"
+        }
+
+        mergePack()
+    }
+
+    fun mergePack(): PackMerger.MergeResult {
+        val modelFiles = resources.list("models", "bbmodel")
+        val generated = modelFiles.map { path ->
+            val fileName = path.substringAfterLast('/')
+            logger.info { "Generating model from $fileName" }
+            val raw = ModelGenerator.generateRaw(resources, fileName)
+            ModelEngine.registerRaw(raw.blueprint.name, raw)
+            raw
+        }
+
+        val allRaw = (ModelEngine.rawResults() + generated)
+            .distinctBy { it.blueprint.name }
+
+        val armorEntries = if (!CustomArmorRegistry.isEmpty()) {
+            val armors = CustomArmorRegistry.all().toList()
+            logger.info { "Generating armor shader pack for ${armors.size} armors" }
+            ArmorShaderPack.generate(armors)
+        } else {
+            emptyMap()
+        }
+
+        val mapScreenEntries = MapShaderPack.generate()
+        logger.info { "Generated map screen shader pack: ${mapScreenEntries.size} entries" }
+
+        val allShaderEntries = armorEntries + mapScreenEntries
+        val result = PackMerger.merge(resources, MODELS_DIR, allRaw, allShaderEntries)
         mergeResult = result
 
         resources.writeBytes("$BASE_DIR/pack.zip", result.packBytes)
 
         logger.info {
-            "Pack merged: ${result.packBytes.size / 1024}KB, SHA-1=${result.sha1}"
+            "Pack merged: ${result.packBytes.size / 1024}KB, SHA-1=${result.sha1}, " +
+                "models=${allRaw.size}, items=${CustomItemRegistry.all().size}, " +
+                "blocks=${CustomBlockRegistry.all().size}, armors=${CustomArmorRegistry.all().size}"
         }
         return result
     }

@@ -36,16 +36,21 @@ data class BoneTransform(
         )
     }
 
-    fun toWorldPosition(modelPosition: Pos): Vec {
-        val yawRad = Math.toRadians(-modelPosition.yaw().toDouble())
+    fun toRelativePosition(modelYaw: Float): Vec {
+        val yawRad = Math.toRadians(-modelYaw.toDouble())
         val cosYaw = cos(yawRad)
         val sinYaw = sin(yawRad)
-        val rx = position.x() * cosYaw - position.z() * sinYaw
-        val rz = position.x() * sinYaw + position.z() * cosYaw
+        val rx = position.x() * cosYaw + position.z() * sinYaw
+        val rz = -position.x() * sinYaw + position.z() * cosYaw
+        return Vec(rx, position.y(), rz)
+    }
+
+    fun toWorldPosition(modelPosition: Pos): Vec {
+        val rel = toRelativePosition(modelPosition.yaw())
         return Vec(
-            modelPosition.x() + rx,
-            modelPosition.y() + position.y(),
-            modelPosition.z() + rz,
+            modelPosition.x() + rel.x(),
+            modelPosition.y() + rel.y(),
+            modelPosition.z() + rel.z(),
         )
     }
 

@@ -1,0 +1,116 @@
+[
+  {
+    "id": "armor_knight",
+    "category": "ARMOR_SKIN",
+    "nameKey": "orbit.cosmetic.armor_knight.name",
+    "descriptionKey": "orbit.cosmetic.armor_knight.description",
+    "rarity": "RARE",
+    "material": "minecraft:leather_chestplate",
+    "data": {
+      "armorId": "warrior_armor"
+    }
+  },
+  {
+    "id": "kill_flame_burst",
+    "category": "KILL_EFFECT",
+    "nameKey": "orbit.cosmetic.kill_flame_burst.name",
+    "descriptionKey": "orbit.cosmetic.kill_flame_burst.description",
+    "rarity": "COMMON",
+    "material": "minecraft:blaze_powder",
+    "data": {
+      "particle": "flame",
+      "shape": "sphere"
+    }
+  },
+  {
+    "id": "kill_heart_explosion",
+    "category": "KILL_EFFECT",
+    "nameKey": "orbit.cosmetic.kill_heart_explosion.name",
+    "descriptionKey": "orbit.cosmetic.kill_heart_explosion.description",
+    "rarity": "EPIC",
+    "material": "minecraft:golden_apple",
+    "data": {
+      "particle": "heart",
+      "shape": "sphere"
+    }
+  },
+  {
+    "id": "trail_flame",
+    "category": "TRAIL",
+    "nameKey": "orbit.cosmetic.trail_flame.name",
+    "descriptionKey": "orbit.cosmetic.trail_flame.description",
+    "rarity": "COMMON",
+    "material": "minecraft:blaze_rod",
+    "data": {
+      "particle": "flame"
+    }
+  },
+  {
+    "id": "trail_soul",
+    "category": "TRAIL",
+    "nameKey": "orbit.cosmetic.trail_soul.name",
+    "descriptionKey": "orbit.cosmetic.trail_soul.description",
+    "rarity": "RARE",
+    "material": "minecraft:soul_lantern",
+    "data": {
+      "particle": "soul_fire_flame"
+    }
+  },
+  {
+    "id": "trail_enchant",
+    "category": "TRAIL",
+    "nameKey": "orbit.cosmetic.trail_enchant.name",
+    "descriptionKey": "orbit.cosmetic.trail_enchant.description",
+    "rarity": "EPIC",
+    "material": "minecraft:enchanting_table",
+    "data": {
+      "particle": "enchant"
+    }
+  },
+  {
+    "id": "win_firework_helix",
+    "category": "WIN_EFFECT",
+    "nameKey": "orbit.cosmetic.win_firework_helix.name",
+    "descriptionKey": "orbit.cosmetic.win_firework_helix.description",
+    "rarity": "RARE",
+    "material": "minecraft:firework_rocket",
+    "data": {
+      "particle": "firework",
+      "shape": "helix"
+    }
+  },
+  {
+    "id": "win_totem",
+    "category": "WIN_EFFECT",
+    "nameKey": "orbit.cosmetic.win_totem.name",
+    "descriptionKey": "orbit.cosmetic.win_totem.description",
+    "rarity": "LEGENDARY",
+    "material": "minecraft:totem_of_undying",
+    "data": {
+      "particle": "totem_of_undying",
+      "shape": "sphere"
+    }
+  },
+  {
+    "id": "projectile_flame",
+    "category": "PROJECTILE_TRAIL",
+    "nameKey": "orbit.cosmetic.projectile_flame.name",
+    "descriptionKey": "orbit.cosmetic.projectile_flame.description",
+    "rarity": "COMMON",
+    "material": "minecraft:spectral_arrow",
+    "data": {
+      "particle": "flame"
+    }
+  },
+  {
+    "id": "projectile_dragon",
+    "category": "PROJECTILE_TRAIL",
+    "nameKey": "orbit.cosmetic.projectile_dragon.name",
+    "descriptionKey": "orbit.cosmetic.projectile_dragon.description",
+    "rarity": "LEGENDARY",
+    "material": "minecraft:dragon_breath",
+    "data": {
+      "particle": "dragon_breath"
+    }
+  }
+]

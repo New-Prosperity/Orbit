@@ -11,10 +11,12 @@ data class BlueprintBone(
     val childNames: List<String>,
     val offset: Vec,
     val rotation: Quat,
+    val rotationEuler: Vec,
     val scale: Vec,
     val modelItem: ItemStack?,
     val behaviors: Map<BoneBehaviorType, Map<String, Any>>,
     val visible: Boolean = true,
+    val modelScale: Float = 1f,
 )
 
 enum class BoneBehaviorType {

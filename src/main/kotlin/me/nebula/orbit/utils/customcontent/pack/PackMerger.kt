@@ -2,18 +2,22 @@ package me.nebula.orbit.utils.customcontent.pack
 
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
+import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.modelengine.generator.*
 import net.minestom.server.item.Material
+import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import javax.imageio.ImageIO
 
 object PackMerger {
 
+    private val logger = logger("PackMerger")
     private val gson = GsonBuilder().setPrettyPrinting().create()
 
     data class MergeResult(val packBytes: ByteArray, val sha1: String) {
@@ -34,19 +38,24 @@ object PackMerger {
         resources: ResourceManager,
         modelsDirectory: String,
         modelEngineRawResults: List<RawGenerationResult>,
-        packFormat: Int = 42,
+        armorShaderEntries: Map<String, ByteArray> = emptyMap(),
+        packFormat: Int = 75,
     ): MergeResult {
         val entries = LinkedHashMap<String, ByteArray>()
 
         entries["pack.mcmeta"] = buildMcMeta(packFormat)
 
+        injectTestCube(entries)
+
         modelEngineRawResults.forEach { raw ->
             raw.textureBytes.forEach { (texPath, bytes) ->
-                entries["assets/minecraft/textures/modelengine/$texPath"] = bytes
+                entries["assets/minecraft/textures/$texPath"] = bytes
             }
-            raw.boneModels.forEach { (bonePath, boneModel) ->
+            raw.boneModels.forEach { (boneKey, boneModel) ->
                 val json = buildModelJson(boneModel)
-                entries["assets/minecraft/models/modelengine/$bonePath.json"] = json
+                entries["assets/minecraft/models/$boneKey.json"] = json
+                entries["assets/minecraft/items/$boneKey.json"] =
+                    buildItemDefinition("minecraft:$boneKey")
             }
         }
 
@@ -80,7 +89,7 @@ object PackMerger {
             entries["assets/minecraft/models/customcontent/blocks/$id.json"] = buildModelJson(model)
         }
 
-        val itemOverrides = collectItemOverrides(modelEngineRawResults)
+        val itemOverrides = collectItemOverrides()
         ItemModelOverrideWriter.generate(itemOverrides).forEach { (path, bytes) ->
             entries[path] = bytes
         }
@@ -88,6 +97,17 @@ object PackMerger {
         BlockStateWriter.generate().forEach { (path, bytes) ->
             entries[path] = bytes
         }
+
+        armorShaderEntries.forEach { (path, bytes) ->
+            entries[path] = bytes
+        }
+
+        entries["assets/minecraft/atlases/blocks.json"] = buildAtlasDefinition(entries)
+
+        val textures = entries.keys.count { it.endsWith(".png") }
+        val models = entries.keys.count { it.contains("/models/") }
+        val shaders = entries.keys.count { it.contains("/shaders/") }
+        logger.info { "Merged pack: ${entries.size} entries ($models models, $textures textures, $shaders shaders)" }
 
         val packBytes = writeZip(entries)
         val sha1 = sha1Hex(packBytes)
@@ -113,21 +133,8 @@ object PackMerger {
         textureOutput["${id}_atlas.png"] = atlasBytes
     }
 
-    private fun collectItemOverrides(
-        rawResults: List<RawGenerationResult>,
-    ): Map<Material, List<ItemModelOverrideWriter.OverrideEntry>> {
+    private fun collectItemOverrides(): Map<Material, List<ItemModelOverrideWriter.OverrideEntry>> {
         val overrides = mutableMapOf<Material, MutableList<ItemModelOverrideWriter.OverrideEntry>>()
-
-        rawResults.forEach { raw ->
-            raw.boneModels.keys.forEach { bonePath ->
-                val parts = bonePath.split("/", limit = 2)
-                if (parts.size == 2) {
-                    val cmdId = ModelIdRegistry.getId(parts[0], parts[1]) ?: return@forEach
-                    overrides.getOrPut(Material.PAPER) { mutableListOf() }
-                        .add(ItemModelOverrideWriter.OverrideEntry(cmdId, "modelengine/$bonePath"))
-                }
-            }
-        }
 
         CustomItemRegistry.all().forEach { item ->
             overrides.getOrPut(item.baseMaterial) { mutableListOf() }
@@ -149,10 +156,22 @@ object PackMerger {
         return overrides
     }
 
+    private fun buildItemDefinition(modelPath: String): ByteArray {
+        val json = JsonObject().apply {
+            add("model", JsonObject().apply {
+                addProperty("type", "minecraft:model")
+                addProperty("model", modelPath)
+            })
+        }
+        return gson.toJson(json).toByteArray(Charsets.UTF_8)
+    }
+
     private fun buildMcMeta(packFormat: Int): ByteArray {
         val json = JsonObject().apply {
             add("pack", JsonObject().apply {
                 addProperty("pack_format", packFormat)
+                addProperty("min_format", packFormat)
+                addProperty("max_format", packFormat)
                 addProperty("description", "Nebula merged resource pack")
             })
         }
@@ -161,38 +180,41 @@ object PackMerger {
 
     private fun buildModelJson(model: GeneratedBoneModel): ByteArray {
         val json = JsonObject().apply {
-            addProperty("parent", "minecraft:block/block")
             add("textures", JsonObject().apply {
                 model.textures.forEachIndexed { i, path -> addProperty(i.toString(), path) }
             })
-            if (model.elements.isNotEmpty()) {
-                add("elements", com.google.gson.JsonArray().apply {
-                    model.elements.forEach { element ->
-                        add(JsonObject().apply {
-                            add("from", element.from.toJsonArray())
-                            add("to", element.to.toJsonArray())
-                            if (element.rotation != null) {
-                                add("rotation", JsonObject().apply {
-                                    addProperty("angle", element.rotation.angle)
-                                    addProperty("axis", element.rotation.axis)
-                                    add("origin", element.rotation.origin.toJsonArray())
+            add("display", JsonObject().apply {
+                add("thirdperson_righthand", JsonObject().apply {
+                    add("translation", com.google.gson.JsonArray().apply { add(0); add(0); add(0) })
+                    add("scale", com.google.gson.JsonArray().apply { add(1); add(1); add(1) })
+                })
+            })
+            add("elements", com.google.gson.JsonArray().apply {
+                model.elements.forEach { element ->
+                    add(JsonObject().apply {
+                        add("from", element.from.toJsonArray())
+                        add("to", element.to.toJsonArray())
+                        if (element.rotation != null) {
+                            add("rotation", JsonObject().apply {
+                                addProperty("angle", element.rotation.angle)
+                                addProperty("axis", element.rotation.axis)
+                                add("origin", element.rotation.origin.toJsonArray())
+                            })
+                        }
+                        add("faces", JsonObject().apply {
+                            element.faces.forEach { (face, faceData) ->
+                                add(face, JsonObject().apply {
+                                    add("uv", com.google.gson.JsonArray().also { arr ->
+                                        faceData.uv.forEach { arr.add(it) }
+                                    })
+                                    addProperty("rotation", faceData.rotation)
+                                    addProperty("texture", "#${faceData.textureIndex}")
                                 })
                             }
-                            add("faces", JsonObject().apply {
-                                element.faces.forEach { (face, faceData) ->
-                                    add(face, JsonObject().apply {
-                                        add("uv", com.google.gson.JsonArray().also { arr ->
-                                            faceData.uv.forEach { arr.add(it) }
-                                        })
-                                        addProperty("texture", "#${faceData.textureIndex}")
-                                        if (faceData.rotation != 0) addProperty("rotation", faceData.rotation)
-                                    })
-                                }
-                            })
                         })
-                    }
-                })
-            }
+                    })
+                }
+            })
         }
         return gson.toJson(json).toByteArray(Charsets.UTF_8)
     }
@@ -209,9 +231,68 @@ object PackMerger {
         return baos.toByteArray()
     }
 
+    private fun buildAtlasDefinition(entries: Map<String, ByteArray>): ByteArray {
+        val json = JsonObject().apply {
+            add("sources", com.google.gson.JsonArray().apply {
+                entries.keys
+                    .filter { it.startsWith("assets/minecraft/textures/") && it.endsWith(".png") }
+                    .map { it.removePrefix("assets/minecraft/textures/").removeSuffix(".png") }
+                    .forEach { textureName ->
+                        add(JsonObject().apply {
+                            addProperty("type", "single")
+                            addProperty("resource", "minecraft:$textureName")
+                        })
+                    }
+            })
+        }
+        return gson.toJson(json).toByteArray(Charsets.UTF_8)
+    }
+
     private fun sha1Hex(data: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-1")
         return digest.digest(data).joinToString("") { "%02x".format(it) }
+    }
+
+    private fun injectTestCube(entries: MutableMap<String, ByteArray>) {
+        val img = BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.color = java.awt.Color(255, 0, 0, 255)
+        g.fillRect(0, 0, 16, 16)
+        g.dispose()
+        val baos = ByteArrayOutputStream()
+        ImageIO.write(img, "png", baos)
+        entries["assets/minecraft/textures/me_debug_red.png"] = baos.toByteArray()
+
+        val model = """
+{
+  "textures": {
+    "0": "minecraft:me_debug_red",
+    "particle": "minecraft:me_debug_red"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "north": {"uv": [0, 0, 16, 16], "texture": "#0"},
+        "south": {"uv": [0, 0, 16, 16], "texture": "#0"},
+        "east":  {"uv": [0, 0, 16, 16], "texture": "#0"},
+        "west":  {"uv": [0, 0, 16, 16], "texture": "#0"},
+        "up":    {"uv": [0, 0, 16, 16], "texture": "#0"},
+        "down":  {"uv": [0, 0, 16, 16], "texture": "#0"}
+      }
+    }
+  ],
+  "display": {
+    "head": {
+      "translation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    }
+  }
+}
+""".trim()
+        entries["assets/minecraft/models/me_debug_cube.json"] = model.toByteArray(Charsets.UTF_8)
+        entries["assets/minecraft/items/me_debug_cube.json"] = buildItemDefinition("minecraft:me_debug_cube")
     }
 
     private fun FloatArray.toJsonArray(): com.google.gson.JsonArray =

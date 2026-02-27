@@ -1,46 +1,18 @@
 package me.nebula.orbit.utils.customcontent
 
-import com.sun.net.httpserver.HttpServer
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.chat.sendMM
 import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
 import me.nebula.orbit.utils.customcontent.block.BlockHitbox
 import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
-import net.kyori.adventure.resource.ResourcePackInfo
-import net.kyori.adventure.resource.ResourcePackRequest
 import net.minestom.server.command.builder.Command
-import java.net.InetSocketAddress
-import java.net.URI
+import java.io.ByteArrayInputStream
+import java.util.zip.ZipInputStream
 
-private object PackServer {
-
-    @Volatile private var server: HttpServer? = null
-
-    @Synchronized
-    fun ensureRunning(): Int {
-        server?.let { return it.address.port }
-        val port = (9100..9200).random()
-        val srv = HttpServer.create(InetSocketAddress(port), 0)
-        srv.createContext("/pack.zip") { exchange ->
-            val bytes = CustomContentRegistry.packBytes
-            if (bytes == null) {
-                exchange.sendResponseHeaders(404, -1)
-                exchange.close()
-                return@createContext
-            }
-            exchange.responseHeaders["Content-Type"] = listOf("application/zip")
-            exchange.sendResponseHeaders(200, bytes.size.toLong())
-            exchange.responseBody.use { it.write(bytes) }
-        }
-        srv.start()
-        server = srv
-        return port
-    }
-}
-
-fun customContentCommand(resources: ResourceManager, serverHost: String?): Command = command("cc") {
+fun customContentCommand(resources: ResourceManager): Command = command("cc") {
     permission("orbit.customcontent")
 
     subCommand("items") {
@@ -142,6 +114,22 @@ fun customContentCommand(resources: ResourceManager, serverHost: String?): Comma
         }
     }
 
+    subCommand("reload") {
+        onPlayerExecute {
+            player.sendMM("<gray>Reloading custom content...")
+            try {
+                CustomContentRegistry.reload()
+                val items = CustomItemRegistry.all().size
+                val blocks = CustomBlockRegistry.all().size
+                val armors = CustomArmorRegistry.all().size
+                val packSize = CustomContentRegistry.packBytes?.size?.let { it / 1024 } ?: 0
+                player.sendMM("<green>Reloaded: <white>$items<green> items, <white>$blocks<green> blocks, <white>$armors<green> armors <gray>(${packSize}KB)")
+            } catch (e: Exception) {
+                player.sendMM("<red>Reload failed: ${e.message}")
+            }
+        }
+    }
+
     subCommand("pack") {
         onPlayerExecute {
             try {
@@ -153,30 +141,27 @@ fun customContentCommand(resources: ResourceManager, serverHost: String?): Comma
         }
     }
 
-    subCommand("send") {
+    subCommand("packdump") {
         onPlayerExecute {
             val bytes = CustomContentRegistry.packBytes
-            val sha1 = CustomContentRegistry.packSha1
-            if (bytes == null || sha1 == null) {
-                player.sendMM("<red>No pack available. Run <white>/cc pack <red>first.")
+            if (bytes == null) {
+                player.sendMM("<red>No pack available.")
                 return@onPlayerExecute
             }
-            try {
-                val port = PackServer.ensureRunning()
-                val host = serverHost ?: "127.0.0.1"
-                val url = "http://$host:$port/pack.zip"
-                val info = ResourcePackInfo.resourcePackInfo()
-                    .uri(URI.create(url))
-                    .hash(sha1)
-                    .build()
-                val request = ResourcePackRequest.resourcePackRequest()
-                    .packs(info)
-                    .required(false)
-                    .build()
-                player.sendResourcePacks(request)
-                player.sendMM("<green>Sending pack from <white>$url")
-            } catch (e: Exception) {
-                player.sendMM("<red>Failed to send pack: ${e.message}")
+            player.sendMM("<gold><bold>Pack Contents</bold> <gray>(${bytes.size / 1024}KB)")
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    val data = zip.readAllBytes()
+                    val isJson = entry.name.endsWith(".json")
+                    if (isJson && data.size < 500) {
+                        player.sendMM("<yellow>${entry.name} <gray>(${data.size}B)")
+                        player.sendMM("<dark_gray>${String(data, Charsets.UTF_8).replace("\n", " ").take(200)}")
+                    } else {
+                        player.sendMM("<yellow>${entry.name} <gray>(${data.size}B)")
+                    }
+                    entry = zip.nextEntry
+                }
             }
         }
     }

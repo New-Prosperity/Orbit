@@ -13,6 +13,6 @@ if [ ! -f "$JAR" ]; then
 fi
 
 echo "[$PROJECT] Uploading to GitHub Releases (tag: latest)..."
-gh release upload latest "$JAR#$PROJECT.jar" --clobber
+gh release upload latest "$JAR" --clobber
 
 echo "[$PROJECT] Deployed successfully."

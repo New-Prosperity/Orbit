@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.modelengine.generator
 
+import me.nebula.ether.utils.logging.logger
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -23,14 +24,26 @@ data class AtlasResult(
 
 object AtlasManager {
 
-    fun stitch(textures: List<BbTexture>): AtlasResult {
-        val images = textures.mapIndexed { index, tex ->
-            val imageData = decodeBase64Image(tex.source)
-                ?: return AtlasResult(BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB), 16, 16, emptyList())
+    private val logger = logger("AtlasManager")
+
+    fun stitch(textures: List<BbTexture>, cropTo: BbResolution? = null): AtlasResult {
+        val images = textures.mapIndexedNotNull { index, tex ->
+            val decoded = decodeBase64Image(tex.source)
+            if (decoded == null) {
+                logger.warn { "Failed to decode texture ${tex.name} (index=$index, source=${tex.source.take(40)}...)" }
+                return@mapIndexedNotNull null
+            }
+            val imageData = if (cropTo != null) {
+                val cropW = minOf(decoded.width, cropTo.width)
+                val cropH = minOf(decoded.height, cropTo.height)
+                if (cropW < decoded.width || cropH < decoded.height) decoded.getSubimage(0, 0, cropW, cropH)
+                else decoded
+            } else decoded
             Triple(tex, imageData, index)
         }
 
         if (images.isEmpty()) {
+            logger.warn { "No valid textures decoded, returning empty atlas" }
             val empty = BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB)
             return AtlasResult(empty, 16, 16, emptyList())
         }
@@ -85,13 +98,12 @@ object AtlasManager {
     fun entryByOriginalIndex(entries: List<AtlasEntry>, index: Int): AtlasEntry? =
         entries.firstOrNull { it.originalIndex == index }
 
-    private fun decodeBase64Image(source: String): BufferedImage? {
-        val data = if (source.contains(",")) {
-            source.substringAfter(",")
-        } else source
+    private fun decodeBase64Image(source: String): BufferedImage? = runCatching {
+        if (source.isBlank()) return null
+        val data = if (source.contains(",")) source.substringAfter(",") else source
         val bytes = Base64.getDecoder().decode(data)
-        return ImageIO.read(ByteArrayInputStream(bytes))
-    }
+        ImageIO.read(ByteArrayInputStream(bytes))
+    }.onFailure { logger.warn { "Base64 image decode error: ${it.message}" } }.getOrNull()
 
     private fun nextPowerOf2(n: Int): Int {
         if (n <= 0) return 1

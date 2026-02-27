@@ -16,24 +16,31 @@ object PackWriter {
         packDescription: String,
         models: Map<String, GeneratedBoneModel>,
         textureBytes: Map<String, ByteArray>,
-        packFormat: Int = 42,
+        packFormat: Int = 75,
     ): ByteArray {
         val baos = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zip ->
             writeMcMeta(zip, packName, packDescription, packFormat)
 
             textureBytes.forEach { (path, data) ->
-                zip.putNextEntry(ZipEntry("assets/minecraft/textures/modelengine/$path"))
+                zip.putNextEntry(ZipEntry("assets/minecraft/textures/$path"))
                 zip.write(data)
                 zip.closeEntry()
             }
 
             models.forEach { (bonePath, boneModel) ->
                 val modelJson = buildModelJson(boneModel)
-                zip.putNextEntry(ZipEntry("assets/minecraft/models/modelengine/$bonePath.json"))
+                zip.putNextEntry(ZipEntry("assets/minecraft/models/$bonePath.json"))
                 zip.write(gson.toJson(modelJson).toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
+
+                val itemDef = buildItemDefinition("minecraft:$bonePath")
+                zip.putNextEntry(ZipEntry("assets/minecraft/items/$bonePath.json"))
+                zip.write(gson.toJson(itemDef).toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
             }
+
+            writeAtlasDefinition(zip, textureBytes.keys)
         }
         return baos.toByteArray()
     }
@@ -42,6 +49,8 @@ object PackWriter {
         val meta = JsonObject().apply {
             add("pack", JsonObject().apply {
                 addProperty("pack_format", packFormat)
+                addProperty("min_format", packFormat)
+                addProperty("max_format", packFormat)
                 addProperty("description", description)
             })
         }
@@ -50,49 +59,69 @@ object PackWriter {
         zip.closeEntry()
     }
 
-    private fun buildModelJson(model: GeneratedBoneModel): JsonObject = JsonObject().apply {
-        addProperty("parent", "minecraft:item/generated")
+    private fun writeAtlasDefinition(zip: ZipOutputStream, texturePaths: Set<String>) {
+        val json = JsonObject().apply {
+            add("sources", JsonArray().apply {
+                texturePaths.forEach { path ->
+                    val name = path.removeSuffix(".png")
+                    add(JsonObject().apply {
+                        addProperty("type", "single")
+                        addProperty("resource", "minecraft:$name")
+                    })
+                }
+            })
+        }
+        zip.putNextEntry(ZipEntry("assets/minecraft/atlases/blocks.json"))
+        zip.write(gson.toJson(json).toByteArray(Charsets.UTF_8))
+        zip.closeEntry()
+    }
 
+    private fun buildItemDefinition(modelPath: String): JsonObject = JsonObject().apply {
+        add("model", JsonObject().apply {
+            addProperty("type", "minecraft:model")
+            addProperty("model", modelPath)
+        })
+    }
+
+    private fun buildModelJson(model: GeneratedBoneModel): JsonObject = JsonObject().apply {
         add("textures", JsonObject().apply {
             model.textures.forEachIndexed { i, path ->
                 addProperty(i.toString(), path)
             }
         })
 
-        if (model.elements.isNotEmpty()) {
-            add("elements", JsonArray().apply {
-                model.elements.forEach { element ->
-                    add(JsonObject().apply {
-                        add("from", element.from.toJsonArray())
-                        add("to", element.to.toJsonArray())
-                        if (element.rotation != null) {
-                            add("rotation", JsonObject().apply {
-                                addProperty("angle", element.rotation.angle)
-                                addProperty("axis", element.rotation.axis)
-                                add("origin", element.rotation.origin.toJsonArray())
+        add("display", JsonObject().apply {
+            add("thirdperson_righthand", JsonObject().apply {
+                add("translation", JsonArray().apply { add(0); add(0); add(0) })
+                add("scale", JsonArray().apply { add(1); add(1); add(1) })
+            })
+        })
+
+        add("elements", JsonArray().apply {
+            model.elements.forEach { element ->
+                add(JsonObject().apply {
+                    add("from", element.from.toJsonArray())
+                    add("to", element.to.toJsonArray())
+                    if (element.rotation != null) {
+                        add("rotation", JsonObject().apply {
+                            addProperty("angle", element.rotation.angle)
+                            addProperty("axis", element.rotation.axis)
+                            add("origin", element.rotation.origin.toJsonArray())
+                        })
+                    }
+                    add("faces", JsonObject().apply {
+                        element.faces.forEach { (face, faceData) ->
+                            add(face, JsonObject().apply {
+                                add("uv", JsonArray().also { arr ->
+                                    faceData.uv.forEach { arr.add(it) }
+                                })
+                                addProperty("rotation", faceData.rotation)
+                                addProperty("texture", "#${faceData.textureIndex}")
                             })
                         }
-                        add("faces", JsonObject().apply {
-                            element.faces.forEach { (face, faceData) ->
-                                add(face, JsonObject().apply {
-                                    add("uv", JsonArray().also { arr ->
-                                        faceData.uv.forEach { arr.add(it) }
-                                    })
-                                    addProperty("texture", "#${faceData.textureIndex}")
-                                    if (faceData.rotation != 0) addProperty("rotation", faceData.rotation)
-                                })
-                            }
-                        })
                     })
-                }
-            })
-        }
-
-        add("display", JsonObject().apply {
-            add("head", JsonObject().apply {
-                add("translation", JsonArray().also { it.add(0); it.add(0); it.add(0) })
-                add("scale", JsonArray().also { it.add(1); it.add(1); it.add(1) })
-            })
+                })
+            }
         })
     }
 

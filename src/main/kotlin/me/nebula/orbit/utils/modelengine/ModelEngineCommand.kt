@@ -8,6 +8,14 @@ import me.nebula.orbit.utils.modelengine.generator.ModelIdRegistry
 import me.nebula.orbit.utils.modelengine.model.StandaloneModelOwner
 import me.nebula.orbit.utils.modelengine.model.standAloneModel
 import net.minestom.server.command.builder.Command
+import net.minestom.server.component.DataComponents
+import net.minestom.server.coordinate.Vec
+import net.minestom.server.entity.Entity
+import net.minestom.server.entity.EntityType
+import net.minestom.server.entity.metadata.display.AbstractDisplayMeta
+import net.minestom.server.entity.metadata.display.ItemDisplayMeta
+import net.minestom.server.item.ItemStack
+import net.minestom.server.item.Material
 import java.util.concurrent.ConcurrentHashMap
 
 private val spawnedModels: MutableSet<StandaloneModelOwner> = ConcurrentHashMap.newKeySet()
@@ -74,7 +82,7 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
             val cmdArgs = args.get("args") as? Array<String>
             val blueprintName = cmdArgs?.getOrNull(0)
             if (blueprintName.isNullOrEmpty()) {
-                player.sendMM("<red>Usage: /me spawn <blueprint> [scale]")
+                player.sendMM("<red>Usage: /me spawn <blueprint> [scale] [noidle]")
                 return@onPlayerExecute
             }
             if (ModelEngine.blueprintOrNull(blueprintName) == null) {
@@ -82,12 +90,14 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
                 return@onPlayerExecute
             }
             val scale = cmdArgs.getOrNull(1)?.toFloatOrNull() ?: 1.0f
+            val noIdle = cmdArgs.any { it.equals("noidle", ignoreCase = true) }
             val owner = standAloneModel(player.position) {
-                model(blueprintName) { scale(scale) }
+                model(blueprintName, autoPlayIdle = !noIdle) { scale(scale) }
             }
             owner.show(player)
             spawnedModels += owner
-            player.sendMM("<green>Spawned <white>$blueprintName <green>at your position <gray>(scale=$scale)")
+            val idleLabel = if (noIdle) ", noidle" else ""
+            player.sendMM("<green>Spawned <white>$blueprintName <green>at your position <gray>(scale=$scale$idleLabel)")
         }
     }
 
@@ -140,6 +150,77 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
                 val modelNames = modeled.models.keys.joinToString(", ")
                 player.sendMM("<yellow>${modeled.owner.ownerId} <gray>at <white>${pos.blockX()}, ${pos.blockY()}, ${pos.blockZ()} <gray>models=<white>$modelNames <gray>viewers=<white>${modeled.viewers.size}")
             }
+        }
+    }
+
+    subCommand("testreal") {
+        stringArrayArgument("args")
+        tabComplete { _, input ->
+            val tokens = input.split(" ")
+            if (tokens.size <= 1) {
+                ModelEngine.blueprints().keys.filter { it.startsWith(tokens[0], ignoreCase = true) }
+            } else emptyList()
+        }
+        onPlayerExecute {
+            @Suppress("UNCHECKED_CAST")
+            val cmdArgs = args.get("args") as? Array<String>
+            val blueprintName = cmdArgs?.getOrNull(0)
+            if (blueprintName.isNullOrEmpty()) {
+                player.sendMM("<red>Usage: /me testreal <blueprint> [bone]")
+                return@onPlayerExecute
+            }
+            val bp = ModelEngine.blueprintOrNull(blueprintName)
+            if (bp == null) {
+                player.sendMM("<red>Blueprint not found: $blueprintName")
+                return@onPlayerExecute
+            }
+            val boneName = cmdArgs.getOrNull(1) ?: bp.rootBoneNames.firstOrNull()
+            val bone = boneName?.let { bp.bones[it] }
+            if (bone == null) {
+                player.sendMM("<red>Bone not found. Available: ${bp.bones.keys.joinToString(", ")}")
+                return@onPlayerExecute
+            }
+            val item = bone.modelItem
+            if (item == null) {
+                player.sendMM("<red>Bone $boneName has no model item")
+                return@onPlayerExecute
+            }
+            val itemModel = item.get(DataComponents.ITEM_MODEL)
+            player.sendMM("<gray>Spawning REAL item_display: item_model=<white>$itemModel")
+            player.sendMM("<gray>ItemStack: <white>$item")
+            player.sendMM("<gray>Components: <white>${item.get(DataComponents.ITEM_MODEL)}")
+
+            val entity = Entity(EntityType.ITEM_DISPLAY)
+            val meta = entity.entityMeta as ItemDisplayMeta
+            meta.setNotifyAboutChanges(false)
+            meta.setItemStack(item)
+            meta.setScale(Vec(1.0, 1.0, 1.0))
+            meta.setBillboardRenderConstraints(AbstractDisplayMeta.BillboardConstraints.FIXED)
+            meta.setNotifyAboutChanges(true)
+            entity.setInstance(player.instance!!, player.position.add(0.0, 2.0, 0.0))
+
+            player.sendMM("<green>Spawned REAL entity at your position +2Y. Compare with packet-based model.")
+        }
+    }
+
+    subCommand("testcube") {
+        onPlayerExecute {
+            val item = ItemStack.of(Material.PAPER).with(DataComponents.ITEM_MODEL, "minecraft:me_debug_cube")
+            player.sendMM("<gray>Spawning debug cube: item_model=<white>minecraft:me_debug_cube")
+            player.sendMM("<gray>This should render as a solid RED cube if the pack is loaded correctly.")
+
+            val entity = Entity(EntityType.ITEM_DISPLAY)
+            val meta = entity.entityMeta as ItemDisplayMeta
+            meta.setNotifyAboutChanges(false)
+            meta.setItemStack(item)
+            meta.setScale(Vec(1.0, 1.0, 1.0))
+            meta.setBillboardRenderConstraints(AbstractDisplayMeta.BillboardConstraints.FIXED)
+            meta.setNotifyAboutChanges(true)
+            entity.setInstance(player.instance!!, player.position.add(0.0, 2.0, 0.0))
+
+            player.sendMM("<green>Spawned debug cube at your position +2Y.")
+            player.sendMM("<yellow>If you see a red cube: pack works, issue is in model generation.")
+            player.sendMM("<yellow>If you see paper/nothing: pack loading or item_model resolution is broken.")
         }
     }
 

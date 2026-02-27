@@ -16,26 +16,33 @@ object ItemModelOverrideWriter {
             if (entries.isEmpty()) return@mapNotNull null
             val sorted = entries.sortedBy { it.customModelData }
             val materialKey = material.key().value()
-            val path = "assets/minecraft/models/item/$materialKey.json"
-            val json = buildOverrideJson(materialKey, sorted)
+            val path = "assets/minecraft/items/$materialKey.json"
+            val json = buildItemDefinition(materialKey, sorted)
             path to gson.toJson(json).toByteArray(Charsets.UTF_8)
         }.toMap()
 
-    private fun buildOverrideJson(materialKey: String, entries: List<OverrideEntry>): JsonObject =
+    private fun buildItemDefinition(materialKey: String, entries: List<OverrideEntry>): JsonObject =
         JsonObject().apply {
-            addProperty("parent", "minecraft:item/generated")
-            add("textures", JsonObject().apply {
-                addProperty("layer0", "minecraft:item/$materialKey")
-            })
-            add("overrides", JsonArray().apply {
-                entries.forEach { entry ->
-                    add(JsonObject().apply {
-                        add("predicate", JsonObject().apply {
-                            addProperty("custom_model_data", entry.customModelData)
+            add("model", JsonObject().apply {
+                addProperty("type", "minecraft:range_dispatch")
+                addProperty("property", "minecraft:custom_model_data")
+                addProperty("index", 0)
+                addProperty("scale", 1.0)
+                add("fallback", JsonObject().apply {
+                    addProperty("type", "minecraft:model")
+                    addProperty("model", "minecraft:item/$materialKey")
+                })
+                add("entries", JsonArray().apply {
+                    entries.forEach { entry ->
+                        add(JsonObject().apply {
+                            addProperty("threshold", entry.customModelData.toDouble())
+                            add("model", JsonObject().apply {
+                                addProperty("type", "minecraft:model")
+                                addProperty("model", entry.modelPath)
+                            })
                         })
-                        addProperty("model", entry.modelPath)
-                    })
-                }
+                    }
+                })
             })
         }
 }

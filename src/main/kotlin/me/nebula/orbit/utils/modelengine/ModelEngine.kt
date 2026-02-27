@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.modelengine
 
 import me.nebula.orbit.utils.modelengine.blueprint.ModelBlueprint
+import me.nebula.orbit.utils.modelengine.generator.RawGenerationResult
 import me.nebula.orbit.utils.modelengine.model.ModelOwner
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
 import me.nebula.orbit.utils.modelengine.model.ModeledEntityBuilder
@@ -19,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 object ModelEngine {
 
     private val blueprints = ConcurrentHashMap<String, ModelBlueprint>()
+    private val rawResults = ConcurrentHashMap<String, RawGenerationResult>()
     private val modeledEntities = ConcurrentHashMap<Int, ModeledEntity>()
     private var tickTask: Task? = null
     private var eventNode: EventNode<*>? = null
@@ -27,8 +29,14 @@ object ModelEngine {
         blueprints[name] = blueprint
     }
 
+    fun registerRaw(name: String, raw: RawGenerationResult) {
+        blueprints[name] = raw.blueprint
+        rawResults[name] = raw
+    }
+
     fun unregisterBlueprint(name: String) {
         blueprints.remove(name)
+        rawResults.remove(name)
     }
 
     fun blueprint(name: String): ModelBlueprint =
@@ -37,6 +45,8 @@ object ModelEngine {
     fun blueprintOrNull(name: String): ModelBlueprint? = blueprints[name]
 
     fun blueprints(): Map<String, ModelBlueprint> = blueprints.toMap()
+
+    fun rawResults(): List<RawGenerationResult> = rawResults.values.toList()
 
     fun createModeledEntity(owner: ModelOwner): ModeledEntity {
         modeledEntities[owner.ownerId]?.destroy()

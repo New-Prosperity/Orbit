@@ -43,6 +43,7 @@ import me.nebula.orbit.utils.modelengine.modelEngineCommand
 import me.nebula.orbit.cosmetic.CosmeticListener
 import me.nebula.orbit.cosmetic.CosmeticMenu
 import me.nebula.orbit.cosmetic.CosmeticRegistry
+import me.nebula.orbit.commands.installBasicCommands
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.customcontent.armor.armorTestCommand
 import me.nebula.orbit.utils.screen.screenTestCommand
@@ -189,6 +190,7 @@ object Orbit {
         CustomContentRegistry.mergePack()
 
         val commandManager = MinecraftServer.getCommandManager()
+        installBasicCommands(commandManager)
         commandManager.register(modelEngineCommand(app.resources))
         commandManager.register(customContentCommand(app.resources))
         commandManager.register(cinematicTestCommand())

@@ -5,7 +5,7 @@ import me.nebula.ether.utils.translation.TranslationRegistry
 object OrbitTranslations {
 
     fun register(translations: TranslationRegistry) {
-        translations.putAll("en", mechanic() + utility())
+        translations.putAll("en", mechanic() + utility() + game() + cosmetic())
     }
 
     private fun mechanic(): Map<String, String> = mapOf(
@@ -86,6 +86,55 @@ object OrbitTranslations {
         "orbit.util.podium.first" to "1st Place",
         "orbit.util.podium.second" to "2nd Place",
         "orbit.util.podium.third" to "3rd Place",
+    )
+
+    private fun game(): Map<String, String> = mapOf(
+        "orbit.game.hoplite.elimination" to "<red><victim> <gray>was eliminated by <gold><killer>",
+    )
+
+    private fun cosmetic(): Map<String, String> = mapOf(
+        "orbit.cosmetic.menu.title" to "Cosmetics",
+        "orbit.cosmetic.category.armor_skin" to "Armor Skins",
+        "orbit.cosmetic.category.kill_effect" to "Kill Effects",
+        "orbit.cosmetic.category.trail" to "Trails",
+        "orbit.cosmetic.category.win_effect" to "Win Effects",
+        "orbit.cosmetic.category.projectile_trail" to "Projectile Trails",
+
+        "orbit.cosmetic.rarity.common" to "Common",
+        "orbit.cosmetic.rarity.rare" to "Rare",
+        "orbit.cosmetic.rarity.epic" to "Epic",
+        "orbit.cosmetic.rarity.legendary" to "Legendary",
+
+        "orbit.cosmetic.status.owned" to "Owned",
+        "orbit.cosmetic.status.equipped" to "Equipped",
+        "orbit.cosmetic.status.locked" to "Locked",
+        "orbit.cosmetic.action.equip" to "Click to equip",
+        "orbit.cosmetic.action.unequip" to "Click to unequip",
+
+        "orbit.cosmetic.armor_knight.name" to "Knight Armor",
+        "orbit.cosmetic.armor_knight.description" to "A noble knight's enchanted armor set",
+
+        "orbit.cosmetic.kill_flame_burst.name" to "Flame Burst",
+        "orbit.cosmetic.kill_flame_burst.description" to "Erupts flames at the defeat location",
+        "orbit.cosmetic.kill_heart_explosion.name" to "Heart Explosion",
+        "orbit.cosmetic.kill_heart_explosion.description" to "A burst of hearts upon elimination",
+
+        "orbit.cosmetic.trail_flame.name" to "Flame Trail",
+        "orbit.cosmetic.trail_flame.description" to "Leave a trail of fire behind you",
+        "orbit.cosmetic.trail_soul.name" to "Soul Trail",
+        "orbit.cosmetic.trail_soul.description" to "Leave eerie soul flames in your wake",
+        "orbit.cosmetic.trail_enchant.name" to "Enchant Trail",
+        "orbit.cosmetic.trail_enchant.description" to "Mystical enchantment glyphs follow you",
+
+        "orbit.cosmetic.win_firework_helix.name" to "Firework Helix",
+        "orbit.cosmetic.win_firework_helix.description" to "A spiraling firework celebration",
+        "orbit.cosmetic.win_totem.name" to "Totem Burst",
+        "orbit.cosmetic.win_totem.description" to "An explosive totem of undying effect",
+
+        "orbit.cosmetic.projectile_flame.name" to "Flame Arrow",
+        "orbit.cosmetic.projectile_flame.description" to "Your arrows leave a fiery trail",
+        "orbit.cosmetic.projectile_dragon.name" to "Dragon Breath Arrow",
+        "orbit.cosmetic.projectile_dragon.description" to "Your arrows leave dragon breath particles",
     )
 
 }

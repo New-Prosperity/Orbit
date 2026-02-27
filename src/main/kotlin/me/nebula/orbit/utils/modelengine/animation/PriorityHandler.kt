@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.modelengine.animation
 
 import me.nebula.orbit.utils.modelengine.blueprint.AnimationBlueprint
 import me.nebula.orbit.utils.modelengine.blueprint.LoopMode
+import me.nebula.orbit.utils.modelengine.math.eulerToQuat
 import me.nebula.orbit.utils.modelengine.model.ActiveModel
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -143,7 +144,13 @@ class PriorityHandler : AnimationHandler {
         boneProperties.forEach { (boneName, prop) ->
             val bone = model.bones[boneName] ?: return@forEach
             bone.animatedPosition = prop.position
-            bone.animatedRotation = prop.rotation
+            val boneEuler = bone.blueprint.rotationEuler
+            val combinedEuler = boneEuler.add(prop.rotationEuler)
+            bone.localRotation = eulerToQuat(
+                combinedEuler.x().toFloat(),
+                combinedEuler.y().toFloat(),
+                combinedEuler.z().toFloat(),
+            )
             bone.animatedScale = prop.scale
         }
     }

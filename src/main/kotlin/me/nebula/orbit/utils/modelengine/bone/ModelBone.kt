@@ -70,6 +70,7 @@ class ModelBone(val blueprint: BlueprintBone) {
     fun resetAnimation() {
         animatedPosition = Vec.ZERO
         animatedRotation = QUAT_IDENTITY
+        localRotation = blueprint.rotation
         animatedScale = Vec(1.0, 1.0, 1.0)
     }
 }

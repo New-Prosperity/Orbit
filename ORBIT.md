@@ -14,7 +14,7 @@ Standalone Minestom game server for the Nebula network. Runs on every server —
 - Env vars: `HAZELCAST_LICENSE` (required), `VELOCITY_SECRET` (required), `SERVER_PORT` (default 25565), `P_SERVER_UUID` (optional), `SERVER_HOST` (optional).
 - **Provision self-discovery**: When `P_SERVER_UUID` is set, Orbit looks up `ProvisionStore.load(serverUuid)` from the distributed Hazelcast store (populated by Pulsar's `ServerSynchronizer.sync()`), deriving `serverName` from the provision's server name and `gameMode` from `provision.metadata["game_mode"]`. No direct Proton API call needed — Orbit relies on the cluster-synced store. When `P_SERVER_UUID` is empty or no provision found, `serverName` defaults to `"orbit-local"` and `gameMode` to `null` (hub mode).
 - Hazelcast: lite member with 18 stores (includes ReconnectionStore).
-- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `ModelEngine.install()` → `CustomContentRegistry.init()` (loads items, blocks, armors) → load `.bbmodel` model files → `CustomContentRegistry.mergePack()` (generates armor shaders, merges all) → register commands (model, cc, cinematic, screen, armor) → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
+- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `ModelEngine.install()` → `CustomContentRegistry.init()` (loads items, blocks, armors) → load `.bbmodel` model files → `CustomContentRegistry.mergePack()` (generates armor shaders, merges all) → register commands (basic, model, cc, cinematic, screen, armor) → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
 - **Resource pack**: Pack is merged at startup but NOT sent from Orbit — pack distribution is delegated to the proxy.
 - Common listeners: `AsyncPlayerConfigurationEvent` (locale cache, set spawning instance/respawn from mode), `PlayerDisconnectEvent` (evict locale), `OnlinePlayerCache` refresh (5s).
 - `resolveMode()` selects `ServerMode` by `gameMode` (sourced from Proton provision `metadata["game_mode"]`, NOT an env var): `null` → `HubMode(app.resources)`, `"hoplite"` → `HopliteMode(app.resources)`, else → `error()`.
@@ -793,7 +793,7 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 | `coinflip/CoinFlip.kt` | `coinFlip { onHeads {}; onTails {} }`, `diceRoll(sides) {}`, `weightedRandom<T> {}` DSL, animated reveal |
 | `spectatorcam/SpectatorCam.kt` | `spectatorCam(player) { target(); mode(FIRST_PERSON/FREE_CAM/ORBIT) }` DSL, orbit camera, player cycling |
 | `cinematic/CinematicCamera.kt` | `cinematic(player) { node(time, pos); lookAt(entity); loop(); onComplete {} }` DSL, keyframe path with catmull-rom/bezier/linear position interpolation, quaternion slerp rotation, dynamic lookAt target tracking, reuses `KeyframeInterpolator` + `quatSlerp` |
-| `screen/Screen.kt` | `screen(player, cameraPos) { cursor {}; button(id, x, y, w, h) { onClick {}; hoverScale() }; label(id, x, y) { text() } }` DSL, packet-only 2D screen projection with ITEM_DISPLAY cursor, AABB hit-testing, hover feedback, delta-based mouse input via OAK_BOAT mount, `ScreenProjection.kt` math engine |
+| `screen/Screen.kt` | `screen(player, eyePos) { cursor {}; background(color); onDraw { canvas -> }; button(id, x, y, w, h) { onClick {}; onHover {} }; panel(x, y, w, h, color) { label(); button(); progressBar(); image() } }` DSL, shader-decoded map-based renderer: MSB-split encoding into item frame map grid (640x384 default = 10x6 maps, 64x64 true-color pixels per map), GLSL palette reverse-lookup decode in `rendertype_text.fsh`+`entity.fsh`, `MapCanvas` pixel buffer with BitSet tile-level dirty tracking, `MapEncoder` tile encoding with magic signature + partial dirty-only encode, `MapDisplay` packet-based item frame grid with row-level partial `MapDataPacket` updates (diffs previous data, sends only changed row ranges), staggered initial load (20 tiles/tick), `ScreenConfig.kt` auto-depth projection with `require` validation, ITEM_DISPLAY cursor with interpolation, AABB hit-testing + widget tree hit-testing, camel mount input capture, `MapShaderPack.kt` generates 128-entry palette GLSL, `TextureLoader` (classpath/bytes/BufferedImage → `Texture` with scaling/sub-region), drawing primitives (`line`/`circle`/`filledCircle`/`roundedRect`/`stroke`/`linearGradient`/`radialGradient`/`blendPixel`), `BitmapFont` grid-atlas font system with built-in 6x8 default, `AnimationController` per-session tween system (`Easing.LINEAR/EASE_IN/EASE_OUT/EASE_IN_OUT`, `IntInterpolator`/`DoubleInterpolator`/`ColorInterpolator`), composable widget tree (`Panel`/`Label`/`Button`/`ProgressBar`/`ImageWidget`) with auto-draw and auto-hit-test |
 | `chestloot/ChestLoot.kt` | `chestLoot(name) { tier("common") { item() }; fillChestsInRegion() }` DSL, weighted tiers, amount ranges |
 | `npcdialog/NPCDialog.kt` | `npcDialog(npcName) { page("greeting") { text(); option("quest") {} } }` DSL, tree-structured dialog, clickable chat options |
 | `autorestart/AutoRestart.kt` | `autoRestart { after(6.hours); warnings(30.minutes, 10.minutes); warningMessage(); onRestart {} }` DSL, `AutoRestartManager.scheduleRestart/cancelRestart/getTimeRemaining`, broadcast warnings, kick on restart |
@@ -954,3 +954,21 @@ Permission: `orbit.customcontent`
 - Tab completion for `<item>` from `CustomItemRegistry.all().map { it.id }`
 - Tab completion for `<id>` from combined item + block IDs
 - Registered in `Orbit.kt` after `CustomContentRegistry.init()`. Pack sending removed — delegated to proxy.
+
+### Basic Commands (`commands/BasicCommands.kt`)
+Installed via `installBasicCommands(commandManager)` — registers all commands + god mode damage listener + disconnect cleanup.
+
+| Command | Aliases | Permission | Args | Action |
+|---|---|---|---|---|
+| `/gamemode` | `/gm` | `orbit.command.gamemode` | `<mode> [player]` | Set gamemode (survival/s/0, creative/c/1, adventure/a/2, spectator/sp/3) |
+| `/fly` | — | `orbit.command.fly` | `[player]` | Toggle flight |
+| `/heal` | — | `orbit.command.heal` | `[player]` | Restore to max health |
+| `/feed` | — | `orbit.command.feed` | `[player]` | Restore food (20) + saturation (5.0) |
+| `/tp` | `/teleport` | `orbit.command.teleport` | `<player>` or `<x> <y> <z>` | Teleport to player or coordinates |
+| `/speed` | — | `orbit.command.speed` | `<1-10> [player]` | Set walk (0.1×n) + fly (0.05×n) speed |
+| `/kill` | — | `orbit.command.kill` | `[player]` | Kill player |
+| `/clear` | `/clearinventory`, `/ci` | `orbit.command.clear` | `[player]` | Clear inventory |
+| `/ping` | — | `orbit.command.ping` | `[player]` | Show latency in ms |
+| `/god` | — | `orbit.command.god` | `[player]` | Toggle invulnerability (cancels EntityDamageEvent) |
+
+All commands: permission-gated via `RankManager`, tab-complete player names via `OnlinePlayerCache`, run on virtual threads.

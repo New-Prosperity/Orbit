@@ -9,6 +9,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 class ModeledEntity(val owner: ModelOwner) {
 
+    private companion object {
+        const val TICK_DELTA = 1f / 20f
+    }
+
     val entityOrNull: Entity? get() = (owner as? EntityModelOwner)?.entity
 
     private val _models = ConcurrentHashMap<String, ActiveModel>()
@@ -20,8 +24,8 @@ class ModeledEntity(val owner: ModelOwner) {
     var headYaw: Float = 0f
     var headPitch: Float = 0f
 
-    fun addModel(id: String, blueprint: ModelBlueprint): ActiveModel {
-        val model = ActiveModel(blueprint)
+    fun addModel(id: String, blueprint: ModelBlueprint, autoPlayIdle: Boolean = true): ActiveModel {
+        val model = ActiveModel(blueprint, autoPlayIdle)
         _models[id] = model
         _viewers.forEach { uuid ->
             findPlayer(uuid)?.let { model.show(it, owner.position) }
@@ -59,6 +63,7 @@ class ModeledEntity(val owner: ModelOwner) {
 
     fun tick() {
         _models.values.forEach { model ->
+            model.tickAnimations(TICK_DELTA)
             model.computeTransforms()
             model.tickBehaviors(this)
             model.updateRenderer(owner.position)
@@ -84,13 +89,16 @@ class ModeledEntityBuilder @PublishedApi internal constructor(
     private val owner: ModelOwner,
     private val modeledEntity: ModeledEntity,
 ) {
-    fun model(id: String, block: ActiveModelBuilder.() -> Unit = {}) {
+    fun model(id: String, autoPlayIdle: Boolean = true, block: ActiveModelBuilder.() -> Unit = {}) {
         val blueprint = ModelEngine.blueprint(id)
-        val model = modeledEntity.addModel(id, blueprint)
+        val model = modeledEntity.addModel(id, blueprint, autoPlayIdle)
         ActiveModelBuilder(model).apply(block)
     }
 }
 
 class ActiveModelBuilder @PublishedApi internal constructor(private val model: ActiveModel) {
     fun scale(scale: Float) { model.modelScale = scale }
+    fun animation(name: String, lerpIn: Float = 0f, lerpOut: Float = 0f, speed: Float = 1f) {
+        model.playAnimation(name, lerpIn, lerpOut, speed)
+    }
 }
