@@ -40,7 +40,7 @@ fun MapCanvas.drawText(font: BitmapFont, x: Int, y: Int, text: String, color: In
 fun textWidth(font: BitmapFont, text: String): Int = text.length * font.charWidth
 
 val DEFAULT_FONT: BitmapFont by lazy {
-    val w = 6
+    val w = 7
     val h = 8
     val cols = 16
     val rows = 6

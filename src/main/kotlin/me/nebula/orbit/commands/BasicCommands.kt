@@ -3,6 +3,9 @@ package me.nebula.orbit.commands
 import me.nebula.orbit.utils.chat.sendMM
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.commandbuilder.suggestPlayers
+import me.nebula.orbit.utils.gui.gui
+import me.nebula.orbit.utils.weathercontrol.WeatherController
+import me.nebula.orbit.utils.weathercontrol.WeatherState
 import net.minestom.server.MinecraftServer
 import net.minestom.server.command.CommandManager
 import net.minestom.server.coordinate.Pos
@@ -11,6 +14,8 @@ import net.minestom.server.entity.Player
 import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
+import net.minestom.server.item.ItemStack
+import net.minestom.server.item.Material
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -28,6 +33,11 @@ fun installBasicCommands(commandManager: CommandManager) {
         clearCommand(),
         pingCommand(),
         godCommand(),
+        giveCommand(),
+        timeCommand(),
+        weatherCommand(),
+        tphereCommand(),
+        invseeCommand(),
     ).forEach(commandManager::register)
 
     val global = MinecraftServer.getGlobalEventHandler()
@@ -338,5 +348,170 @@ private fun godCommand() = command("god") {
             player.sendMM("<green>God mode $state <green>for <white>${target.username}")
             target.sendMM("<green>God mode $state")
         }
+    }
+}
+
+private fun giveCommand() = command("give") {
+    permission("orbit.command.give")
+    stringArrayArgument("args")
+    tabComplete { _, input ->
+        val tokens = input.trimEnd().split(" ")
+        when (tokens.size) {
+            2 -> Material.values().asSequence()
+                .map { it.key().value() }
+                .filter { it.startsWith(tokens.last(), ignoreCase = true) }
+                .take(50)
+                .toList()
+            3 -> emptyList()
+            4 -> suggestPlayers(tokens.last())
+            else -> emptyList()
+        }
+    }
+    onPlayerExecute {
+        val cmdArgs = args.get("args") as? Array<String>
+        if (cmdArgs.isNullOrEmpty()) {
+            player.sendMM("<red>Usage: /give <item> [amount] [player]")
+            return@onPlayerExecute
+        }
+        val input = cmdArgs[0].lowercase()
+        val key = if (input.contains(":")) input else "minecraft:$input"
+        val material = Material.fromKey(key)
+            ?: Material.values().firstOrNull { it.key().value().equals(input, ignoreCase = true) }
+        if (material == null) {
+            player.sendMM("<red>Unknown item: <white>${cmdArgs[0]}")
+            return@onPlayerExecute
+        }
+        val amount = (cmdArgs.getOrNull(1)?.toIntOrNull() ?: 1).coerceIn(1, 6400)
+        val target = targetOrSelf(player, cmdArgs, 2) ?: run {
+            player.sendMM("<red>Player not found: <white>${cmdArgs[2]}")
+            return@onPlayerExecute
+        }
+        target.inventory.addItemStack(ItemStack.of(material, amount))
+        if (target === player) {
+            player.sendMM("<green>Gave <white>${amount}x ${material.key().value()}")
+        } else {
+            player.sendMM("<green>Gave <white>${amount}x ${material.key().value()} <green>to <white>${target.username}")
+            target.sendMM("<green>Received <white>${amount}x ${material.key().value()}")
+        }
+    }
+}
+
+private fun timeCommand() = command("time") {
+    permission("orbit.command.time")
+    stringArrayArgument("args")
+    tabComplete { _, input ->
+        val tokens = input.trimEnd().split(" ")
+        if (tokens.size == 2) listOf("day", "noon", "night", "midnight")
+            .filter { it.startsWith(tokens.last(), ignoreCase = true) }
+        else emptyList()
+    }
+    onPlayerExecute {
+        val cmdArgs = args.get("args") as? Array<String>
+        if (cmdArgs.isNullOrEmpty()) {
+            player.sendMM("<red>Usage: /time <day|noon|night|midnight|ticks>")
+            return@onPlayerExecute
+        }
+        val ticks = when (cmdArgs[0].lowercase()) {
+            "day" -> 1000L
+            "noon" -> 6000L
+            "night" -> 13000L
+            "midnight" -> 18000L
+            else -> cmdArgs[0].toLongOrNull()
+        }
+        if (ticks == null) {
+            player.sendMM("<red>Invalid time: <white>${cmdArgs[0]}")
+            return@onPlayerExecute
+        }
+        val instance = player.instance ?: return@onPlayerExecute
+        instance.time = ticks
+        player.sendMM("<green>Time set to <white>$ticks")
+    }
+}
+
+private fun weatherCommand() = command("weather") {
+    permission("orbit.command.weather")
+    stringArrayArgument("args")
+    tabComplete { _, input ->
+        val tokens = input.trimEnd().split(" ")
+        if (tokens.size == 2) listOf("clear", "rain", "thunder")
+            .filter { it.startsWith(tokens.last(), ignoreCase = true) }
+        else emptyList()
+    }
+    onPlayerExecute {
+        val cmdArgs = args.get("args") as? Array<String>
+        if (cmdArgs.isNullOrEmpty()) {
+            player.sendMM("<red>Usage: /weather <clear|rain|thunder>")
+            return@onPlayerExecute
+        }
+        val state = when (cmdArgs[0].lowercase()) {
+            "clear", "sunny" -> WeatherState.SUNNY
+            "rain", "rainy" -> WeatherState.RAINY
+            "thunder", "thundering" -> WeatherState.THUNDERING
+            else -> null
+        }
+        if (state == null) {
+            player.sendMM("<red>Unknown weather: <white>${cmdArgs[0]}")
+            return@onPlayerExecute
+        }
+        val instance = player.instance ?: return@onPlayerExecute
+        WeatherController.setWeather(instance, state)
+        player.sendMM("<green>Weather set to <white>${state.name.lowercase()}")
+    }
+}
+
+private fun tphereCommand() = command("tphere") {
+    permission("orbit.command.tphere")
+    aliases("s2l")
+    stringArrayArgument("args")
+    tabComplete { _, input ->
+        val tokens = input.trimEnd().split(" ")
+        if (tokens.size == 2) suggestPlayers(tokens.last()) else emptyList()
+    }
+    onPlayerExecute {
+        val cmdArgs = args.get("args") as? Array<String>
+        if (cmdArgs.isNullOrEmpty()) {
+            player.sendMM("<red>Usage: /tphere <player>")
+            return@onPlayerExecute
+        }
+        val target = resolveOnline(cmdArgs[0]) ?: run {
+            player.sendMM("<red>Player not found: <white>${cmdArgs[0]}")
+            return@onPlayerExecute
+        }
+        target.teleport(player.position)
+        player.sendMM("<green>Teleported <white>${target.username} <green>to you")
+        target.sendMM("<green>You were teleported to <white>${player.username}")
+    }
+}
+
+private fun invseeCommand() = command("invsee") {
+    permission("orbit.command.invsee")
+    stringArrayArgument("args")
+    tabComplete { _, input ->
+        val tokens = input.trimEnd().split(" ")
+        if (tokens.size == 2) suggestPlayers(tokens.last()) else emptyList()
+    }
+    onPlayerExecute {
+        val cmdArgs = args.get("args") as? Array<String>
+        if (cmdArgs.isNullOrEmpty()) {
+            player.sendMM("<red>Usage: /invsee <player>")
+            return@onPlayerExecute
+        }
+        val target = resolveOnline(cmdArgs[0]) ?: run {
+            player.sendMM("<red>Player not found: <white>${cmdArgs[0]}")
+            return@onPlayerExecute
+        }
+        val inv = target.inventory
+        val g = gui("<gray>${target.username}'s Inventory", rows = 5) {
+            for (i in 9 until 36) {
+                val item = inv.getItemStack(i)
+                if (!item.isAir) slot(i - 9, item)
+            }
+            for (i in 0 until 9) {
+                val item = inv.getItemStack(i)
+                if (!item.isAir) slot(i + 36, item)
+            }
+            border(Material.GRAY_STAINED_GLASS_PANE)
+        }
+        g.open(player)
     }
 }

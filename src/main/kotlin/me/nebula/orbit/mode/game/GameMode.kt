@@ -169,6 +169,36 @@ abstract class GameMode : ServerMode {
         }
     }
 
+    fun revive(player: Player) {
+        require(phase == GamePhase.PLAYING) { "Can only revive during PLAYING phase" }
+        require(tracker.isSpectating(player.uuid)) { "Player ${player.username} is not spectating" }
+
+        tracker.revive(player.uuid)
+        player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
+        player.teleport(spawnPoint)
+    }
+
+    fun forceReconnect(player: Player) {
+        require(phase == GamePhase.PLAYING) { "Can only force reconnect during PLAYING phase" }
+        require(tracker.isDisconnected(player.uuid)) { "Player ${player.username} is not in disconnected state" }
+
+        disconnectTimers.remove(player.uuid)?.cancel()
+        ReconnectionStore.delete(player.uuid)
+        tracker.reconnect(player.uuid)
+        onPlayerReconnected(player)
+    }
+
+    fun forceStart() {
+        require(phase == GamePhase.WAITING || phase == GamePhase.STARTING) { "Can only force start from WAITING or STARTING phase" }
+
+        if (phase == GamePhase.WAITING) {
+            stateMachine.transition(GamePhase.STARTING)
+        }
+        startingCountdown?.stop()
+        startingCountdown = null
+        stateMachine.transition(GamePhase.PLAYING)
+    }
+
     fun forceEnd(result: MatchResult) {
         lastEndResult = result
         stateMachine.transition(GamePhase.ENDING)

@@ -44,6 +44,7 @@ import me.nebula.orbit.cosmetic.CosmeticListener
 import me.nebula.orbit.cosmetic.CosmeticMenu
 import me.nebula.orbit.cosmetic.CosmeticRegistry
 import me.nebula.orbit.commands.installBasicCommands
+import me.nebula.orbit.commands.installGameCommands
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.customcontent.armor.armorTestCommand
 import me.nebula.orbit.utils.screen.screenTestCommand
@@ -66,6 +67,8 @@ object Orbit {
     lateinit var app: App
     lateinit var translations: TranslationRegistry
     lateinit var serverName: String
+        private set
+    lateinit var mode: ServerMode
         private set
     var gameMode: String? = null
         private set
@@ -170,7 +173,7 @@ object Orbit {
 
         val server = MinecraftServer.init(Auth.Velocity(env.all["VELOCITY_SECRET"]!!))
 
-        val mode: ServerMode = resolveMode()
+        mode = resolveMode()
         logger.info { "Server mode: ${mode::class.simpleName}" }
 
         val handler = MinecraftServer.getGlobalEventHandler()
@@ -191,6 +194,7 @@ object Orbit {
 
         val commandManager = MinecraftServer.getCommandManager()
         installBasicCommands(commandManager)
+        installGameCommands(commandManager)
         commandManager.register(modelEngineCommand(app.resources))
         commandManager.register(customContentCommand(app.resources))
         commandManager.register(cinematicTestCommand())

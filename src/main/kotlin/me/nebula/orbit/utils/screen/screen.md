@@ -130,7 +130,7 @@ canvas.drawText(DEFAULT_FONT, 10, 10, "Hello World", 0xFFFFFFFF.toInt())
 val w = textWidth(DEFAULT_FONT, "Hello")
 ```
 
-`DEFAULT_FONT` is a built-in 6x8 monospace font (ASCII 32-122, no file dependency). Custom fonts load from a grid-atlas texture:
+`DEFAULT_FONT` is a built-in 7x8 monospace font (ASCII 32-122, no file dependency). Custom fonts load from a grid-atlas texture:
 
 ```kotlin
 val font = BitmapFont(atlas = texture, charWidth = 8, charHeight = 12, columns = 16)
@@ -285,7 +285,7 @@ Depth is auto-computed: `(tilesY / 2) / tan(fov * coverage / 2)`.
 |---|---|
 | `canvas.drawText(font, x, y, text, color)` | Render text with tint color |
 | `textWidth(font, text)` | Calculate text pixel width |
-| `DEFAULT_FONT` | Built-in 6x8 monospace (ASCII 32-122) |
+| `DEFAULT_FONT` | Built-in 7x8 monospace (ASCII 32-122) |
 
 ## Widget API
 

@@ -120,6 +120,137 @@ fun screenTestCommand(): Command = command("screen") {
         }
     }
 
+    subCommand("ui") {
+        onPlayerExecute {
+            val origin = player.position
+            val eyePos = Pos(origin.x(), origin.y() + EYE_HEIGHT, origin.z(), origin.yaw(), 0f)
+            var clickCount = 0
+
+            screen(player, eyePos) {
+                cursor {
+                    item(ItemStack.of(Material.ARROW))
+                    scale(0.06f)
+                }
+
+                background(0xFF111118.toInt())
+
+                onDraw { canvas ->
+                    canvas.linearGradient(0, 0, 640, 50, 0xFF1E1E2E.toInt(), 0xFF181825.toInt())
+                    canvas.drawText(DEFAULT_FONT, 248, 21, "BUTTON TEST", 0xFFCDD6F4.toInt())
+                    canvas.stroke(0, 49, 640, 1, 0xFF313244.toInt(), 1)
+                }
+
+                panel(40, 70, 260, 280, 0xFF1E1E2E.toInt()) {
+                    cornerRadius(10)
+                    label(20, 14, "Navigation", DEFAULT_FONT, 0xFFA6ADC8.toInt())
+
+                    button(20, 40, 220, 40, "Play", DEFAULT_FONT) {
+                        bgColor(0xFFA6E3A1.toInt())
+                        hoverColor(0xFF94E2D5.toInt())
+                        textColor(0xFF1E1E2E.toInt())
+                        cornerRadius(6)
+                        onClick { player.sendMessage(Component.text("Play!")) }
+                    }
+
+                    button(20, 92, 220, 40, "Settings", DEFAULT_FONT) {
+                        bgColor(0xFF89B4FA.toInt())
+                        hoverColor(0xFFB4BEFE.toInt())
+                        textColor(0xFF1E1E2E.toInt())
+                        cornerRadius(6)
+                        onClick { player.sendMessage(Component.text("Settings opened")) }
+                    }
+
+                    button(20, 144, 220, 40, "Cosmetics", DEFAULT_FONT) {
+                        bgColor(0xFFF9E2AF.toInt())
+                        hoverColor(0xFFFAB387.toInt())
+                        textColor(0xFF1E1E2E.toInt())
+                        cornerRadius(6)
+                        onClick { player.sendMessage(Component.text("Cosmetics opened")) }
+                    }
+
+                    button(20, 196, 220, 40, "Quit", DEFAULT_FONT) {
+                        bgColor(0xFFF38BA8.toInt())
+                        hoverColor(0xFFEBA0AC.toInt())
+                        textColor(0xFF1E1E2E.toInt())
+                        cornerRadius(6)
+                        onClick { player.closeScreen() }
+                    }
+                }
+
+                panel(340, 70, 260, 130, 0xFF1E1E2E.toInt()) {
+                    cornerRadius(10)
+                    label(20, 14, "Click Counter", DEFAULT_FONT, 0xFFA6ADC8.toInt())
+
+                    button(20, 40, 220, 40, "Click Me!", DEFAULT_FONT) {
+                        bgColor(0xFFCBA6F7.toInt())
+                        hoverColor(0xFFF5C2E7.toInt())
+                        textColor(0xFF1E1E2E.toInt())
+                        cornerRadius(6)
+                        onClick {
+                            clickCount++
+                            Screen.update(player) { canvas ->
+                                canvas.roundedRect(360, 170, 220, 20, 4, 0xFF1E1E2E.toInt())
+                                canvas.drawText(DEFAULT_FONT, 370, 174, "Clicks: $clickCount", 0xFFCDD6F4.toInt())
+                            }
+                        }
+                    }
+
+                    progressBar(20, 92, 220, 16) {
+                        progress(0f)
+                        fgColor(0xFFCBA6F7.toInt())
+                        bgColor(0xFF313244.toInt())
+                        cornerRadius(4)
+                    }
+                }
+
+                panel(340, 220, 260, 130, 0xFF1E1E2E.toInt()) {
+                    cornerRadius(10)
+                    label(20, 14, "Toggle Buttons", DEFAULT_FONT, 0xFFA6ADC8.toInt())
+
+                    button(20, 40, 105, 34, "Option A", DEFAULT_FONT) {
+                        bgColor(0xFF45475A.toInt())
+                        hoverColor(0xFF585B70.toInt())
+                        textColor(0xFFCDD6F4.toInt())
+                        cornerRadius(6)
+                        onClick { player.sendMessage(Component.text("Option A selected")) }
+                    }
+
+                    button(135, 40, 105, 34, "Option B", DEFAULT_FONT) {
+                        bgColor(0xFF45475A.toInt())
+                        hoverColor(0xFF585B70.toInt())
+                        textColor(0xFFCDD6F4.toInt())
+                        cornerRadius(6)
+                        onClick { player.sendMessage(Component.text("Option B selected")) }
+                    }
+
+                    button(20, 84, 220, 34, "Confirm Selection", DEFAULT_FONT) {
+                        bgColor(0xFFA6E3A1.toInt())
+                        hoverColor(0xFF94E2D5.toInt())
+                        textColor(0xFF1E1E2E.toInt())
+                        cornerRadius(6)
+                        onClick { player.sendMessage(Component.text("Confirmed!")) }
+                    }
+                }
+
+                sensitivity(1.0)
+                escToClose()
+                onClose { player.sendMessage(Component.text("UI closed.")) }
+            }
+
+            var tickTask: net.minestom.server.timer.Task? = null
+            tickTask = MinecraftServer.getSchedulerManager()
+                .buildTask {
+                    if (!Screen.isOpen(player)) {
+                        tickTask?.cancel()
+                        return@buildTask
+                    }
+                    Screen.update(player) {}
+                }
+                .repeat(TaskSchedule.tick(2))
+                .schedule()
+        }
+    }
+
     subCommand("close") {
         onPlayerExecute {
             if (player.hasScreenOpen) {

@@ -27,6 +27,13 @@ class PlayerTracker {
         players[uuid] = PlayerState.Spectating
     }
 
+    fun revive(uuid: UUID) {
+        val current = players[uuid] ?: return
+        if (current is PlayerState.Spectating) {
+            players[uuid] = PlayerState.Alive
+        }
+    }
+
     fun disconnect(uuid: UUID) {
         val current = players[uuid] ?: return
         if (current is PlayerState.Alive) {
