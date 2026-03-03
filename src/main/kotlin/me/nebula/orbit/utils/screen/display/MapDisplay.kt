@@ -15,6 +15,7 @@ import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
 import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
 import net.minestom.server.network.packet.server.play.MapDataPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
+import net.minestom.server.utils.Direction
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -22,7 +23,12 @@ private val nextEntityId = AtomicInteger(-6_000_000)
 private val nextMapId = AtomicInteger(Int.MAX_VALUE)
 
 private const val META_FLAGS = 0
-private const val META_ITEM_FRAME_ITEM = 8
+private const val META_HANGING_DIRECTION = 8
+private const val META_ITEM_FRAME_ITEM = 9
+
+private val FACING_TO_DIRECTION = arrayOf(
+    Direction.DOWN, Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST
+)
 
 class MapDisplay(private val tilesX: Int, private val tilesY: Int) {
 
@@ -56,6 +62,7 @@ class MapDisplay(private val tilesX: Int, private val tilesY: Int) {
 
                 player.sendPacket(EntityMetaDataPacket(entityIds[idx], mapOf(
                     META_FLAGS to Metadata.Byte(0x20.toByte()),
+                    META_HANGING_DIRECTION to Metadata.Direction(FACING_TO_DIRECTION[facing]),
                     META_ITEM_FRAME_ITEM to Metadata.ItemStack(mapItem),
                 )))
             }

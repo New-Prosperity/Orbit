@@ -4,27 +4,6 @@ import net.minestom.server.coordinate.Point
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
-import kotlin.math.pow
-
-fun Instance.nearbyEntities(center: Point, radius: Double): List<Entity> {
-    val radiusSq = radius * radius
-    return entities.filter { entity ->
-        val dx = entity.position.x() - center.x()
-        val dy = entity.position.y() - center.y()
-        val dz = entity.position.z() - center.z()
-        dx * dx + dy * dy + dz * dz <= radiusSq
-    }
-}
-
-fun Instance.nearbyPlayers(center: Point, radius: Double): List<Player> {
-    val radiusSq = radius * radius
-    return players.filter { player ->
-        val dx = player.position.x() - center.x()
-        val dy = player.position.y() - center.y()
-        val dz = player.position.z() - center.z()
-        dx * dx + dy * dy + dz * dz <= radiusSq
-    }
-}
 
 fun Player.nearestPlayer(maxRadius: Double = 100.0): Player? {
     val radiusSq = maxRadius * maxRadius

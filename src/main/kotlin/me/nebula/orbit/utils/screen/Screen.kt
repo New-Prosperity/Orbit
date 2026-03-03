@@ -30,6 +30,7 @@ import net.minestom.server.network.packet.client.play.ClientPlayerRotationPacket
 import net.minestom.server.network.packet.client.play.ClientVehicleMovePacket
 import net.minestom.server.network.packet.server.play.CameraPacket
 import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
+import net.minestom.server.network.packet.server.play.EntityHeadLookPacket
 import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import net.minestom.server.timer.TaskSchedule
@@ -224,6 +225,7 @@ object Screen {
                 val s = sessions[player.uuid] ?: return@buildTask
                 player.sendPacket(CameraPacket(viewpointEntityId))
                 s.cameraApplied = true
+                s.calibrated = false
             }
             .delay(TaskSchedule.tick(CAMERA_DELAY_TICKS))
             .schedule()
@@ -280,7 +282,9 @@ object Screen {
     private fun spawnViewpoint(player: Player, config: ScreenConfig): Int {
         val id = nextViewpointEntityId.getAndDecrement()
         val uuid = UUID.randomUUID()
-        player.sendPacket(SpawnEntityPacket(id, uuid, EntityType.VILLAGER, config.feetPos, 0f, 0, Vec.ZERO))
+        val yaw = snapYaw(config.eyePos.yaw())
+        player.sendPacket(SpawnEntityPacket(id, uuid, EntityType.VILLAGER, config.feetPos, yaw, 0, Vec.ZERO))
+        player.sendPacket(EntityHeadLookPacket(id, yaw))
         player.sendPacket(EntityMetaDataPacket(id, mapOf(
             0 to Metadata.Byte(0x20.toByte()),
         )))
@@ -345,6 +349,8 @@ object Screen {
     }
 
     private fun handleRotation(session: ScreenSession, player: Player, newYaw: Float, newPitch: Float) {
+        if (!session.cameraApplied) return
+
         if (!session.calibrated) {
             session.lastYaw = newYaw
             session.lastPitch = newPitch

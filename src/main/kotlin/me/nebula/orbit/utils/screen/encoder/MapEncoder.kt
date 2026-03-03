@@ -31,7 +31,7 @@ object MapEncoder {
         for (ty in 0 until tilesY) {
             for (tx in 0 until tilesX) {
                 if (dirtyOnly && !canvas.isDirty(tx, ty)) continue
-                val data = encodeTileDirect(canvas, tx, ty, tx == 0 && ty == 0)
+                val data = encodeTileDirect(canvas, tx, ty, true)
                 val hash = contentHash(data)
                 chunks += EncodedChunk(tx, ty, data, hash)
             }

@@ -3,8 +3,10 @@ package me.nebula.orbit.utils.screen
 import me.nebula.orbit.utils.screen.encoder.TILE_PIXELS
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
+import kotlin.math.abs
 import kotlin.math.atan
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -18,7 +20,6 @@ data class ScreenConfig(
     val canvasHeight: Int = 384,
     val fov: Double = 70.0,
     val coverage: Double = 0.85,
-    val sensitivity: Double = 1.0,
 ) {
     init {
         require(canvasWidth % TILE_PIXELS == 0) { "canvasWidth must be multiple of $TILE_PIXELS" }
@@ -71,16 +72,23 @@ fun computeScreenBasis(config: ScreenConfig): ScreenBasis {
     val up = right.cross(forward).normalize()
 
     val eye = Vec(config.eyePos.x(), config.eyePos.y(), config.eyePos.z())
-    val center = eye.add(forward.mul(depth))
+    val rawCenter = eye.add(forward.mul(depth))
+    val facing = yawToFacing(snappedYaw)
+    val rightAlongX = facing == 2 || facing == 3
+    val center = Vec(
+        if (rightAlongX) snapForTileGrid(rawCenter.x(), tilesX) else rawCenter.x(),
+        snapForTileGrid(rawCenter.y(), tilesY),
+        if (!rightAlongX) snapForTileGrid(rawCenter.z(), tilesX) else rawCenter.z(),
+    )
 
-    val horizontalFov = Math.toDegrees(2.0 * atan(guiWidth / 2.0 / depth))
-    val verticalFov = Math.toDegrees(2.0 * atan(guiHeight / 2.0 / depth))
+    val effectiveDepth = computeFrameDepth(eye, center, facing)
+    val horizontalFov = Math.toDegrees(2.0 * atan(guiWidth / 2.0 / effectiveDepth))
+    val verticalFov = Math.toDegrees(2.0 * atan(guiHeight / 2.0 / effectiveDepth))
     val horizontalDegree = horizontalFov / guiWidth
     val verticalDegree = verticalFov / guiHeight
     val pixelToWorldRatio = guiWidth / config.canvasWidth
 
     val facingRotation = quaternionFacingCamera(forward)
-    val facing = yawToFacing(snappedYaw)
 
     return ScreenBasis(
         center = center,
@@ -97,7 +105,7 @@ fun computeScreenBasis(config: ScreenConfig): ScreenBasis {
         screenWidth = config.canvasWidth,
         screenHeight = config.canvasHeight,
         facingRotation = facingRotation,
-        depth = depth,
+        depth = effectiveDepth,
         tilesX = tilesX,
         tilesY = tilesY,
         facing = facing,
@@ -121,7 +129,7 @@ fun wrapDegrees(degrees: Double): Double {
     return d
 }
 
-private fun snapYaw(yaw: Float): Float {
+internal fun snapYaw(yaw: Float): Float {
     val normalized = ((yaw % 360f) + 360f) % 360f
     return when {
         normalized < 45f || normalized >= 315f -> 0f
@@ -129,6 +137,33 @@ private fun snapYaw(yaw: Float): Float {
         normalized < 225f -> 180f
         else -> 270f
     }
+}
+
+private const val FRAME_SURFACE_INSET = 0.46875
+
+private fun computeFrameDepth(eye: Vec, center: Vec, facing: Int): Double {
+    val centerAxis: Double
+    val eyeAxis: Double
+    val surfaceOffset: Double
+    when (facing) {
+        2, 4 -> {
+            centerAxis = if (facing == 2) center.z() else center.x()
+            eyeAxis = if (facing == 2) eye.z() else eye.x()
+            surfaceOffset = 0.5 + FRAME_SURFACE_INSET
+        }
+        3, 5 -> {
+            centerAxis = if (facing == 3) center.z() else center.x()
+            eyeAxis = if (facing == 3) eye.z() else eye.x()
+            surfaceOffset = 0.5 - FRAME_SURFACE_INSET
+        }
+        else -> return center.sub(eye).length()
+    }
+    return abs(floor(centerAxis) + surfaceOffset - eyeAxis)
+}
+
+private fun snapForTileGrid(value: Double, tiles: Int): Double {
+    val offset = (tiles % 2) * 0.5
+    return Math.round(value - offset) + offset
 }
 
 private fun yawToFacing(snappedYaw: Float): Int = when (snappedYaw.roundToInt()) {

@@ -1,13 +1,11 @@
 # EntityTracker
 
-Spatial query extensions for finding entities and players by distance, radius, or line of sight.
+Spatial query extensions for finding nearest entities or entities along a line. For radius queries, use Minestom's built-in `Instance.getNearbyEntities(point, radius)`.
 
 ## Instance Extensions
 
 | Function | Description |
 |---|---|
-| `instance.nearbyEntities(center, radius)` | All entities within radius of a point |
-| `instance.nearbyPlayers(center, radius)` | All players within radius of a point |
 | `instance.entitiesInLine(start, direction, length, width)` | Entities along a ray (default width 0.5) |
 
 ## Player Extensions
@@ -20,9 +18,7 @@ Spatial query extensions for finding entities and players by distance, radius, o
 ## Example
 
 ```kotlin
-val nearby = instance.nearbyEntities(player.position, 10.0)
-
-val closePlayers = instance.nearbyPlayers(Pos(0.0, 64.0, 0.0), 50.0)
+val nearby = instance.getNearbyEntities(player.position, 10.0)
 
 val closest = player.nearestPlayer(maxRadius = 30.0)
 

@@ -116,6 +116,7 @@ vec4 decodeMapPixel(sampler2D tex, vec2 uv) {
     ivec2 texel = ivec2(floor(uv * 128.0));
     int cellX = texel.x / 2;
     int cellY = texel.y / 2;
+    if (cellX == 0 && cellY == 0) cellX = 1;
     ivec2 cellBase = ivec2(cellX * 2, cellY * 2);
 
     int b00 = reverseMapColor(texelFetch(tex, cellBase + ivec2(0, 0), 0).rgb);
@@ -133,13 +134,13 @@ vec4 decodeMapPixel(sampler2D tex, vec2 uv) {
     }
 
     private fun generateRenderTypeTextFsh(): String = """
-#version 150
+#version 330
 
 #moj_import <minecraft:fog.glsl>
-#moj_import <map_decode.glsl>
+#moj_import <minecraft:dynamictransforms.glsl>
+#moj_import <minecraft:map_decode.glsl>
 
 uniform sampler2D Sampler0;
-uniform vec4 ColorModulator;
 
 in float sphericalVertexDistance;
 in float cylindricalVertexDistance;
@@ -164,9 +165,11 @@ void main() {
 """.trimIndent()
 
     private fun generateRenderTypeTextVsh(): String = """
-#version 150
+#version 330
 
 #moj_import <minecraft:fog.glsl>
+#moj_import <minecraft:dynamictransforms.glsl>
+#moj_import <minecraft:projection.glsl>
 
 in vec3 Position;
 in vec4 Color;
@@ -174,8 +177,6 @@ in vec2 UV0;
 in ivec2 UV2;
 
 uniform sampler2D Sampler2;
-uniform mat4 ModelViewMat;
-uniform mat4 ProjMat;
 
 out float sphericalVertexDistance;
 out float cylindricalVertexDistance;
@@ -184,9 +185,8 @@ out vec2 texCoord0;
 
 void main() {
     gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
-    vec3 pos = Position;
-    sphericalVertexDistance = fog_spherical_distance(pos);
-    cylindricalVertexDistance = fog_cylindrical_distance(pos);
+    sphericalVertexDistance = fog_spherical_distance(Position);
+    cylindricalVertexDistance = fog_cylindrical_distance(Position);
     vertexColor = Color * texelFetch(Sampler2, UV2 / 16, 0);
     texCoord0 = UV0;
 }

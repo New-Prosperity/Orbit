@@ -566,11 +566,11 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 
 | File | Summary |
 |---|---|
-| `ArmorPart.kt` | Sealed class: 9 armor body parts (`Helmet`, `Chestplate`, `RightArm`, `LeftArm`, `InnerArmor`, `RightLeg`, `LeftLeg`, `RightBoot`, `LeftBoot`) with bone prefix, STASIS constant, layer, `isLeft`. `fromBoneName()` auto-detection |
+| `ArmorPart.kt` | Sealed class: 9 armor body parts (`Helmet`, `Chestplate`, `RightArm`, `LeftArm`, `InnerArmor`, `RightLeg`, `LeftLeg`, `RightBoot`, `LeftBoot`) with bone prefix, STASIS constant, layer, `cemYOffset` (CEM TOP-face Y correction), `isLeft`. `fromBoneName()` auto-detection |
 | `ArmorDefinition.kt` | Data classes: `ArmorCube` (center, halfSize, rotation, pivot, uvFaces), `ArmorCubeUv`, `ParsedArmorPiece`, `ParsedArmor`, `RegisteredArmor` (id, colorId, RGB, parsed data) |
-| `ArmorParser.kt` | Parses `.bbmodel` via `BlockbenchParser`, walks bone hierarchy, auto-detects armor pieces by prefix. Coordinate transform: BB → TBN space (bone-relative positioning). Left-part 180° mirror via sign multiplier. Handles nested prefixed sub-groups, multi-level rotations |
+| `ArmorParser.kt` | Parses `.bbmodel` via `BlockbenchParser`, walks bone hierarchy, auto-detects armor pieces by prefix. Coordinate transform: BB → TBN space (bone-relative positioning) with per-part `cemYOffset` correction for TOP-face canvas origin. Left-part 180° mirror via sign multiplier. Handles nested prefixed sub-groups, multi-level rotations |
 | `ArmorGlslGenerator.kt` | Converts parsed cubes → GLSL `ADD_BOX_WITH_ROTATION_ROTATE` macros. `generateArmorGlsl()` produces dual-section file (`#ifdef VSH`/`#ifdef FSH`). `generateArmorcordsGlsl()` produces RGB → armorId mapping |
-| `ArmorShaderPack.kt` | Assembles all shader pack entries: 16 static shader files from classpath + generated `armor.glsl` + `armorcords.glsl` + leather layer textures with marker pixels. Returns `Map<String, ByteArray>` |
+| `ArmorShaderPack.kt` | Assembles all shader pack entries: 16 static shader files from classpath + generated `armor.glsl` + `armorcords.glsl` + leather layer textures with marker pixels + transparent `leather_overlay.png` (suppresses vanilla overlay remnants). Returns `Map<String, ByteArray>` |
 | `CustomArmorRegistry.kt` | Registry with `ConcurrentHashMap`. `loadFromResources(resources, dir)` auto-detects `.bbmodel` files. `register()` assigns color IDs via `ModelIdRegistry`. Extension functions: `createItem(ArmorPart)`, `equipFullSet(Player)` |
 | `ArmorTestCommand.kt` | `/armor list` (show registered armors), `/armor equip <id>` (full set), `/armor give <id> <slot>` (single piece) |
 
@@ -587,7 +587,7 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 | `rb_` | Right Boot | 799 | 1 |
 | `lb_` | Left Boot | 899 | 1 |
 
-**How it works**: Each armor gets a unique RGB via `ModelIdRegistry`. Server equips leather armor dyed to that RGB. Vertex shader (`entity.vsh`) reads pixel `(63,31)` of the leather texture to identify custom armor. Fragment shader (`entity.fsh`) raycasts 3D cubes via `ADD_BOX` macros instead of rendering flat texture.
+**How it works**: Each armor gets a unique RGB via `ModelIdRegistry`. Server equips leather armor dyed to that RGB. Vertex shader (`entity.vsh`) reads pixel `(63,31)` of the leather texture to identify custom armor — CEM mode is guarded by `IS_LEATHER_LAYER` so only leather textures trigger it (non-leather entities render normally). Fragment shader (`entity.fsh`) raycasts 3D cubes via `ADD_BOX` macros instead of rendering flat texture. Transparent `leather_overlay.png` files suppress vanilla overlay remnants (stitching, belt, kneeguards).
 
 **Static shaders**: 16 files in `src/main/resources/shaders/armor/` from MC 1.21.6 overlay (compatible with 1.21.11). Key files: `entity.vsh`/`entity.fsh` (core pipeline), `frag_funcs.glsl` (CEM raycasting library), `armorparts.glsl` (STASIS constants), `setup.glsl` (UV-based part detection).
 
@@ -772,9 +772,9 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 | `npc/Npc.kt` | Packet-based fake NPCs with `NpcVisual` sealed interface: `SkinVisual` (player skin), `EntityVisual` (any EntityType + raw metadata), `ModelVisual` (model-only, invisible INTERACTION hitbox). `npc(name) { skin(); entityType(); modelOnly(); metadata(); model {} }` DSL, configurable `nameOffset`, TextDisplay name, per-player visibility, optional `StandaloneModelOwner` for Blockbench model attachment (visibility synced), `Instance.spawnNpc()`, `Player.showNpc/hideNpc()` |
 | `chat/Chat.kt` | `mm(text)`, `Player.sendMM()`, `Instance.broadcastMM()`, `message {}` builder |
 | `placeholder/Placeholder.kt` | `PlaceholderRegistry`, `Player.resolvePlaceholders(text)` |
-| `eventbus/EventBus.kt` | Custom `EventBus`, `on<T> {}`, `emit(event)`, `globalEventBus` |
+| ~~`eventbus/EventBus.kt`~~ | Removed — redundant with Minestom's `EventNode` system |
 | `metadata/EntityMetadata.kt` | `Entity.setString/getInt/setFloat/...` Tag shortcut extensions, `EntityPropertyRegistry` typed property system, `Entity.setProperty<T>/getProperty<T>/removeProperty/hasProperty/propertyKeys` |
-| `entitytracker/EntityTracker.kt` | `Instance.nearbyEntities()`, `Player.nearestPlayer()`, `entitiesInLine()` |
+| `entitytracker/EntityTracker.kt` | `Player.nearestPlayer()`, `Player.nearestEntity()`, `Instance.entitiesInLine()` (use Minestom's `Instance.getNearbyEntities()` for radius queries) |
 | `protection/Protection.kt` | Unified protection: sealed `ProtectionZone` (RegionZone/ChunkZone/RadiusZone), `ProtectionFlag` enum (BREAK/PLACE/INTERACT/PVP/MOB_DAMAGE), `ProtectionManager` with single EventNode, `protectRegion {}`, `protectChunk {}`, `protectSpawn {}` DSL |
 | `damage/Damage.kt` | `DamageTracker` per-player damage history, `DamageIndicator` floating TextDisplay damage numbers, `DamageMultiplierManager` per-player per-source multipliers, `Player.setDamageMultiplier/getDamageMultiplier/removeDamageMultiplier` extensions |
 | `raytrace/RayTrace.kt` | `rayTraceBlock()`, `rayTraceEntity()`, `raycast()` (entity+block in one pass with bounding box checks), `Player.lookDirection/rayTraceBlock/rayTraceEntity/lookingAt/getLookedAtEntity/getLookedAtBlock` extensions |

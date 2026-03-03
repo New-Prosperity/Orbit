@@ -1,7 +1,6 @@
 package me.nebula.orbit.mechanic.axolotlbehavior
 
 import me.nebula.orbit.module.OrbitModule
-import me.nebula.orbit.utils.entitytracker.nearbyEntities
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.EntityType
@@ -97,7 +96,7 @@ class AxolotlBehaviorModule : OrbitModule("axolotl-behavior") {
         val lastAttack = axolotl.getTag(LAST_ATTACK_TAG)
         if (now - lastAttack < ATTACK_COOLDOWN_MS) return
 
-        val target = instance.nearbyEntities(axolotl.position, ATTACK_RANGE)
+        val target = instance.getNearbyEntities(axolotl.position, ATTACK_RANGE)
             .firstOrNull { it.entityType in TARGET_TYPES && !it.isRemoved }
             ?: return
 

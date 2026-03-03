@@ -61,7 +61,6 @@ void main() {
     vec2 texSize = textureSize(Sampler0, 0);
     bool isHead = (texCoord0 * texSize).y <= 16;
     vec4 color = texture(Sampler0, texCoord0);
-    color *= ColorModulator;
     #ifndef NO_OVERLAY
         vec4 oldColor = color;
 

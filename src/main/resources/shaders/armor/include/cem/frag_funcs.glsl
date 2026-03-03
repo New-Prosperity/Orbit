@@ -231,7 +231,11 @@ vec4 sBoxExtWithRotation(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color, inou
         vec2 rotatedUV = uSide.xy + uSide.zw * box.xy;
         if (uSideRotationAngle == 1.0) {
             rotatedUV = uSide.xy + uSide.zw * box.yx;
-        } 
+        } else if (uSideRotationAngle == 2.0) {
+            rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+        } else if (uSideRotationAngle == 3.0) {
+            rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.y, box.x);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
     else if (normal.y < -0.9 && dSide != VECNULL4)
@@ -239,7 +243,11 @@ vec4 sBoxExtWithRotation(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color, inou
         vec2 rotatedUV = dSide.xy + dSide.zw * box.xy;
         if (dSideRotationAngle == 1.0) {
             rotatedUV = dSide.xy + dSide.zw * box.yx;
-        } 
+        } else if (dSideRotationAngle == 2.0) {
+            rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+        } else if (dSideRotationAngle == 3.0) {
+            rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.y, box.x);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
 
@@ -302,7 +310,11 @@ vec4 sBoxExtWithRotation(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color, inou
             vec2 rotatedUV = uSide.xy + uSide.zw * box.xy;
             if (uSideRotationAngle == 1.0) {
                 rotatedUV = uSide.xy + uSide.zw * box.yx;
-            } 
+            } else if (uSideRotationAngle == 2.0) {
+                rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+            } else if (uSideRotationAngle == 3.0) {
+                rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.y, box.x);
+            }
             col = texture(Sampler0, (rotatedUV) / texSize);
         }
         else if (normal.y < -0.9 && dSide != VECNULL4)
@@ -310,7 +322,11 @@ vec4 sBoxExtWithRotation(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color, inou
             vec2 rotatedUV = dSide.xy + dSide.zw * box.xy;
             if (dSideRotationAngle == 1.0) {
                 rotatedUV = dSide.xy + dSide.zw * box.yx;
-            } 
+            } else if (dSideRotationAngle == 2.0) {
+                rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+            } else if (dSideRotationAngle == 3.0) {
+                rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.y, box.x);
+            }
             col = texture(Sampler0, (rotatedUV) / texSize);
         }
     }
@@ -547,38 +563,37 @@ vec4 sBoxWithRotation(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color, inout f
 
     if (normal.x > 0.9)
     {
-        vec2 rotatedUV = eSide.xy + eSide.zw * box.xy;
-
+        vec2 rotatedUV = eSide.xy + eSide.zw * vec2(box.y, 1.0 - box.x);
         if (eSideRotationAngle == 1.0) {
-            rotatedUV = eSide.xy + eSide.zw * box.yx;
-        } else if (eSideRotationAngle == 2.0) {
             rotatedUV = eSide.xy + eSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
-        } else if (eSideRotationAngle == 3.0) {
+        } else if (eSideRotationAngle == 2.0) {
             rotatedUV = eSide.xy + eSide.zw * vec2(1.0 - box.y, box.x);
-        } 
+        } else if (eSideRotationAngle == 3.0) {
+            rotatedUV = eSide.xy + eSide.zw * vec2(box.x, box.y);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
     else if (normal.x < -0.9)
     {
-        vec2 rotatedUV = wSide.xy + wSide.zw * vec2(1 - box.x, box.y);
+        vec2 rotatedUV = wSide.xy + wSide.zw * vec2(1.0 - box.y, 1.0 - box.x);
         if (wSideRotationAngle == 1.0) {
-            rotatedUV = wSide.xy + wSide.zw * vec2(box.y, 1.0 - box.x);
+            rotatedUV = wSide.xy + wSide.zw * vec2(1.0 - box.x, box.y);
         } else if (wSideRotationAngle == 2.0) {
-            rotatedUV = wSide.xy + wSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+            rotatedUV = wSide.xy + wSide.zw * vec2(box.y, box.x);
         } else if (wSideRotationAngle == 3.0) {
-            rotatedUV = wSide.xy + wSide.zw * vec2(1.0 - box.y, box.x);
-        } 
+            rotatedUV = wSide.xy + wSide.zw * vec2(box.x, 1.0 - box.y);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
     else if (normal.z > 0.9)
     {
-        vec2 rotatedUV = sSide.xy + sSide.zw * vec2(1 - box.x, box.y);
+        vec2 rotatedUV = sSide.xy + sSide.zw * vec2(1.0 - box.x, box.y);
         if (sSideRotationAngle == 1.0) {
             rotatedUV = sSide.xy + sSide.zw * vec2(box.y, 1.0 - box.x);
         } else if (sSideRotationAngle == 2.0) {
-            rotatedUV = sSide.xy + sSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+            rotatedUV = sSide.xy + sSide.zw * vec2(box.x, 1.0 - box.y);
         } else if (sSideRotationAngle == 3.0) {
-            rotatedUV = sSide.xy + sSide.zw * vec2(1.0 - box.y, box.x);
+            rotatedUV = sSide.xy + sSide.zw * vec2(1.0 - box.y, 1.0 - box.x);
         }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
@@ -586,7 +601,7 @@ vec4 sBoxWithRotation(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color, inout f
     {
         vec2 rotatedUV = nSide.xy + nSide.zw * box.xy;
         if (nSideRotationAngle == 1.0) {
-            rotatedUV = nSide.xy + nSide.zw * box.yx;
+            rotatedUV = nSide.xy + nSide.zw * vec2(box.y, 1.0 - box.x);
         } else if (nSideRotationAngle == 2.0) {
             rotatedUV = nSide.xy + nSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
         } else if (nSideRotationAngle == 3.0) {
@@ -596,18 +611,26 @@ vec4 sBoxWithRotation(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color, inout f
     }
     else if (normal.y > 0.9)
     {
-        vec2 rotatedUV = uSide.xy + uSide.zw * box.xy;
+        vec2 rotatedUV = uSide.xy + uSide.zw * vec2(box.x, 1.0 - box.y);
         if (uSideRotationAngle == 1.0) {
-            rotatedUV = uSide.xy + uSide.zw * box.yx;
-        } 
+            rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.y, 1.0 - box.x);
+        } else if (uSideRotationAngle == 2.0) {
+            rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.x, box.y);
+        } else if (uSideRotationAngle == 3.0) {
+            rotatedUV = uSide.xy + uSide.zw * vec2(box.y, box.x);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
     else if (normal.y < -0.9)
     {
-        vec2 rotatedUV = dSide.xy + dSide.zw * box.xy;
+        vec2 rotatedUV = dSide.xy + dSide.zw * vec2(box.x, 1.0 - box.y);
         if (dSideRotationAngle == 1.0) {
-            rotatedUV = dSide.xy + dSide.zw * box.yx;
-        } 
+            rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.y, 1.0 - box.x);
+        } else if (dSideRotationAngle == 2.0) {
+            rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.x, box.y);
+        } else if (dSideRotationAngle == 3.0) {
+            rotatedUV = dSide.xy + dSide.zw * vec2(box.y, box.x);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
 
@@ -640,38 +663,37 @@ vec4 sBoxWithRotationEmissive(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color,
 
     if (normal.x > 0.9)
     {
-        vec2 rotatedUV = eSide.xy + eSide.zw * box.xy;
-
+        vec2 rotatedUV = eSide.xy + eSide.zw * vec2(box.y, 1.0 - box.x);
         if (eSideRotationAngle == 1.0) {
-            rotatedUV = eSide.xy + eSide.zw * box.yx;
-        } else if (eSideRotationAngle == 2.0) {
             rotatedUV = eSide.xy + eSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
-        } else if (eSideRotationAngle == 3.0) {
+        } else if (eSideRotationAngle == 2.0) {
             rotatedUV = eSide.xy + eSide.zw * vec2(1.0 - box.y, box.x);
-        } 
+        } else if (eSideRotationAngle == 3.0) {
+            rotatedUV = eSide.xy + eSide.zw * vec2(box.x, box.y);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
     else if (normal.x < -0.9)
     {
-        vec2 rotatedUV = wSide.xy + wSide.zw * vec2(1 - box.x, box.y);
+        vec2 rotatedUV = wSide.xy + wSide.zw * vec2(1.0 - box.y, 1.0 - box.x);
         if (wSideRotationAngle == 1.0) {
-            rotatedUV = wSide.xy + wSide.zw * vec2(box.y, 1.0 - box.x);
+            rotatedUV = wSide.xy + wSide.zw * vec2(1.0 - box.x, box.y);
         } else if (wSideRotationAngle == 2.0) {
-            rotatedUV = wSide.xy + wSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+            rotatedUV = wSide.xy + wSide.zw * vec2(box.y, box.x);
         } else if (wSideRotationAngle == 3.0) {
-            rotatedUV = wSide.xy + wSide.zw * vec2(1.0 - box.y, box.x);
-        } 
+            rotatedUV = wSide.xy + wSide.zw * vec2(box.x, 1.0 - box.y);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
     else if (normal.z > 0.9)
     {
-        vec2 rotatedUV = sSide.xy + sSide.zw * vec2(1 - box.x, box.y);
+        vec2 rotatedUV = sSide.xy + sSide.zw * vec2(1.0 - box.x, box.y);
         if (sSideRotationAngle == 1.0) {
             rotatedUV = sSide.xy + sSide.zw * vec2(box.y, 1.0 - box.x);
         } else if (sSideRotationAngle == 2.0) {
-            rotatedUV = sSide.xy + sSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+            rotatedUV = sSide.xy + sSide.zw * vec2(box.x, 1.0 - box.y);
         } else if (sSideRotationAngle == 3.0) {
-            rotatedUV = sSide.xy + sSide.zw * vec2(1.0 - box.y, box.x);
+            rotatedUV = sSide.xy + sSide.zw * vec2(1.0 - box.y, 1.0 - box.x);
         }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
@@ -679,7 +701,7 @@ vec4 sBoxWithRotationEmissive(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color,
     {
         vec2 rotatedUV = nSide.xy + nSide.zw * box.xy;
         if (nSideRotationAngle == 1.0) {
-            rotatedUV = nSide.xy + nSide.zw * box.yx;
+            rotatedUV = nSide.xy + nSide.zw * vec2(box.y, 1.0 - box.x);
         } else if (nSideRotationAngle == 2.0) {
             rotatedUV = nSide.xy + nSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
         } else if (nSideRotationAngle == 3.0) {
@@ -689,18 +711,26 @@ vec4 sBoxWithRotationEmissive(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color,
     }
     else if (normal.y > 0.9)
     {
-        vec2 rotatedUV = uSide.xy + uSide.zw * box.xy;
+        vec2 rotatedUV = uSide.xy + uSide.zw * vec2(box.x, 1.0 - box.y);
         if (uSideRotationAngle == 1.0) {
-            rotatedUV = uSide.xy + uSide.zw * box.yx;
-        } 
+            rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.y, 1.0 - box.x);
+        } else if (uSideRotationAngle == 2.0) {
+            rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.x, box.y);
+        } else if (uSideRotationAngle == 3.0) {
+            rotatedUV = uSide.xy + uSide.zw * vec2(box.y, box.x);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
     else if (normal.y < -0.9)
     {
-        vec2 rotatedUV = dSide.xy + dSide.zw * box.xy;
+        vec2 rotatedUV = dSide.xy + dSide.zw * vec2(box.x, 1.0 - box.y);
         if (dSideRotationAngle == 1.0) {
-            rotatedUV = dSide.xy + dSide.zw * box.yx;
-        } 
+            rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.y, 1.0 - box.x);
+        } else if (dSideRotationAngle == 2.0) {
+            rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.x, box.y);
+        } else if (dSideRotationAngle == 3.0) {
+            rotatedUV = dSide.xy + dSide.zw * vec2(box.y, box.x);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
 
@@ -955,7 +985,11 @@ vec4 sBoxInvWithRotation(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color, inou
         vec2 rotatedUV = uSide.xy + uSide.zw * box.xy;
         if (uSideRotationAngle == 1.0) {
             rotatedUV = uSide.xy + uSide.zw * box.yx;
-        } 
+        } else if (uSideRotationAngle == 2.0) {
+            rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+        } else if (uSideRotationAngle == 3.0) {
+            rotatedUV = uSide.xy + uSide.zw * vec2(1.0 - box.y, box.x);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
     else if (normal.y < -0.9)
@@ -963,7 +997,11 @@ vec4 sBoxInvWithRotation(vec3 ro, vec3 rd, vec3 size, mat3 TBN, vec4 color, inou
         vec2 rotatedUV = dSide.xy + dSide.zw * box.xy;
         if (dSideRotationAngle == 1.0) {
             rotatedUV = dSide.xy + dSide.zw * box.yx;
-        } 
+        } else if (dSideRotationAngle == 2.0) {
+            rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.x, 1.0 - box.y);
+        } else if (dSideRotationAngle == 3.0) {
+            rotatedUV = dSide.xy + dSide.zw * vec2(1.0 - box.y, box.x);
+        }
         col = texture(Sampler0, (rotatedUV) / texSize);
     }
 

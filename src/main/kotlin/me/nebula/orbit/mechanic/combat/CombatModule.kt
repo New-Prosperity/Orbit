@@ -44,7 +44,7 @@ class CombatModule : OrbitModule("combat") {
             target.damage(EntityDamage(attacker, damage))
 
             val yaw = Math.toRadians(attacker.position.yaw().toDouble())
-            val knockback = Vec(-sin(yaw) * 8.0, 4.0, cos(yaw) * 8.0)
+            val knockback = Vec(-sin(yaw) * 8.0, 8.0, cos(yaw) * 8.0)
             target.velocity = target.velocity.add(knockback)
 
             attacker.setTag(LAST_ATTACK_TAG, now)

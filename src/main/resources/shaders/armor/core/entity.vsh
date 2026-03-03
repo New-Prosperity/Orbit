@@ -122,7 +122,8 @@ void main() {
     markforremove = 0;
     RelativeCords = ivec2(0);
     
-    if (IS_LEATHER_LAYER) {
+    bool isLeather = IS_LEATHER_LAYER;
+    if (isLeather) {
         ivec2 atlasSize = textureSize(Sampler0, 0);
         vec2 armorAmount = vec2(atlasSize) * vec2(INV_TEX_RES_SIX, INV_TEX_RES_THREE);
         vec2 offset = 1.0 / armorAmount;
@@ -149,7 +150,7 @@ void main() {
         vertexColor = Color;
     #else
         vertexColor = light;
-        if(IS_LEATHER_LAYER){
+        if(isLeather){
             vertexColor *= ColorModulator;
         }
     #endif
@@ -166,11 +167,14 @@ void main() {
     bool isPartOne = (ch0 == 0 && ch1 == 0 && ch2 == 0 && ch3 == 255);
     bool isPartTwo = (ch0 == 255 && ch1 == 255 && ch2 == 255 && ch3 == 255);
 
-    if (isGui == 0 && (isPartOne || isPartTwo)) {
+    if (isLeather && isGui == 0 && (isPartOne || isPartTwo)) {
         float RVC_0 = getChannel(RelativeCords,ivec2(63,31), 0);
         float RVC_1 = getChannel(RelativeCords,ivec2(63,31), 1);
         float RVC_2 = getChannel(RelativeCords,ivec2(63,31), 2);
         if(RVC_0==0 && RVC_1==0 && RVC_2==0){
+            markforremove = 1;
+            gl_Position = vec4(0,0,0,1);
+            overlayColor = vec4(0,0,0,0);
             return;
         }
         vec2 texSize = textureSize(Sampler0, 0);
@@ -192,7 +196,7 @@ void main() {
         #moj_import <mods/armor/armor.glsl>
         
         if(face==TOP_FACE){
-            cem_reverse = 0;
+            cem_reverse = (bodypart == ARMOR_LEFT_ARM || bodypart == ARMOR_LEFT_FEET) ? 1 : 0;
             corner = corner.yx;
             if (isPartOne) {
                 cem_size = 0.666667;

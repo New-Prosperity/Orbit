@@ -44,7 +44,6 @@ val config = ScreenConfig(
     canvasHeight = 384,
     fov = 70.0,
     coverage = 0.85,
-    sensitivity = 1.0,
 )
 
 screen(player, config) {
@@ -194,14 +193,15 @@ The `+4` offset avoids transparent map color IDs 0-3. Effective resolution: 64x6
 
 Client converts each map byte → RGB via hardcoded palette. Shader reverses this:
 1. **Detection**: first 2x2 cell = magic signature (4 specific map color IDs)
-2. **Reverse lookup**: 128-entry `vec3[]` palette constant, nearest-distance match
-3. **Reconstruct**: recombine 7-bit lower + MSB to get original 8-bit channels
+2. **Magic cell substitution**: pixel (0,0) uses cell (1,0) data since cell (0,0) holds the magic signature
+3. **Reverse lookup**: 128-entry `vec3[]` palette constant, nearest-distance match
+4. **Reconstruct**: recombine 7-bit lower + MSB to get original 8-bit channels
 
-Target shaders: `rendertype_text.fsh` (primary, maps use text render type), `entity.fsh` (secondary, belt-and-suspenders).
+Target shader: `rendertype_text.fsh` (maps use text render type). Shaders match vanilla 1.21.11 interface: `#version 330`, UBO-based uniforms via `dynamictransforms.glsl` (provides `ModelViewMat`, `ColorModulator`), `projection.glsl` (provides `ProjMat`), `fog.glsl` (provides fog UBO). Custom include `map_decode.glsl` contains palette + decode functions.
 
 ### Display
 
-Invisible item frame entities in a grid, each holding a `filled_map` with unique map ID. `MapDataPacket` sends encoded pixel data per tile. Multi-layer dirty-checking: content hash skips unchanged tiles, row-level diff minimizes bytes sent for changed tiles.
+Invisible item frame entities in a grid, each holding a `filled_map` with unique map ID. Item frame ITEM metadata is at index 9 (index 8 is `HangingEntity.DIRECTION` since 1.21.x). `MapDataPacket` sends encoded pixel data per tile. Multi-layer dirty-checking: content hash skips unchanged tiles, row-level diff minimizes bytes sent for changed tiles.
 
 ### Widget System
 
@@ -225,9 +225,10 @@ Composable widget tree with absolute positioning relative to parent. Widgets aut
 | `canvasHeight` | `384` | >0, multiple of 64 | Pixel height |
 | `fov` | `70.0` | 30.0–120.0 | Minecraft vertical FOV in degrees |
 | `coverage` | `0.85` | 0.1–1.0 | Fraction of FOV the screen covers |
-| `sensitivity` | `1.0` | — | Mouse sensitivity multiplier |
 
-Depth is auto-computed: `(tilesY / 2) / tan(fov * coverage / 2)`.
+Depth is auto-computed: `(tilesY / 2) / tan(fov * coverage / 2)`. Screen center is block-grid-snapped so item frames render at their mathematical positions (prevents cursor/tile misalignment from block-position truncation). Cursor sensitivity uses effective depth to the actual frame surface (accounting for the 0.46875-block inset from `HangingEntity` rendering), ensuring the cursor angular range matches the visual tile grid extent.
+
+Mouse sensitivity is set via the builder DSL: `sensitivity(1.0)` (default `1.0`). This multiplier scales cursor movement relative to head rotation.
 
 ## API
 
@@ -319,7 +320,7 @@ utils/screen/
 ├── texture/
 │   └── TextureLoader.kt   (image loading, Texture data class)
 ├── font/
-│   └── BitmapFont.kt      (grid-atlas font, drawText, built-in 6x8)
+│   └── BitmapFont.kt      (grid-atlas font, drawText, built-in 7x8)
 ├── animation/
 │   └── Tween.kt           (tween system, easing, AnimationController)
 ├── widget/
@@ -335,7 +336,7 @@ utils/screen/
 - Invisible camel anchor (real `EntityCreature`) for mouse input capture via `addPassenger`
 - Single global `EventNode("screen-global")` with O(1) session lookup, single global remount task
 - ITEM_DISPLAY cursor with interpolation
-- Delta-based cursor movement, first-packet calibration
+- Delta-based cursor movement, calibration deferred until camera is applied (rotation packets ignored before camera switch, re-calibrated on switch)
 - Multi-level dirty-checking: tile-level BitSet → content hash → row-level diff
 - Row-level partial MapDataPacket: only changed rows sent via `ColorContent` with row offset
 - Staggered initial load: 20 tiles per tick across multiple scheduler tasks

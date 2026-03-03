@@ -28,7 +28,7 @@ class KnockbackEnchantModule : OrbitModule("knockback-enchant") {
 
             val yaw = Math.toRadians(attacker.position.yaw().toDouble())
             val multiplier = 0.5 * level
-            val extraKnockback = Vec(-sin(yaw) * 8.0 * multiplier, 2.0 * multiplier, cos(yaw) * 8.0 * multiplier)
+            val extraKnockback = Vec(-sin(yaw) * 10.0 * multiplier, 4.0 * multiplier, cos(yaw) * 10.0 * multiplier)
             target.velocity = target.velocity.add(extraKnockback)
         }
     }
