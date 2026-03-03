@@ -63,8 +63,9 @@ object ArmorGlslGenerator {
                 val texIndex = if (piece.part.layer == 2) 1 else 0
                 val tex = armor.parsed.textures.getOrElse(texIndex) { armor.parsed.textures.first() }
 
+                val mirrorFaces = piece.part is ArmorPart.LeftArm || piece.part is ArmorPart.LeftLeg
                 for (cube in piece.cubes) {
-                    sb.appendLine("        ${generateAddBox(cube, tex.width, tex.height, armor.colorId)}")
+                    sb.appendLine("        ${generateAddBox(cube, tex.width, tex.height, armor.colorId, mirrorFaces)}")
                 }
             }
 
@@ -77,17 +78,19 @@ object ArmorGlslGenerator {
         }
     }
 
-    private fun generateAddBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int): String {
+    private fun generateAddBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, mirrorFaces: Boolean): String {
         val pos = formatVec3(cube.center)
         val size = formatVec3(cube.halfSize)
 
         val cellOffsetU = colorId * CELL_WIDTH
-        val dFace = cube.uvFaces["south"] ?: EMPTY_UV
-        val uFace = cube.uvFaces["north"] ?: EMPTY_UV
-        val nFace = cube.uvFaces["up"] ?: EMPTY_UV
-        val eFace = cube.uvFaces["east"] ?: EMPTY_UV
-        val sFace = cube.uvFaces["down"] ?: EMPTY_UV
-        val wFace = cube.uvFaces["west"] ?: EMPTY_UV
+        val (dKey, uKey) = if (mirrorFaces) "north" to "south" else "south" to "north"
+        val (eKey, wKey) = if (mirrorFaces) "east" to "west" else "west" to "east"
+        val dFace = cube.uvFaces[dKey] ?: EMPTY_UV
+        val uFace = cube.uvFaces[uKey] ?: EMPTY_UV
+        val nFace = cube.uvFaces["down"] ?: EMPTY_UV
+        val eFace = cube.uvFaces[eKey] ?: EMPTY_UV
+        val sFace = cube.uvFaces["up"] ?: EMPTY_UV
+        val wFace = cube.uvFaces[wKey] ?: EMPTY_UV
 
         val dSide = formatUv(dFace, texW, texH, cellOffsetU)
         val uSide = formatUv(uFace, texW, texH, cellOffsetU)
@@ -106,12 +109,6 @@ object ArmorGlslGenerator {
         return when {
             !cube.hasRotation -> {
                 "ADD_BOX_WITH_ROTATION($pos, $size, $dSide, $uSide, $nSide, $eSide, $sSide, $wSide, $dRot, $uRot, $nRot, $eRot, $sRot, $wRot);"
-            }
-            cube.rotationLevels.size == 1 -> {
-                val level = cube.rotationLevels[0]
-                val rotation = buildRotationMatrix(level.components)
-                val pivot = formatVec3(level.pivot)
-                "ADD_BOX_WITH_ROTATION_ROTATE($pos, $size, $rotation, $pivot, $dSide, $uSide, $nSide, $eSide, $sSide, $wSide, $dRot, $uRot, $nRot, $eRot, $sRot, $wRot);"
             }
             else -> generateMultiLevelRotation(
                 cube, pos, size,
@@ -137,12 +134,12 @@ object ArmorGlslGenerator {
         }
         val composedR = levels.indices.reversed().joinToString(" * ") { "_R$it" }
         appendLine("mat3 _Rc = $composedR;")
-        appendLine("vec3 _p = _R0 * (-center + ($pos + ${formatVec3(levels[0].pivot)}) * modelSize);")
+        appendLine("vec3 _p = _R0 * (-center + ${formatVec3(levels[0].pivot)} * modelSize);")
         for (i in 1 until levels.size) {
             appendLine("_p = _R$i * (_p - ${formatVec3(levels[i - 1].pivot)} * modelSize + ${formatVec3(levels[i].pivot)} * modelSize);")
         }
-        appendLine("_p = _p - ${formatVec3(levels.last().pivot)} * modelSize;")
-        appendLine("color = sBoxWithRotation(_p, _Rc * dirTBN, $size * modelSize, TBN * inverse(_Rc), color, minT, $dSide, $uSide, $nSide, $eSide, $sSide, $wSide, $dRot, $uRot, $nRot, $eRot, $sRot, $wRot, false);")
+        appendLine("_p = _p - ${formatVec3(levels.last().pivot)} * modelSize + $pos * modelSize;")
+        appendLine("color = sBoxWithRotation(_p, _Rc * dirTBN, $size * modelSize, TBN * inverse(_Rc), color, minT, $uSide, $dSide, $nSide, $wSide, $sSide, $eSide, $dRot, $uRot, $nRot, $eRot, $sRot, $wRot, false);")
         append("}")
     }
 

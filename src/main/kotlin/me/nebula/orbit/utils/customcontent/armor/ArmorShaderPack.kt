@@ -62,6 +62,10 @@ object ArmorShaderPack {
         entries["assets/minecraft/textures/entity/equipment/humanoid_leggings/leather.png"] =
             generateLeatherLayer(armors, isLayerTwo = true)
 
+        val transparentOverlay = generateTransparentPng()
+        entries["assets/minecraft/textures/entity/equipment/humanoid/leather_overlay.png"] = transparentOverlay
+        entries["assets/minecraft/textures/entity/equipment/humanoid_leggings/leather_overlay.png"] = transparentOverlay
+
         logger.info { "Generated armor shader pack: ${armors.size} armors, ${entries.size} entries" }
         return entries
     }
@@ -71,14 +75,14 @@ object ArmorShaderPack {
         val atlasWidth = LEATHER_LAYER_WIDTH * (maxColorId + 1)
         val img = BufferedImage(atlasWidth, LEATHER_LAYER_HEIGHT, BufferedImage.TYPE_INT_ARGB)
 
+        val layerMarker = if (isLayerTwo) Color(255, 255, 255, 255) else Color(0, 0, 0, 255)
+
         val g0 = img.createGraphics()
         g0.color = Color(255, 255, 255, 255)
         g0.fillRect(0, 0, LEATHER_LAYER_WIDTH, LEATHER_LAYER_HEIGHT)
         g0.dispose()
-        img.setRGB(MARKER_X, LAYER_TYPE_Y, 0)
-        img.setRGB(MARKER_X, COLOR_ID_Y, 0)
-
-        val layerMarker = if (isLayerTwo) Color(255, 255, 255, 255) else Color(0, 0, 0, 255)
+        img.setRGB(MARKER_X, LAYER_TYPE_Y, layerMarker.rgb)
+        img.setRGB(MARKER_X, COLOR_ID_Y, Color(0, 0, 0, 255).rgb)
 
         for (armor in armors) {
             val cellX = armor.colorId * LEATHER_LAYER_WIDTH
@@ -110,6 +114,14 @@ object ArmorShaderPack {
             val bytes = Base64.getDecoder().decode(data)
             ImageIO.read(ByteArrayInputStream(bytes))
         }.onFailure { logger.warn { "Base64 image decode error: ${it.message}" } }.getOrNull()
+    }
+
+    private fun generateTransparentPng(): ByteArray {
+        val img = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+        img.setRGB(0, 0, 0)
+        val baos = ByteArrayOutputStream()
+        ImageIO.write(img, "png", baos)
+        return baos.toByteArray()
     }
 
     private fun readResource(path: String): ByteArray? =

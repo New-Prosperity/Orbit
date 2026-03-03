@@ -5,8 +5,6 @@ import me.nebula.orbit.utils.modelengine.generator.BbGroup
 import me.nebula.orbit.utils.modelengine.generator.BbGroupChild
 import me.nebula.orbit.utils.modelengine.generator.BlockbenchModel
 import net.minestom.server.coordinate.Vec
-import kotlin.math.cos
-import kotlin.math.sin
 
 object ArmorParser {
 
@@ -34,7 +32,7 @@ object ArmorParser {
     ) {
         val part = ArmorPart.fromBoneName(group.name)
         if (part != null) {
-            val cubes = collectCubes(group, elementsByUuid, group.origin, emptyList(), part.isLeft, output)
+            val cubes = collectCubes(group, elementsByUuid, group.origin, emptyList(), part, output)
             splitByTextureLayer(part, cubes, output)
             return
         }
@@ -65,8 +63,27 @@ object ArmorParser {
         if (mismatched.isNotEmpty()) {
             val altPart = part.alternateLayerPart()
             if (altPart != null) {
-                output.add(ParsedArmorPiece(altPart, mismatched))
+                val adjusted = adjustCubesForPart(mismatched, part, altPart)
+                output.add(ParsedArmorPiece(altPart, adjusted))
             }
+        }
+    }
+
+    private fun adjustCubesForPart(
+        cubes: List<ArmorCube>,
+        from: ArmorPart,
+        to: ArmorPart,
+    ): List<ArmorCube> {
+        val dz = to.cemYOffset - from.cemYOffset
+        val dx = from.cemXOffset - to.cemXOffset
+        if (dz == 0.0 && dx == 0.0) return cubes
+        return cubes.map { cube ->
+            cube.copy(
+                center = Vec(cube.center.x() + dx, cube.center.y(), cube.center.z() + dz),
+                rotationLevels = cube.rotationLevels.map { level ->
+                    level.copy(pivot = Vec(level.pivot.x() + dx, level.pivot.y(), level.pivot.z() + dz))
+                },
+            )
         }
     }
 
@@ -84,7 +101,7 @@ object ArmorParser {
         elementsByUuid: Map<String, BbElement>,
         boneOrigin: Vec,
         parentTransforms: List<GroupTransform>,
-        isLeft: Boolean,
+        part: ArmorPart,
         piecesOutput: MutableList<ParsedArmorPiece>,
     ): List<ArmorCube> {
         val cubes = mutableListOf<ArmorCube>()
@@ -94,12 +111,12 @@ object ArmorParser {
                 is BbGroupChild.ElementRef -> {
                     val element = elementsByUuid[child.uuid] ?: continue
                     if (!element.visibility) continue
-                    cubes.add(convertElement(element, boneOrigin, parentTransforms, isLeft))
+                    cubes.add(convertElement(element, boneOrigin, parentTransforms, part))
                 }
                 is BbGroupChild.SubGroup -> {
                     val subPart = ArmorPart.fromBoneName(child.group.name)
                     if (subPart != null) {
-                        val subCubes = collectCubes(child.group, elementsByUuid, child.group.origin, emptyList(), subPart.isLeft, piecesOutput)
+                        val subCubes = collectCubes(child.group, elementsByUuid, child.group.origin, emptyList(), subPart, piecesOutput)
                         splitByTextureLayer(subPart, subCubes, piecesOutput)
                     } else {
                         val subRot = child.group.rotation
@@ -108,7 +125,7 @@ object ArmorParser {
                         } else {
                             parentTransforms
                         }
-                        cubes.addAll(collectCubes(child.group, elementsByUuid, boneOrigin, newTransforms, isLeft, piecesOutput))
+                        cubes.addAll(collectCubes(child.group, elementsByUuid, boneOrigin, newTransforms, part, piecesOutput))
                     }
                 }
             }
@@ -121,26 +138,22 @@ object ArmorParser {
         element: BbElement,
         boneOrigin: Vec,
         parentTransforms: List<GroupTransform>,
-        isLeft: Boolean,
+        part: ArmorPart,
     ): ArmorCube {
         val from = element.from
         val to = element.to
 
-        var centerBb = Vec(
+        val centerBb = Vec(
             (from.x() + to.x()) / 2.0,
             (from.y() + to.y()) / 2.0,
             (from.z() + to.z()) / 2.0,
         )
 
-        for (transform in parentTransforms.asReversed()) {
-            centerBb = rotatePointAround(centerBb, transform.origin, transform.rotation)
-        }
-
         val cx = centerBb.x() - boneOrigin.x()
         val cy = centerBb.y() - boneOrigin.y()
         val cz = centerBb.z() - boneOrigin.z()
-        val s = if (isLeft) -1.0 else 1.0
-        val center = Vec(s * cx, s * -cz, cy)
+        val s = if (part.isLeft) -1.0 else 1.0
+        val center = Vec(cx - s * part.cemXOffset, cz, part.cemYOffset - cy)
 
         val inflate = element.inflate.toDouble()
         val halfSize = Vec(
@@ -149,7 +162,7 @@ object ArmorParser {
             (to.y() - from.y()) / 2.0 + inflate,
         )
 
-        val levels = buildRotationLevels(element, boneOrigin, parentTransforms, isLeft)
+        val levels = buildRotationLevels(element, boneOrigin, parentTransforms, part)
 
         val uvFaces = element.faces.mapValues { (_, face) ->
             ArmorCubeUv(
@@ -177,29 +190,29 @@ object ArmorParser {
         element: BbElement,
         boneOrigin: Vec,
         parentTransforms: List<GroupTransform>,
-        isLeft: Boolean,
+        part: ArmorPart,
     ): List<ArmorRotationLevel> {
         val levels = mutableListOf<ArmorRotationLevel>()
-        val s = if (isLeft) -1.0 else 1.0
+        val s = if (part.isLeft) -1.0 else 1.0
 
         for (transform in parentTransforms) {
             val components = mutableListOf<ArmorRotationComponent>()
-            addEulerComponents(components, transform.rotation, isLeft)
+            addEulerComponents(components, transform.rotation)
             if (components.isNotEmpty()) {
                 val gpx = transform.origin.x() - boneOrigin.x()
                 val gpy = transform.origin.y() - boneOrigin.y()
                 val gpz = transform.origin.z() - boneOrigin.z()
-                levels.add(ArmorRotationLevel(components, Vec(s * gpx, s * -gpz, gpy)))
+                levels.add(ArmorRotationLevel(components, Vec(gpx - s * part.cemXOffset, gpz, part.cemYOffset - gpy)))
             }
         }
 
         val elemComponents = mutableListOf<ArmorRotationComponent>()
-        addEulerComponents(elemComponents, element.rotation, isLeft)
+        addEulerComponents(elemComponents, element.rotation)
         if (elemComponents.isNotEmpty()) {
             val epx = element.origin.x() - boneOrigin.x()
             val epy = element.origin.y() - boneOrigin.y()
             val epz = element.origin.z() - boneOrigin.z()
-            levels.add(ArmorRotationLevel(elemComponents, Vec(s * epx, s * -epz, epy)))
+            levels.add(ArmorRotationLevel(elemComponents, Vec(epx - s * part.cemXOffset, epz, part.cemYOffset - epy)))
         }
 
         return levels
@@ -208,40 +221,14 @@ object ArmorParser {
     private fun addEulerComponents(
         output: MutableList<ArmorRotationComponent>,
         bbRotation: Vec,
-        isLeft: Boolean,
     ) {
-        val s = if (isLeft) -1.0 else 1.0
-        val tbnY = s * bbRotation.z()
-        val tbnZ = bbRotation.y()
-        val tbnX = s * -bbRotation.x()
+        val tbnX = bbRotation.x()
+        val tbnZ = -bbRotation.y()
+        val tbnY = bbRotation.z()
 
-        if (tbnY != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnY), ArmorRotationComponent.AXIS_Y))
-        if (tbnZ != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnZ), ArmorRotationComponent.AXIS_Z))
         if (tbnX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnX), ArmorRotationComponent.AXIS_X))
+        if (tbnZ != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnZ), ArmorRotationComponent.AXIS_Z))
+        if (tbnY != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnY), ArmorRotationComponent.AXIS_Y))
     }
 
-    private fun rotatePointAround(point: Vec, origin: Vec, eulerDegrees: Vec): Vec {
-        val offset = point.sub(origin)
-        val rotated = rotateByEulerZYX(offset, eulerDegrees)
-        return rotated.add(origin)
-    }
-
-    private fun rotateByEulerZYX(point: Vec, angles: Vec): Vec {
-        var p = point
-        if (angles.x() != 0.0) p = rotateAroundAxis(p, Math.toRadians(angles.x()), 0)
-        if (angles.y() != 0.0) p = rotateAroundAxis(p, Math.toRadians(angles.y()), 1)
-        if (angles.z() != 0.0) p = rotateAroundAxis(p, Math.toRadians(angles.z()), 2)
-        return p
-    }
-
-    private fun rotateAroundAxis(point: Vec, radians: Double, axis: Int): Vec {
-        val c = cos(radians)
-        val s = sin(radians)
-        return when (axis) {
-            0 -> Vec(point.x(), point.y() * c - point.z() * s, point.y() * s + point.z() * c)
-            1 -> Vec(point.x() * c + point.z() * s, point.y(), -point.x() * s + point.z() * c)
-            2 -> Vec(point.x() * c - point.y() * s, point.x() * s + point.y() * c, point.z())
-            else -> point
-        }
-    }
 }
