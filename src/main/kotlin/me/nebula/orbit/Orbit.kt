@@ -8,6 +8,9 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
 import me.nebula.gravity.cosmetic.CosmeticStore
+import me.nebula.gravity.host.HostRequestLookupStore
+import me.nebula.gravity.host.HostRequestStore
+import me.nebula.gravity.host.HostTicketStore
 import me.nebula.gravity.economy.EconomyStore
 import me.nebula.gravity.economy.EconomyTransactionStore
 import me.nebula.gravity.messaging.NetworkMessenger
@@ -72,6 +75,10 @@ object Orbit {
         private set
     var gameMode: String? = null
         private set
+    var hostOwner: UUID? = null
+        private set
+    var mapName: String? = null
+        private set
 
     private val logger = logger("Orbit")
     private val miniMessage = MiniMessage.miniMessage()
@@ -103,13 +110,13 @@ object Orbit {
         Thread.currentThread().contextClassLoader = Orbit::class.java.classLoader
 
         val env = environment {
-            required("HAZELCAST_LICENSE")
             required("VELOCITY_SECRET")
         }
 
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
         val serverUuid = env.optional("P_SERVER_UUID", "")
         val serverHost = env.optional("SERVER_HOST", "").ifEmpty { null } ?: detectContainerAddress()
+        val hazelcastAddresses = System.getenv("HAZELCAST_ADDRESSES")
 
         app = appDelegate("Orbit") {
             configureResources {
@@ -117,9 +124,10 @@ object Orbit {
             }
             configureModules {
                 +hazelcastModule {
-                    member {
-                        isLiteMember = true
-                        licenseKey = env.all["HAZELCAST_LICENSE"]
+                    client {
+                        if (hazelcastAddresses != null) {
+                            networkConfig.addAddress(*hazelcastAddresses.split(",").toTypedArray())
+                        }
                     }
                     stores {
                         +PlayerStore
@@ -141,6 +149,9 @@ object Orbit {
                         +ProvisionStore
                         +ReconnectionStore
                         +CosmeticStore
+                        +HostTicketStore
+                        +HostRequestStore
+                        +HostRequestLookupStore
                     }
                 }
             }
@@ -161,8 +172,10 @@ object Orbit {
             if (cached != null) {
                 val (provision, server) = cached
                 gameMode = provision.metadata?.get("game_mode")
+                hostOwner = provision.metadata?.get("host_owner")?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                mapName = provision.metadata?.get("map")
                 serverName = server?.name ?: "orbit-local"
-                logger.info { "Provision discovered: name=$serverName, gameMode=$gameMode, provisionUuid=${provision.uuid}" }
+                logger.info { "Provision discovered: name=$serverName, gameMode=$gameMode, hostOwner=$hostOwner, map=$mapName, provisionUuid=${provision.uuid}" }
             } else {
                 serverName = "orbit-local"
                 logger.warn { "No provision found in store for P_SERVER_UUID=$serverUuid, using fallback serverName=$serverName" }

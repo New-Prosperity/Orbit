@@ -11,9 +11,10 @@ Standalone Minestom game server for the Nebula network. Runs on every server —
 
 ## Entry — `Orbit.kt`
 - `object Orbit` with `@JvmStatic fun main()`.
-- Env vars: `HAZELCAST_LICENSE` (required), `VELOCITY_SECRET` (required), `SERVER_PORT` (default 25565), `P_SERVER_UUID` (optional), `SERVER_HOST` (optional).
+- Env vars: `VELOCITY_SECRET` (required), `SERVER_PORT` (default 25565), `P_SERVER_UUID` (optional), `SERVER_HOST` (optional), `HAZELCAST_ADDRESSES` (optional, comma-separated cluster addresses for client discovery — omit to use Hazelcast auto-discovery).
 - **Provision self-discovery**: When `P_SERVER_UUID` is set, Orbit looks up `ProvisionStore.load(serverUuid)` from the distributed Hazelcast store (populated by Pulsar's `ServerSynchronizer.sync()`), deriving `serverName` from the provision's server name and `gameMode` from `provision.metadata["game_mode"]`. No direct Proton API call needed — Orbit relies on the cluster-synced store. When `P_SERVER_UUID` is empty or no provision found, `serverName` defaults to `"orbit-local"` and `gameMode` to `null` (hub mode).
-- Hazelcast: lite member with 18 stores (includes ReconnectionStore).
+- Hazelcast: **client mode** with 21 stores (includes ReconnectionStore, HostTicketStore, HostRequestStore, HostRequestLookupStore). Smart client auto-discovers all members after initial connection. Near-cache configs wired automatically by HazelcastModule for stores with `nearCacheSeconds > 0`.
+- **Provision metadata**: Extracts `game_mode`, `host_owner` (UUID), and `map` from provision metadata. `Orbit.hostOwner` and `Orbit.mapName` are set when server is host-provisioned.
 - Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `ModelEngine.install()` → `CustomContentRegistry.init()` (loads items, blocks, armors) → load `.bbmodel` model files → `CustomContentRegistry.mergePack()` (generates armor shaders, merges all) → register commands (basic, game, model, cc, cinematic, screen, armor) → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
 - **Resource pack**: Pack is merged at startup but NOT sent from Orbit — pack distribution is delegated to the proxy.
 - Common listeners: `AsyncPlayerConfigurationEvent` (locale cache, set spawning instance/respawn from mode), `PlayerDisconnectEvent` (evict locale), `OnlinePlayerCache` refresh (5s).
@@ -55,7 +56,9 @@ Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Or
 - **Config data classes**: `HubModeConfig` (`mode/hub/HubModeConfig.kt`) wraps `SpawnConfig`, `ScoreboardConfig`, `TabListConfig`, `LobbyConfig`, `List<HotbarItemConfig>`, `SelectorConfig(title, rows, border)`, `CosmeticConfig`.
 - **Default config**: `src/main/resources/hub.json` bundled in JAR.
 - **Placeholders**: Global `{online}` (SessionStore.cachedSize), `{server}` (Orbit.serverName). Per-player `{rank}` (PlayerRankStore/RankStore lookup).
-- **Action system**: Hotbar items reference click actions by string name (e.g., `"open_selector"`). Immutable actions map built locally in `install()`. Unknown actions and invalid material keys logged as warnings.
+- **Action system**: Hotbar items reference click actions by string name (e.g., `"open_selector"`, `"open_host"`). Immutable actions map built locally in `install()`. Unknown actions and invalid material keys logged as warnings.
+- **Host system**: `"open_host"` action opens `HostMenu.openGameModeMenu(player)`. Subscribes to `HostProvisionStatusMessage` for real-time player feedback (provisioning/ready/failed). Cleans `HostMenu.pendingPlayers` on READY/FAILED status. Unsubscribes on shutdown.
+- **Disconnect cleanup**: `PlayerDisconnectEvent` removes hotbar and clears `HostMenu.removePending(uuid)` to prevent stale pending state.
 - **Hub instance**: Validates and loads Anvil world from `config.worldPath` (requires `region/` with `.mca` files), preloads chunks with `config.preloadRadius`, verifies block data post-load. Falls back to flat grass generator if directory missing.
 - **Lobby**: Built from `config.lobby` — `GameMode.valueOf(config.lobby.gameMode)`, all protection flags from config.
 - **Scoreboard**: Built from `config.scoreboard` — title and lines support `{placeholder}` syntax, static vs dynamic determined by placeholder presence.
@@ -63,7 +66,7 @@ Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Or
 - **Hotbar**: Built from `config.hotbar` — `Material.fromKey()`, maps action strings via registered actions.
 - **Server selector**: Built from `config.selector` — title, rows, border material.
 - No `MechanicLoader` — hub mode has no mechanics enabled.
-- `shutdown()` uninstalls scoreboard, tab list, lobby, and hotbar.
+- `shutdown()` unsubscribes host status listener, uninstalls scoreboard, tab list, lobby, and hotbar.
 
 ### Game Engine — `mode/game/`
 Abstract lifecycle framework for minigames. Concrete modes subclass `GameMode` and implement only game-specific logic; the base class owns phases, player tracking, countdowns, timers, and cleanup.
@@ -110,6 +113,21 @@ Abstract `ServerMode` implementation. Lazy fields: `spawnPoint`, `defaultInstanc
 **Open** (default no-op): `onWaitingStart()`, `onPlayerJoinWaiting()`, `onPlayerLeaveWaiting()`, `onCountdownTick()`, `onPlayingStart()`, `onPlayerEliminated()`, `onPlayerDisconnected()`, `onPlayerReconnected()`, `onEndingStart()`, `onEndingComplete()`, `onGameReset()`, `buildLobbyHotbar(): Hotbar?`, `buildTimeExpiredResult(): MatchResult`.
 
 **Public API**: `eliminate(player)`, `revive(player)`, `forceReconnect(player)`, `forceStart()`, `forceEnd(result)`, `phase: GamePhase`, `tracker: PlayerTracker`, `gameStartTime: Long`.
+
+**Host ticket consumption**: In `enterPlaying()`, if `Orbit.hostOwner` is set, atomically consumes one ticket via `HostTicketStore.executeOnKey(owner, ConsumeTicketProcessor())`. Skipped for admins (`RankManager.hasPermission(owner, "*")`). Ticket is only consumed when the game enters PLAYING phase — failed provisions or server crashes during WAITING/STARTING don't waste tickets.
+
+### `HostMenu` (`mode/hub/HostMenu.kt`)
+GUI flow for hosting a game server. Three-step menu: gamemode selection → map selection (skipped if ≤1 map) → confirmation.
+
+- **Admin bypass**: All ticket checks (`openGameModeMenu`, gamemode click, confirm) respect `RankManager.hasPermission(uuid, "*")` — admins can host without tickets.
+- **Gamemode menu**: Lists all `PoolConfig` entries where `hostable == true`. Shows ticket count. Shows error message if no hostable modes exist.
+- **Map menu**: Lists `PoolConfig.maps` for selected gamemode. Skipped if 0-1 maps.
+- **Confirm menu**: Shows selected gamemode/map and cost (1 ticket). Re-validates tickets on click (fresh load from store).
+- **On confirm**: Closes inventory first, publishes `HostProvisionRequestMessage` via `NetworkMessenger` with host owner, gamemode, map, and party members.
+- **Anti-double-click**: `pendingPlayers: ConcurrentHashMap.newKeySet()` — `confirm()` calls `pendingPlayers.add()` which returns false if already pending. Cleared on READY/FAILED status or player disconnect via `removePending(uuid)`.
+- **Duplicate prevention**: Checks `HostRequestLookupStore.exists(player.uuid)` before publishing.
+- **Party integration**: `collectMembers()` resolves party via `PartyLookupStore` → `PartyStore`, falls back to solo.
+- **Translation keys**: `orbit.host.*` (22 keys for menu titles, items, errors, status messages).
 
 ### `HopliteMode` (`mode/game/hoplite/HopliteMode.kt`)
 FFA last-player-standing battle royale. First concrete `GameMode` implementation.

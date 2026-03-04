@@ -5,7 +5,7 @@ import me.nebula.ether.utils.translation.TranslationRegistry
 object OrbitTranslations {
 
     fun register(translations: TranslationRegistry) {
-        translations.putAll("en", mechanic() + utility() + game() + cosmetic())
+        translations.putAll("en", mechanic() + utility() + game() + cosmetic() + host())
     }
 
     private fun mechanic(): Map<String, String> = mapOf(
@@ -135,6 +135,30 @@ object OrbitTranslations {
         "orbit.cosmetic.projectile_flame.description" to "Your arrows leave a fiery trail",
         "orbit.cosmetic.projectile_dragon.name" to "Dragon Breath Arrow",
         "orbit.cosmetic.projectile_dragon.description" to "Your arrows leave dragon breath particles",
+    )
+
+    private fun host(): Map<String, String> = mapOf(
+        "orbit.host.menu.title" to "Host a Game",
+        "orbit.host.gamemode.name" to "<gold><gamemode>",
+        "orbit.host.gamemode.players" to "<gray>Max Players: <white><max>",
+        "orbit.host.tickets.count" to "<gray>Tickets: <yellow><count>",
+        "orbit.host.map.title" to "Select Map",
+        "orbit.host.map.name" to "<green><map>",
+        "orbit.host.back" to "<gray>Back",
+        "orbit.host.confirm.title" to "Confirm Host",
+        "orbit.host.confirm.accept" to "<green>Confirm",
+        "orbit.host.confirm.cancel" to "<red>Cancel",
+        "orbit.host.confirm.gamemode" to "<gray>Mode: <white><gamemode>",
+        "orbit.host.confirm.map" to "<gray>Map: <white><map>",
+        "orbit.host.confirm.cost" to "<gray>Cost: <yellow>1 ticket",
+        "orbit.host.error.no_tickets" to "<red>You don't have any host tickets!",
+        "orbit.host.error.duplicate" to "<red>You already have a pending host request!",
+        "orbit.host.error.already_pending" to "<red>Your request is already being processed!",
+        "orbit.host.error.no_modes" to "<red>No game modes are available for hosting right now.",
+        "orbit.host.status.requested" to "<green>Host request submitted! Provisioning your server...",
+        "orbit.host.status.provisioning" to "<yellow>Your server is being provisioned...",
+        "orbit.host.status.ready" to "<green>Your server is ready! Transferring...",
+        "orbit.host.status.failed" to "<red>Host request failed: <reason>",
     )
 
 }

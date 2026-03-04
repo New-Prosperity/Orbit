@@ -2,12 +2,15 @@ package me.nebula.orbit.mode.hub
 
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
+import me.nebula.gravity.messaging.HostProvisionStatusMessage
+import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.queue.QueueStore
 import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.session.SessionStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.ServerMode
+import me.nebula.orbit.translation.translate
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.placeholderResolver
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
@@ -35,6 +38,7 @@ import net.minestom.server.instance.block.Block
 import net.minestom.server.item.Material
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
 class HubMode(private val resources: ResourceManager) : ServerMode {
@@ -61,6 +65,7 @@ class HubMode(private val resources: ResourceManager) : ServerMode {
     private lateinit var scoreboard: LiveScoreboard
     private lateinit var tabList: LiveTabList
     private lateinit var hotbar: me.nebula.orbit.utils.hotbar.Hotbar
+    private var hostStatusSubscription: UUID? = null
 
     private fun createInstance(): InstanceContainer {
         val worldPath = Path.of(config.worldPath)
@@ -92,7 +97,8 @@ class HubMode(private val resources: ResourceManager) : ServerMode {
         }
 
         val actions = mapOf<String, (net.minestom.server.entity.Player) -> Unit>(
-            "open_selector" to { player -> selectorGui.open(player) }
+            "open_selector" to { player -> selectorGui.open(player) },
+            "open_host" to { player -> HostMenu.openGameModeMenu(player) }
         )
 
         scoreboard = liveScoreboard {
@@ -162,12 +168,30 @@ class HubMode(private val resources: ResourceManager) : ServerMode {
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             hotbar.remove(event.player)
+            HostMenu.removePending(event.player.uuid)
+        }
+
+        hostStatusSubscription = NetworkMessenger.subscribe<HostProvisionStatusMessage> { msg ->
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(msg.hostOwner)
+            when (msg.status) {
+                "PROVISIONING" -> player?.sendMessage(player.translate("orbit.host.status.provisioning"))
+                "READY" -> {
+                    HostMenu.removePending(msg.hostOwner)
+                    player?.sendMessage(player.translate("orbit.host.status.ready"))
+                }
+                "FAILED" -> {
+                    HostMenu.removePending(msg.hostOwner)
+                    player?.sendMessage(player.translate("orbit.host.status.failed",
+                        "reason" to (msg.failureReason ?: "unknown")))
+                }
+            }
         }
 
         logger.info { "Hub mode installed" }
     }
 
     override fun shutdown() {
+        hostStatusSubscription?.let { NetworkMessenger.unsubscribe<HostProvisionStatusMessage>(it) }
         scoreboard.uninstall()
         tabList.uninstall()
         lobby.uninstall()

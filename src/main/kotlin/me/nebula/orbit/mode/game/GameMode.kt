@@ -1,6 +1,9 @@
 package me.nebula.orbit.mode.game
 
 import me.nebula.ether.utils.logging.logger
+import me.nebula.gravity.host.ConsumeTicketProcessor
+import me.nebula.gravity.host.HostTicketStore
+import me.nebula.gravity.rank.RankManager
 import me.nebula.gravity.reconnection.ReconnectionData
 import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.orbit.Orbit
@@ -358,6 +361,13 @@ abstract class GameMode : ServerMode {
         startingCountdown = null
 
         gameStartTime = System.currentTimeMillis()
+
+        Orbit.hostOwner?.let { owner ->
+            if (!RankManager.hasPermission(owner, "*")) {
+                val consumed = HostTicketStore.executeOnKey(owner, ConsumeTicketProcessor())
+                if (!consumed) logger.warn { "Failed to consume host ticket for $owner (balance may be zero)" }
+            }
+        }
 
         val alivePlayers = tracker.alive.mapNotNull { uuid ->
             MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)

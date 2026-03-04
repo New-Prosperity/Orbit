@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.hotbar
 
+import me.nebula.orbit.utils.condition.Condition
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
@@ -11,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
 data class HotbarSlot(
     val slot: Int,
     val item: ItemStack,
+    val visibleWhen: Condition<Player>? = null,
     val onClick: (Player) -> Unit = {},
 )
 
@@ -26,7 +28,9 @@ class Hotbar(
         eventNode.addListener(PlayerUseItemEvent::class.java) { event ->
             if (!activePlayers.contains(event.player.uuid)) return@addListener
             val heldSlot = event.player.heldSlot.toInt()
-            slots[heldSlot]?.onClick?.invoke(event.player)
+            val hotbarSlot = slots[heldSlot] ?: return@addListener
+            if (hotbarSlot.visibleWhen != null && !hotbarSlot.visibleWhen.test(event.player)) return@addListener
+            hotbarSlot.onClick(event.player)
         }
     }
 
@@ -36,8 +40,10 @@ class Hotbar(
                 player.inventory.setItemStack(i, ItemStack.AIR)
             }
         }
-        slots.forEach { (slot, entry) ->
-            player.inventory.setItemStack(slot, entry.item)
+        for ((slot, entry) in slots) {
+            if (entry.visibleWhen == null || entry.visibleWhen.test(player)) {
+                player.inventory.setItemStack(slot, entry.item)
+            }
         }
         activePlayers.add(player.uuid)
     }
@@ -49,7 +55,7 @@ class Hotbar(
                 player.inventory.setItemStack(i, ItemStack.AIR)
             }
         } else {
-            slots.keys.forEach { slot ->
+            for (slot in slots.keys) {
                 player.inventory.setItemStack(slot, ItemStack.AIR)
             }
         }
@@ -71,9 +77,9 @@ class HotbarBuilder(val name: String) {
     private val slots = mutableMapOf<Int, HotbarSlot>()
     var clearOtherSlots: Boolean = true
 
-    fun slot(slot: Int, item: ItemStack, onClick: (Player) -> Unit = {}) {
+    fun slot(slot: Int, item: ItemStack, visibleWhen: Condition<Player>? = null, onClick: (Player) -> Unit = {}) {
         require(slot in 0..8) { "Hotbar slot must be 0-8" }
-        slots[slot] = HotbarSlot(slot, item, onClick)
+        slots[slot] = HotbarSlot(slot, item, visibleWhen, onClick)
     }
 
     fun build(): Hotbar = Hotbar(name, slots.toMap(), clearOtherSlots)
