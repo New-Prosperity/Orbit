@@ -83,13 +83,13 @@ object ArmorGlslGenerator {
         val size = formatVec3(cube.halfSize)
 
         val cellOffsetU = colorId * CELL_WIDTH
-        val (dKey, uKey) = if (mirrorFaces) "north" to "south" else "south" to "north"
+        val (dKey, uKey) = if (mirrorFaces) "south" to "north" else "north" to "south"
         val (eKey, wKey) = if (mirrorFaces) "east" to "west" else "west" to "east"
         val dFace = cube.uvFaces[dKey] ?: EMPTY_UV
         val uFace = cube.uvFaces[uKey] ?: EMPTY_UV
-        val nFace = cube.uvFaces["down"] ?: EMPTY_UV
+        val nFace = cube.uvFaces["up"] ?: EMPTY_UV
         val eFace = cube.uvFaces[eKey] ?: EMPTY_UV
-        val sFace = cube.uvFaces["up"] ?: EMPTY_UV
+        val sFace = cube.uvFaces["down"] ?: EMPTY_UV
         val wFace = cube.uvFaces[wKey] ?: EMPTY_UV
 
         val dSide = formatUv(dFace, texW, texH, cellOffsetU)

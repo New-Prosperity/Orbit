@@ -1,7 +1,7 @@
 <configuration>
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%highlight(%-5level) %gray([%logger]) %msg%n</pattern>
+            <pattern>%gray(%d{HH:mm:ss.SSS}) %highlight(%-5level) %gray([%logger]) %msg%n</pattern>
         </encoder>
     </appender>
 
@@ -22,7 +22,26 @@
         <appender-ref ref="FILE"/>
     </appender>
 
-    <logger name="com.hazelcast" level="WARN"/>
+    <appender name="HAZELCAST_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/hazelcast.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/hazelcast.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%logger] %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="ASYNC_HAZELCAST" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="HAZELCAST_FILE"/>
+    </appender>
+
+    <logger name="com.hazelcast" level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_HAZELCAST"/>
+    </logger>
     <logger name="com.zaxxer.hikari" level="WARN"/>
     <logger name="io.netty" level="WARN"/>
     <logger name="io.minio" level="WARN"/>

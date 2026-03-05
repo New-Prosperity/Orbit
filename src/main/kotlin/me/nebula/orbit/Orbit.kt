@@ -136,7 +136,6 @@ object Orbit {
                         +ServerOccupancyStore
                         +EconomyStore
                         +EconomyTransactionStore
-                        +PropertyStore
                         +RankStore
                         +PlayerRankStore
                         +PreferenceStore
@@ -156,6 +155,7 @@ object Orbit {
                 }
             }
             onEnable {
+                PropertyStore.initialize()
                 translations = translationRegistry {
                     prefix("orbit")
                     defaultLocale("en")
