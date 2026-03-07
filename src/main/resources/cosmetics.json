@@ -42,7 +42,14 @@
     "rarity": "COMMON",
     "material": "minecraft:blaze_rod",
     "data": {
-      "particle": "flame"
+      "particle": "flame",
+      "count": "3",
+      "spread": "0.1"
+    },
+    "maxLevel": 3,
+    "levelOverrides": {
+      "2": { "count": "5", "spread": "0.15" },
+      "3": { "count": "8", "spread": "0.2", "particle": "soul_fire_flame" }
     }
   },
   {
@@ -111,6 +118,251 @@
     "material": "minecraft:dragon_breath",
     "data": {
       "particle": "dragon_breath"
+    }
+  },
+  {
+    "id": "companion_mini_dragon",
+    "category": "COMPANION",
+    "nameKey": "orbit.cosmetic.companion_mini_dragon.name",
+    "descriptionKey": "orbit.cosmetic.companion_mini_dragon.description",
+    "rarity": "LEGENDARY",
+    "material": "minecraft:dragon_egg",
+    "data": {
+      "modelId": "mini_dragon",
+      "scale": "0.5",
+      "idleAnimation": "idle"
+    },
+    "maxLevel": 3,
+    "levelOverrides": {
+      "2": { "scale": "0.7" },
+      "3": { "scale": "1.0", "idleAnimation": "idle_epic" }
+    }
+  },
+  {
+    "id": "spawn_lightning",
+    "category": "SPAWN_EFFECT",
+    "nameKey": "orbit.cosmetic.spawn_lightning.name",
+    "descriptionKey": "orbit.cosmetic.spawn_lightning.description",
+    "rarity": "EPIC",
+    "material": "minecraft:lightning_rod",
+    "data": {
+      "particle": "electric_spark",
+      "shape": "helix",
+      "radius": "0.8",
+      "density": "10"
+    }
+  },
+  {
+    "id": "death_soul_release",
+    "category": "DEATH_EFFECT",
+    "nameKey": "orbit.cosmetic.death_soul_release.name",
+    "descriptionKey": "orbit.cosmetic.death_soul_release.description",
+    "rarity": "RARE",
+    "material": "minecraft:soul_lantern",
+    "data": {
+      "particle": "soul",
+      "shape": "sphere",
+      "radius": "1.5",
+      "density": "15"
+    }
+  },
+  {
+    "id": "aura_flame",
+    "category": "AURA",
+    "nameKey": "orbit.cosmetic.aura_flame.name",
+    "descriptionKey": "orbit.cosmetic.aura_flame.description",
+    "rarity": "COMMON",
+    "material": "minecraft:magma_cream",
+    "data": {
+      "particle": "flame",
+      "count": "2",
+      "spread": "0.3"
+    },
+    "maxLevel": 5,
+    "levelOverrides": {
+      "2": { "count": "3", "spread": "0.35" },
+      "3": { "count": "4", "spread": "0.4" },
+      "4": { "count": "5", "spread": "0.45", "particle": "soul_fire_flame" },
+      "5": { "count": "7", "spread": "0.5", "particle": "enchanted_hit" }
+    }
+  },
+  {
+    "id": "elim_msg_royal",
+    "category": "ELIMINATION_MESSAGE",
+    "nameKey": "orbit.cosmetic.elim_msg_royal.name",
+    "descriptionKey": "orbit.cosmetic.elim_msg_royal.description",
+    "rarity": "EPIC",
+    "material": "minecraft:name_tag",
+    "data": {
+      "formatKey": "orbit.cosmetic.elim.royal"
+    }
+  },
+  {
+    "id": "pet_wolf",
+    "category": "PET",
+    "nameKey": "orbit.cosmetic.pet_wolf.name",
+    "descriptionKey": "orbit.cosmetic.pet_wolf.description",
+    "rarity": "RARE",
+    "material": "minecraft:bone",
+    "data": {
+      "modelId": "pet_wolf",
+      "scale": "0.8",
+      "walkAnimation": "walk"
+    },
+    "maxLevel": 3,
+    "levelOverrides": {
+      "2": { "scale": "1.0" },
+      "3": { "scale": "1.2", "modelId": "pet_wolf_epic" }
+    }
+  },
+  {
+    "id": "pet_fox",
+    "category": "PET",
+    "nameKey": "orbit.cosmetic.pet_fox.name",
+    "descriptionKey": "orbit.cosmetic.pet_fox.description",
+    "rarity": "EPIC",
+    "material": "minecraft:sweet_berries",
+    "data": {
+      "modelId": "pet_fox",
+      "scale": "0.7",
+      "walkAnimation": "walk"
+    }
+  },
+  {
+    "id": "join_quit_royal",
+    "category": "JOIN_QUIT_MESSAGE",
+    "nameKey": "orbit.cosmetic.join_quit_royal.name",
+    "descriptionKey": "orbit.cosmetic.join_quit_royal.description",
+    "rarity": "EPIC",
+    "material": "minecraft:oak_sign",
+    "data": {
+      "joinFormatKey": "orbit.cosmetic.join.royal",
+      "quitFormatKey": "orbit.cosmetic.quit.royal"
+    }
+  },
+  {
+    "id": "join_quit_shadow",
+    "category": "JOIN_QUIT_MESSAGE",
+    "nameKey": "orbit.cosmetic.join_quit_shadow.name",
+    "descriptionKey": "orbit.cosmetic.join_quit_shadow.description",
+    "rarity": "LEGENDARY",
+    "material": "minecraft:wither_rose",
+    "data": {
+      "joinFormatKey": "orbit.cosmetic.join.shadow",
+      "quitFormatKey": "orbit.cosmetic.quit.shadow"
+    }
+  },
+  {
+    "id": "gadget_firework_launcher",
+    "category": "GADGET",
+    "nameKey": "orbit.cosmetic.gadget_firework_launcher.name",
+    "descriptionKey": "orbit.cosmetic.gadget_firework_launcher.description",
+    "rarity": "COMMON",
+    "material": "minecraft:firework_rocket",
+    "data": {
+      "action": "firework_launcher",
+      "cooldownSeconds": "5",
+      "particle": "firework",
+      "force": "25"
+    }
+  },
+  {
+    "id": "gadget_paint_blaster",
+    "category": "GADGET",
+    "nameKey": "orbit.cosmetic.gadget_paint_blaster.name",
+    "descriptionKey": "orbit.cosmetic.gadget_paint_blaster.description",
+    "rarity": "RARE",
+    "material": "minecraft:snowball",
+    "data": {
+      "action": "paint_blaster",
+      "cooldownSeconds": "3",
+      "particle": "item_snowball",
+      "radius": "3.0"
+    }
+  },
+  {
+    "id": "gadget_grappling_hook",
+    "category": "GADGET",
+    "nameKey": "orbit.cosmetic.gadget_grappling_hook.name",
+    "descriptionKey": "orbit.cosmetic.gadget_grappling_hook.description",
+    "rarity": "EPIC",
+    "material": "minecraft:fishing_rod",
+    "data": {
+      "action": "grappling_hook",
+      "cooldownSeconds": "4",
+      "speed": "2.5"
+    },
+    "maxLevel": 3,
+    "levelOverrides": {
+      "2": { "speed": "3.0", "cooldownSeconds": "3" },
+      "3": { "speed": "4.0", "cooldownSeconds": "2" }
+    }
+  },
+  {
+    "id": "gravestone_cross",
+    "category": "GRAVESTONE",
+    "nameKey": "orbit.cosmetic.gravestone_cross.name",
+    "descriptionKey": "orbit.cosmetic.gravestone_cross.description",
+    "rarity": "RARE",
+    "material": "minecraft:mossy_cobblestone",
+    "data": {
+      "modelId": "gravestone_cross",
+      "scale": "1.0",
+      "duration": "10"
+    }
+  },
+  {
+    "id": "gravestone_angel",
+    "category": "GRAVESTONE",
+    "nameKey": "orbit.cosmetic.gravestone_angel.name",
+    "descriptionKey": "orbit.cosmetic.gravestone_angel.description",
+    "rarity": "LEGENDARY",
+    "material": "minecraft:end_stone",
+    "data": {
+      "modelId": "gravestone_angel",
+      "scale": "1.2",
+      "duration": "15"
+    },
+    "maxLevel": 3,
+    "levelOverrides": {
+      "2": { "scale": "1.5", "duration": "20" },
+      "3": { "scale": "1.8", "duration": "30", "modelId": "gravestone_angel_epic" }
+    }
+  },
+  {
+    "id": "mount_horse",
+    "category": "MOUNT",
+    "nameKey": "orbit.cosmetic.mount_horse.name",
+    "descriptionKey": "orbit.cosmetic.mount_horse.description",
+    "rarity": "RARE",
+    "material": "minecraft:saddle",
+    "data": {
+      "modelId": "mount_horse",
+      "scale": "1.0",
+      "speed": "0.25",
+      "seatBone": "seat",
+      "walkAnimation": "walk"
+    },
+    "maxLevel": 3,
+    "levelOverrides": {
+      "2": { "speed": "0.3" },
+      "3": { "speed": "0.35", "modelId": "mount_horse_epic" }
+    }
+  },
+  {
+    "id": "mount_dragon",
+    "category": "MOUNT",
+    "nameKey": "orbit.cosmetic.mount_dragon.name",
+    "descriptionKey": "orbit.cosmetic.mount_dragon.description",
+    "rarity": "LEGENDARY",
+    "material": "minecraft:dragon_egg",
+    "data": {
+      "modelId": "mount_dragon",
+      "scale": "1.5",
+      "speed": "0.3",
+      "seatBone": "seat",
+      "walkAnimation": "walk",
+      "seatOffsetY": "0.5"
     }
   }
 ]

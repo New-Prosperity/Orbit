@@ -17,4 +17,13 @@ data class CosmeticDefinition(
     val rarity: CosmeticRarity,
     val material: String,
     val data: Map<String, String> = emptyMap(),
-)
+    val maxLevel: Int = 1,
+    val levelOverrides: Map<Int, Map<String, String>> = emptyMap(),
+) {
+
+    fun resolveData(level: Int): Map<String, String> {
+        val resolved = data.toMutableMap()
+        levelOverrides.keys.sorted().filter { it <= level }.forEach { resolved.putAll(levelOverrides.getValue(it)) }
+        return resolved
+    }
+}

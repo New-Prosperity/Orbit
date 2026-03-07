@@ -91,8 +91,8 @@ class MapPool(
             .filter { name -> eligible.any { it.name == name } }
             .groupingBy { it }
             .eachCount()
-        if (tally.isEmpty()) return eligible[Random.nextInt(eligible.size)]
-        val topVoted = tally.maxByOrNull { it.value }!!.key
+        val topVoted = tally.maxByOrNull { it.value }?.key
+            ?: return eligible[Random.nextInt(eligible.size)]
         return eligible.first { it.name == topVoted }
     }
 }

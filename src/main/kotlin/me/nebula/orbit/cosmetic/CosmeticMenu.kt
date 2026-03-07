@@ -4,7 +4,6 @@ import me.nebula.gravity.cosmetic.CosmeticCategory
 import me.nebula.gravity.cosmetic.CosmeticPlayerData
 import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.gravity.cosmetic.EquipCosmeticProcessor
-import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.gui.openGui
@@ -21,10 +20,20 @@ object CosmeticMenu {
         CosmeticCategory.TRAIL to Pair(13, Material.BLAZE_POWDER),
         CosmeticCategory.WIN_EFFECT to Pair(14, Material.FIREWORK_ROCKET),
         CosmeticCategory.PROJECTILE_TRAIL to Pair(15, Material.ARROW),
+        CosmeticCategory.COMPANION to Pair(20, Material.ARMOR_STAND),
+        CosmeticCategory.PET to Pair(21, Material.BONE),
+        CosmeticCategory.MOUNT to Pair(22, Material.SADDLE),
+        CosmeticCategory.SPAWN_EFFECT to Pair(23, Material.ENDER_PEARL),
+        CosmeticCategory.DEATH_EFFECT to Pair(24, Material.WITHER_SKELETON_SKULL),
+        CosmeticCategory.AURA to Pair(29, Material.NETHER_STAR),
+        CosmeticCategory.ELIMINATION_MESSAGE to Pair(30, Material.NAME_TAG),
+        CosmeticCategory.JOIN_QUIT_MESSAGE to Pair(31, Material.OAK_SIGN),
+        CosmeticCategory.GADGET to Pair(32, Material.BLAZE_ROD),
+        CosmeticCategory.GRAVESTONE to Pair(33, Material.MOSSY_COBBLESTONE),
     )
 
     fun openCategoryMenu(player: Player) {
-        val gui = gui(player.translateRaw("orbit.cosmetic.menu.title"), rows = 3) {
+        val gui = gui(player.translateRaw("orbit.cosmetic.menu.title"), rows = 5) {
             categorySlots.forEach { (category, config) ->
                 val (slot, material) = config
                 slot(slot, itemStack(material) {
@@ -44,11 +53,12 @@ object CosmeticMenu {
             border(Material.GRAY_STAINED_GLASS_PANE)
 
             cosmetics.forEach { definition ->
-                val owned = definition.id in playerData.owned
+                val level = playerData.owned[definition.id] ?: 0
+                val owned = level > 0
                 val equipped = playerData.equipped[category.name] == definition.id
                 val material = Material.fromKey(definition.material) ?: Material.BARRIER
 
-                item(buildCosmeticItem(player, definition, material, owned, equipped)) { p ->
+                item(buildCosmeticItem(player, definition, material, owned, equipped, level)) { p ->
                     if (!owned) return@item
                     if (equipped) {
                         CosmeticStore.executeOnKey(p.uuid, EquipCosmeticProcessor(category.name, null))
@@ -72,11 +82,16 @@ object CosmeticMenu {
         material: Material,
         owned: Boolean,
         equipped: Boolean,
+        level: Int,
     ) = itemStack(material) {
         val rarityName = player.translateRaw("orbit.cosmetic.rarity.${definition.rarity.name.lowercase()}")
         name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
         lore("${definition.rarity.colorTag}$rarityName")
         lore(player.translateRaw(definition.descriptionKey))
+        if (definition.maxLevel > 1) {
+            lore("")
+            lore("<white>${player.translateRaw("orbit.cosmetic.level", "level" to "$level", "max" to "${definition.maxLevel}")}")
+        }
         lore("")
         when {
             equipped -> {

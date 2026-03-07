@@ -43,9 +43,15 @@ import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.cinematic.cinematicTestCommand
 import me.nebula.orbit.utils.modelengine.modelEngineCommand
+import me.nebula.orbit.cosmetic.AuraManager
+import me.nebula.orbit.cosmetic.CompanionManager
 import me.nebula.orbit.cosmetic.CosmeticListener
 import me.nebula.orbit.cosmetic.CosmeticMenu
+import me.nebula.orbit.cosmetic.CosmeticMountManager
 import me.nebula.orbit.cosmetic.CosmeticRegistry
+import me.nebula.orbit.cosmetic.GadgetManager
+import me.nebula.orbit.cosmetic.GravestoneManager
+import me.nebula.orbit.cosmetic.PetManager
 import me.nebula.orbit.commands.installBasicCommands
 import me.nebula.orbit.commands.installGameCommands
 import me.nebula.orbit.utils.commandbuilder.command
@@ -111,6 +117,7 @@ object Orbit {
 
         val env = environment {
             required("VELOCITY_SECRET")
+            optional("P_SERVER_NAME")
         }
 
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
@@ -125,6 +132,7 @@ object Orbit {
             configureModules {
                 +hazelcastModule {
                     client {
+                        instanceName = env.all["P_SERVER_NAME"]?.ifEmpty { null } ?: "orbit-local"
                         if (hazelcastAddresses != null) {
                             networkConfig.addAddress(*hazelcastAddresses.split(",").toTypedArray())
                         }
@@ -220,6 +228,11 @@ object Orbit {
         CosmeticRegistry.loadFromResources(app.resources)
         CosmeticListener.activeConfig = mode.cosmeticConfig
         CosmeticListener.install(handler)
+        AuraManager.install()
+        CompanionManager.install()
+        PetManager.install()
+        GravestoneManager.install()
+        CosmeticMountManager.install()
 
         mode.install(handler)
 
@@ -247,11 +260,15 @@ object Orbit {
             logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid, address=$serverHost)" }
             NetworkMessenger.publish(ServerRegistrationMessage(serverUuid, serverHost))
             logger.info { "ServerRegistrationMessage published" }
+
         } else {
             logger.warn { "P_SERVER_UUID is empty, skipping server registration" }
         }
 
         Runtime.getRuntime().addShutdownHook(Thread {
+            for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
+                player.kick(Component.text("Server shutting down"))
+            }
             if (serverUuid.isNotEmpty()) {
                 logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
                 NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid))

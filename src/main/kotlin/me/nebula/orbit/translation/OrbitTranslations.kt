@@ -5,54 +5,8 @@ import me.nebula.ether.utils.translation.TranslationRegistry
 object OrbitTranslations {
 
     fun register(translations: TranslationRegistry) {
-        translations.putAll("en", mechanic() + utility() + game() + cosmetic() + host())
+        translations.putAll("en", utility() + game() + cosmetic() + host())
     }
-
-    private fun mechanic(): Map<String, String> = mapOf(
-        "orbit.mechanic.anvil.title" to "Repair & Name",
-        "orbit.mechanic.armor_trim.title" to "Upgrade Gear",
-        "orbit.mechanic.barrel.title" to "Barrel",
-        "orbit.mechanic.blast_furnace.title" to "Blast Furnace",
-        "orbit.mechanic.brewing_stand.title" to "Brewing Stand",
-        "orbit.mechanic.bundle.title" to "Bundle",
-        "orbit.mechanic.cartography_table.title" to "Cartography Table",
-        "orbit.mechanic.chest.title" to "Chest",
-        "orbit.mechanic.command_block.info" to "Command Block [<command>]",
-        "orbit.mechanic.container.chest.title" to "Chest",
-        "orbit.mechanic.container.dispenser.title" to "Dispenser",
-        "orbit.mechanic.container.dropper.title" to "Dropper",
-        "orbit.mechanic.container.furnace.title" to "Furnace",
-        "orbit.mechanic.container.hopper.title" to "Item Hopper",
-        "orbit.mechanic.container.shulker_box.title" to "Shulker Box",
-        "orbit.mechanic.crafter.title" to "Crafter",
-        "orbit.mechanic.crafting.title" to "Crafting",
-        "orbit.mechanic.double_chest.title" to "Large Chest",
-        "orbit.mechanic.dropper.title" to "Dropper",
-        "orbit.mechanic.enchanting.title" to "Enchant",
-        "orbit.mechanic.ender_chest.title" to "Ender Chest",
-        "orbit.mechanic.fletching_table.title" to "Fletching Table",
-        "orbit.mechanic.grindstone.title" to "Repair & Disenchant",
-        "orbit.mechanic.head_drop.name" to "<victim>'s Head",
-        "orbit.mechanic.head_drop.lore" to "Killed by <killer>",
-        "orbit.mechanic.hopper.title" to "Item Hopper",
-        "orbit.mechanic.item_repair.title" to "Repair & Name",
-        "orbit.mechanic.lectern.book_header" to "Book on lectern:",
-        "orbit.mechanic.lectern.empty" to "  (empty)",
-        "orbit.mechanic.loom.title" to "Loom",
-        "orbit.mechanic.map.title" to "Cartography Table",
-        "orbit.mechanic.recovery_compass.distance" to "<direction> - <distance>m to death point",
-        "orbit.mechanic.shulker_box.title" to "Shulker Box",
-        "orbit.mechanic.sign.header" to "Sign text:",
-        "orbit.mechanic.sign.line" to "  Line <number>: <text>",
-        "orbit.mechanic.smithing_table.title" to "Upgrade Gear",
-        "orbit.mechanic.smoker.title" to "Smoker",
-        "orbit.mechanic.stonecutter.title" to "Stonecutter",
-        "orbit.mechanic.trading.title" to "Trade",
-
-        "orbit.mechanic.vault.title" to "Vault",
-        "orbit.mechanic.vault.already_claimed" to "You have already claimed this vault.",
-        "orbit.mechanic.vault.reward" to "You received a vault reward!",
-    )
 
     private fun utility(): Map<String, String> = mapOf(
         "orbit.util.achievement.unlocked" to "Achievement Unlocked!",
@@ -71,21 +25,6 @@ object OrbitTranslations {
         "orbit.util.timer.display" to "<seconds>s",
         "orbit.util.world.unloading" to "World unloading",
         "orbit.util.world.deleted" to "World deleted",
-
-        "orbit.util.auto_restart.warning" to "Server restarting in <time>",
-        "orbit.util.auto_restart.restarting" to "Server is restarting...",
-        "orbit.util.entity_cleanup.warning" to "Clearing <count> entities...",
-        "orbit.util.selection_tool.pos1" to "Position 1 set to <pos>",
-        "orbit.util.selection_tool.pos2" to "Position 2 set to <pos>",
-        "orbit.util.command_cooldown.wait" to "Please wait <remaining>s before using this again.",
-        "orbit.util.warmup.cancelled" to "Action cancelled!",
-        "orbit.util.death_message.pvp" to "<victim> was slain by <killer>",
-        "orbit.util.death_message.fall" to "<victim> fell from a high place",
-        "orbit.util.death_message.void" to "<victim> fell out of the world",
-        "orbit.util.death_message.generic" to "<victim> died",
-        "orbit.util.podium.first" to "1st Place",
-        "orbit.util.podium.second" to "2nd Place",
-        "orbit.util.podium.third" to "3rd Place",
     )
 
     private fun game(): Map<String, String> = mapOf(
@@ -99,6 +38,16 @@ object OrbitTranslations {
         "orbit.cosmetic.category.trail" to "Trails",
         "orbit.cosmetic.category.win_effect" to "Win Effects",
         "orbit.cosmetic.category.projectile_trail" to "Projectile Trails",
+        "orbit.cosmetic.category.companion" to "Companions",
+        "orbit.cosmetic.category.spawn_effect" to "Spawn Effects",
+        "orbit.cosmetic.category.death_effect" to "Death Effects",
+        "orbit.cosmetic.category.aura" to "Auras",
+        "orbit.cosmetic.category.elimination_message" to "Elimination Messages",
+        "orbit.cosmetic.category.pet" to "Pets",
+        "orbit.cosmetic.category.join_quit_message" to "Join/Quit Messages",
+        "orbit.cosmetic.category.gadget" to "Gadgets",
+        "orbit.cosmetic.category.gravestone" to "Gravestones",
+        "orbit.cosmetic.category.mount" to "Mounts",
 
         "orbit.cosmetic.rarity.common" to "Common",
         "orbit.cosmetic.rarity.rare" to "Rare",
@@ -110,6 +59,16 @@ object OrbitTranslations {
         "orbit.cosmetic.status.locked" to "Locked",
         "orbit.cosmetic.action.equip" to "Click to equip",
         "orbit.cosmetic.action.unequip" to "Click to unequip",
+        "orbit.cosmetic.level" to "Level <level>/<max>",
+
+        "orbit.cosmetic.display.label" to "Cosmetic Display",
+        "orbit.cosmetic.display.full" to "Full",
+        "orbit.cosmetic.display.full.description" to "See all player cosmetics",
+        "orbit.cosmetic.display.reduced" to "Reduced",
+        "orbit.cosmetic.display.reduced.description" to "Particles only, no models",
+        "orbit.cosmetic.display.none" to "None",
+        "orbit.cosmetic.display.none.description" to "Hide all other player cosmetics",
+        "orbit.cosmetic.display.changed" to "Cosmetic display set to <mode>",
 
         "orbit.cosmetic.armor_knight.name" to "Knight Armor",
         "orbit.cosmetic.armor_knight.description" to "A noble knight's enchanted armor set",
@@ -135,6 +94,53 @@ object OrbitTranslations {
         "orbit.cosmetic.projectile_flame.description" to "Your arrows leave a fiery trail",
         "orbit.cosmetic.projectile_dragon.name" to "Dragon Breath Arrow",
         "orbit.cosmetic.projectile_dragon.description" to "Your arrows leave dragon breath particles",
+
+        "orbit.cosmetic.companion_mini_dragon.name" to "Mini Dragon",
+        "orbit.cosmetic.companion_mini_dragon.description" to "A tiny dragon companion that follows you",
+
+        "orbit.cosmetic.spawn_lightning.name" to "Lightning Entrance",
+        "orbit.cosmetic.spawn_lightning.description" to "Arrive with a crackling electric helix",
+
+        "orbit.cosmetic.death_soul_release.name" to "Soul Release",
+        "orbit.cosmetic.death_soul_release.description" to "Release wandering souls upon death",
+
+        "orbit.cosmetic.aura_flame.name" to "Flame Aura",
+        "orbit.cosmetic.aura_flame.description" to "Ambient flames surround you",
+
+        "orbit.cosmetic.elim_msg_royal.name" to "Royal Decree",
+        "orbit.cosmetic.elim_msg_royal.description" to "A regal elimination message",
+        "orbit.cosmetic.elim.royal" to "<gold>\u2694 <killer> <yellow>has royally defeated <gold><victim> <yellow>\u2694",
+
+        "orbit.cosmetic.pet_wolf.name" to "Loyal Wolf",
+        "orbit.cosmetic.pet_wolf.description" to "A faithful wolf that follows you around",
+        "orbit.cosmetic.pet_fox.name" to "Sneaky Fox",
+        "orbit.cosmetic.pet_fox.description" to "A cunning fox that trots alongside you",
+
+        "orbit.cosmetic.join_quit_royal.name" to "Royal Arrival",
+        "orbit.cosmetic.join_quit_royal.description" to "Announce your presence like royalty",
+        "orbit.cosmetic.join_quit_shadow.name" to "Shadow Passage",
+        "orbit.cosmetic.join_quit_shadow.description" to "Arrive and depart from the shadows",
+        "orbit.cosmetic.join.royal" to "<gold>\u2726 <yellow><player> <gold>has graced the realm with their presence \u2726",
+        "orbit.cosmetic.quit.royal" to "<gold>\u2726 <yellow><player> <gold>has departed the realm \u2726",
+        "orbit.cosmetic.join.shadow" to "<dark_gray>\u2620 <gray><player> <dark_gray>emerged from the shadows \u2620",
+        "orbit.cosmetic.quit.shadow" to "<dark_gray>\u2620 <gray><player> <dark_gray>vanished into the shadows \u2620",
+
+        "orbit.cosmetic.gadget_firework_launcher.name" to "Firework Launcher",
+        "orbit.cosmetic.gadget_firework_launcher.description" to "Launch yourself skyward with a burst of fireworks",
+        "orbit.cosmetic.gadget_paint_blaster.name" to "Paint Blaster",
+        "orbit.cosmetic.gadget_paint_blaster.description" to "Blast a sphere of colorful particles around you",
+        "orbit.cosmetic.gadget_grappling_hook.name" to "Grappling Hook",
+        "orbit.cosmetic.gadget_grappling_hook.description" to "Propel yourself in the direction you're looking",
+
+        "orbit.cosmetic.gravestone_cross.name" to "Stone Cross",
+        "orbit.cosmetic.gravestone_cross.description" to "A solemn cross marks your fall",
+        "orbit.cosmetic.gravestone_angel.name" to "Guardian Angel",
+        "orbit.cosmetic.gravestone_angel.description" to "An angelic statue watches over your resting place",
+
+        "orbit.cosmetic.mount_horse.name" to "War Horse",
+        "orbit.cosmetic.mount_horse.description" to "A trusty steed to ride across the battlefield",
+        "orbit.cosmetic.mount_dragon.name" to "Storm Dragon",
+        "orbit.cosmetic.mount_dragon.description" to "A fearsome dragon mount that commands respect",
     )
 
     private fun host(): Map<String, String> = mapOf(

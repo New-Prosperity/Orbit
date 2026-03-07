@@ -42,6 +42,6 @@ data class HotbarItemConfig(
 )
 
 data class CosmeticConfig(
-    val enabledCategories: List<String> = listOf("ARMOR_SKIN", "KILL_EFFECT", "TRAIL", "WIN_EFFECT", "PROJECTILE_TRAIL"),
+    val enabledCategories: List<String> = me.nebula.gravity.cosmetic.CosmeticCategory.entries.map { it.name },
     val blacklist: List<String> = emptyList(),
 )

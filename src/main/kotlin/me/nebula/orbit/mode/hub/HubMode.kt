@@ -174,15 +174,15 @@ class HubMode(private val resources: ResourceManager) : ServerMode {
         hostStatusSubscription = NetworkMessenger.subscribe<HostProvisionStatusMessage> { msg ->
             val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(msg.hostOwner)
             when (msg.status) {
-                "PROVISIONING" -> player?.sendMessage(player.translate("orbit.host.status.provisioning"))
+                "PROVISIONING" -> player?.let { it.sendMessage(it.translate("orbit.host.status.provisioning")) }
                 "READY" -> {
                     HostMenu.removePending(msg.hostOwner)
-                    player?.sendMessage(player.translate("orbit.host.status.ready"))
+                    player?.let { it.sendMessage(it.translate("orbit.host.status.ready")) }
                 }
                 "FAILED" -> {
                     HostMenu.removePending(msg.hostOwner)
-                    player?.sendMessage(player.translate("orbit.host.status.failed",
-                        "reason" to (msg.failureReason ?: "unknown")))
+                    player?.let { it.sendMessage(it.translate("orbit.host.status.failed",
+                        "reason" to (msg.failureReason ?: "unknown"))) }
                 }
             }
         }

@@ -17,6 +17,39 @@ data class TimingConfig(
     val allowReconnect: Boolean = true,
     val disconnectEliminationSeconds: Int = 0,
     val reconnectWindowSeconds: Int = 0,
+    val freezeDuringCountdown: Boolean = false,
+    val combatLogSeconds: Int = 0,
+    val afkEliminationSeconds: Int = 0,
+    val minViablePlayers: Int = 0,
+    val isolateSpectatorChat: Boolean = false,
+    val voidDeathY: Double = Double.NEGATIVE_INFINITY,
+)
+
+data class TeamConfig(
+    val teamCount: Int,
+    val minTeamSize: Int = 1,
+    val maxTeamSize: Int = Int.MAX_VALUE,
+    val autoBalance: Boolean = true,
+    val friendlyFire: Boolean = false,
+    val teamNames: List<String> = emptyList(),
+)
+
+data class RespawnConfig(
+    val respawnDelayTicks: Int = 60,
+    val maxLives: Int = 0,
+    val invincibilityTicks: Int = 40,
+    val clearInventoryOnRespawn: Boolean = false,
+)
+
+data class LateJoinConfig(
+    val windowSeconds: Int = 30,
+    val joinAsSpectator: Boolean = false,
+    val maxLateJoiners: Int = 0,
+)
+
+data class OvertimeConfig(
+    val durationSeconds: Int = 60,
+    val suddenDeath: Boolean = false,
 )
 
 data class GameSettings(
@@ -29,4 +62,9 @@ data class GameSettings(
     val hotbar: List<HotbarItemConfig>,
     val timing: TimingConfig,
     val cosmetics: CosmeticConfig? = null,
+    val teams: TeamConfig? = null,
+    val respawn: RespawnConfig? = null,
+    val lateJoin: LateJoinConfig? = null,
+    val overtime: OvertimeConfig? = null,
+    val mapName: String? = null,
 )

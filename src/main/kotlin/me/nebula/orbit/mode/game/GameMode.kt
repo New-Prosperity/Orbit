@@ -18,14 +18,17 @@ import me.nebula.orbit.utils.gamestate.gameStateMachine
 import me.nebula.orbit.utils.graceperiod.GracePeriodManager
 import me.nebula.orbit.utils.graceperiod.gracePeriod
 import me.nebula.orbit.utils.hotbar.Hotbar
+import me.nebula.orbit.utils.kit.Kit
 import me.nebula.orbit.utils.lobby.Lobby
 import me.nebula.orbit.utils.lobby.lobby
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.utils.matchresult.MatchResultDisplay
+import me.nebula.orbit.utils.matchresult.MatchResultManager
 import me.nebula.orbit.utils.matchresult.matchResult
 import me.nebula.orbit.utils.minigametimer.MinigameTimer
 import me.nebula.orbit.utils.minigametimer.minigameTimer
 import me.nebula.orbit.utils.scheduler.delay
+import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.scoreboard.LiveScoreboard
 import me.nebula.orbit.utils.scoreboard.liveScoreboard
 import me.nebula.orbit.utils.tablist.LiveTabList
@@ -33,8 +36,13 @@ import me.nebula.orbit.utils.tablist.liveTabList
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
+import net.minestom.server.entity.damage.EntityDamage
+import net.minestom.server.event.EventNode
 import net.minestom.server.event.GlobalEventHandler
+import net.minestom.server.event.entity.EntityDamageEvent
+import net.minestom.server.event.player.PlayerChatEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
+import net.minestom.server.event.player.PlayerMoveEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.timer.Task
@@ -68,22 +76,77 @@ abstract class GameMode : ServerMode {
     open fun onEndingStart(result: MatchResult) {}
     open fun onEndingComplete() {}
     open fun onGameReset() {}
+    open fun onPlayerDeath(player: Player, killer: Player?) {}
+    open fun onPlayerRespawn(player: Player) {}
+    open fun onTeamsAssigned(assignments: Map<String, List<UUID>>) {}
+    open fun onLateJoin(player: Player) {}
+    open fun onKillStreak(player: Player, streak: Int) {}
+    open fun onOvertimeStart() {}
+    open fun onOvertimeEnd() {}
+    open fun onAfkEliminated(player: Player) {}
+    open fun onCombatLog(player: Player) {}
+
+    open fun onAllPlayersEliminated() {
+        forceEnd(matchResult { draw() })
+    }
+
+    open fun onPlayerDamaged(victim: Player, attacker: Player?, amount: Float, event: EntityDamageEvent): Boolean = true
+
     open fun buildLobbyHotbar(): Hotbar? = null
+    open fun buildRespawnKit(): Kit? = null
+    open fun buildRespawnPosition(player: Player): Pos = spawnPoint
+
     open fun buildTimeExpiredResult(): MatchResult = matchResult {
         draw()
-        duration((System.currentTimeMillis() - gameStartTime).milliseconds.let {
-            java.time.Duration.ofMillis(it.inWholeMilliseconds)
-        })
+        duration(java.time.Duration.ofMillis(System.currentTimeMillis() - gameStartTime))
     }
+
+    open fun buildOvertimeResult(): MatchResult = matchResult {
+        draw()
+        duration(java.time.Duration.ofMillis(System.currentTimeMillis() - gameStartTime))
+    }
+
+    protected open fun assignTeams(players: List<UUID>): Map<UUID, String> {
+        val config = settings.teams ?: return emptyMap()
+        if (config.teamCount <= 0) return emptyMap()
+        val names = config.teamNames.takeIf { it.size >= config.teamCount }
+            ?: (1..config.teamCount).map { "team_$it" }
+        val shuffled = players.shuffled()
+        return shuffled.mapIndexed { i, uuid -> uuid to names[i % names.size] }.toMap()
+    }
+
+    protected open fun persistGameStats(result: MatchResult) {}
 
     val phase: GamePhase get() = stateMachine.current
     val tracker = PlayerTracker()
     protected var gameStartTime: Long = 0L
         private set
+    var initialPlayerCount: Int = 0
+        private set
+
+    val isTeamMode: Boolean get() = settings.teams?.let { it.teamCount > 0 } ?: false
+    val isFriendlyFireEnabled: Boolean get() = settings.teams?.friendlyFire ?: true
+    val isOvertime: Boolean get() = _isOvertime
+    val isSuddenDeath: Boolean get() = _isSuddenDeath
+
+    fun areTeammates(a: UUID, b: UUID): Boolean = tracker.areTeammates(a, b)
 
     private val disconnectTimers = ConcurrentHashMap<UUID, Task>()
+    private val respawnTimers = ConcurrentHashMap<UUID, Task>()
+    private val gameEvents = ConcurrentHashMap<String, Task>()
+    private val spectatorTargets = ConcurrentHashMap<UUID, UUID>()
     private var reconnectWindowTask: Task? = null
+    private var lateJoinWindowTask: Task? = null
+    private var afkCheckTask: Task? = null
+    private var overtimeTask: Task? = null
+    private var voidCheckTask: Task? = null
+    private var freezeEventNode: EventNode<*>? = null
+    private var gameMechanicsNode: EventNode<*>? = null
     @Volatile private var reconnectWindowExpired = false
+    @Volatile private var lateJoinWindowExpired = false
+    @Volatile private var lateJoinCount = 0
+    @Volatile private var _isOvertime = false
+    @Volatile private var _isSuddenDeath = false
 
     override val spawnPoint: Pos by lazy { settings.spawn.toPos() }
 
@@ -154,36 +217,83 @@ abstract class GameMode : ServerMode {
         tabList.uninstall()
         GracePeriodManager.uninstall()
         cleanupReconnectionState()
+        cleanupRespawnTimers()
+        cleanupLateJoinState()
+        cleanupGameEvents()
+        cleanupAfkCheck()
+        cleanupOvertime()
+        cleanupFreezeNode()
+        cleanupGameMechanicsNode()
+        cleanupVoidCheck()
         stateMachine.destroy()
     }
 
     fun eliminate(player: Player) {
-        require(phase == GamePhase.PLAYING) { "Can only eliminate during PLAYING phase" }
-        require(tracker.isAlive(player.uuid)) { "Player ${player.username} is not alive" }
+        if (phase != GamePhase.PLAYING) return
+        if (!tracker.isAlive(player.uuid) && !tracker.isRespawning(player.uuid)) return
 
+        respawnTimers.remove(player.uuid)?.cancel()
         tracker.eliminate(player.uuid)
         player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
         player.teleport(spawnPoint)
-        onPlayerEliminated(player)
 
-        val result = checkWinCondition()
-        if (result != null) {
-            forceEnd(result)
-        }
+        autoSpectateOnEliminate(player)
+        onPlayerEliminated(player)
+        checkGameEnd()
     }
 
-    fun revive(player: Player) {
-        require(phase == GamePhase.PLAYING) { "Can only revive during PLAYING phase" }
-        require(tracker.isSpectating(player.uuid)) { "Player ${player.username} is not spectating" }
+    fun revive(player: Player, position: Pos = spawnPoint) {
+        if (phase != GamePhase.PLAYING) return
+        if (!tracker.isSpectating(player.uuid)) return
 
+        spectatorTargets.remove(player.uuid)
+        player.stopSpectating()
         tracker.revive(player.uuid)
         player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
-        player.teleport(spawnPoint)
+        player.teleport(position)
+    }
+
+    fun handleDeath(player: Player, killer: Player? = null) {
+        if (phase != GamePhase.PLAYING) return
+        if (!tracker.isAlive(player.uuid)) return
+
+        tracker.recordDeath(player.uuid)
+
+        if (killer != null && killer.uuid != player.uuid) {
+            tracker.recordKill(killer.uuid)
+            val streak = tracker.streakOf(killer.uuid)
+            if (streak > 1) onKillStreak(killer, streak)
+        }
+
+        creditAssists(player.uuid, killer?.uuid)
+
+        onPlayerDeath(player, killer)
+
+        if (_isSuddenDeath) {
+            eliminate(player)
+            return
+        }
+
+        val respawnConfig = settings.respawn
+        if (respawnConfig != null) {
+            val livesRemaining = if (respawnConfig.maxLives > 0) {
+                tracker.decrementLives(player.uuid)
+            } else {
+                1
+            }
+
+            if (livesRemaining > 0) {
+                scheduleRespawn(player, respawnConfig)
+                return
+            }
+        }
+
+        eliminate(player)
     }
 
     fun forceReconnect(player: Player) {
-        require(phase == GamePhase.PLAYING) { "Can only force reconnect during PLAYING phase" }
-        require(tracker.isDisconnected(player.uuid)) { "Player ${player.username} is not in disconnected state" }
+        if (phase != GamePhase.PLAYING) return
+        if (!tracker.isDisconnected(player.uuid)) return
 
         disconnectTimers.remove(player.uuid)?.cancel()
         ReconnectionStore.delete(player.uuid)
@@ -192,7 +302,7 @@ abstract class GameMode : ServerMode {
     }
 
     fun forceStart() {
-        require(phase == GamePhase.WAITING || phase == GamePhase.STARTING) { "Can only force start from WAITING or STARTING phase" }
+        if (phase != GamePhase.WAITING && phase != GamePhase.STARTING) return
 
         if (phase == GamePhase.WAITING) {
             stateMachine.transition(GamePhase.STARTING)
@@ -203,37 +313,191 @@ abstract class GameMode : ServerMode {
     }
 
     fun forceEnd(result: MatchResult) {
+        if (phase == GamePhase.ENDING || phase == GamePhase.WAITING) return
         lastEndResult = result
         stateMachine.transition(GamePhase.ENDING)
+    }
+
+    fun nextSpectatorTarget(player: Player): Player? {
+        if (!tracker.isSpectating(player.uuid)) return null
+        val targets = resolveSpectatorTargets(player)
+        if (targets.isEmpty()) return null
+        val currentTargetUuid = spectatorTargets[player.uuid]
+        val currentIndex = if (currentTargetUuid != null) targets.indexOfFirst { it.uuid == currentTargetUuid } else -1
+        val next = targets[(currentIndex + 1) % targets.size]
+        spectatorTargets[player.uuid] = next.uuid
+        player.spectate(next)
+        return next
+    }
+
+    fun previousSpectatorTarget(player: Player): Player? {
+        if (!tracker.isSpectating(player.uuid)) return null
+        val targets = resolveSpectatorTargets(player)
+        if (targets.isEmpty()) return null
+        val currentTargetUuid = spectatorTargets[player.uuid]
+        val currentIndex = if (currentTargetUuid != null) targets.indexOfFirst { it.uuid == currentTargetUuid } else targets.size
+        val prev = targets[(currentIndex - 1 + targets.size) % targets.size]
+        spectatorTargets[player.uuid] = prev.uuid
+        player.spectate(prev)
+        return prev
+    }
+
+    fun scheduleGameEvent(name: String, delayTicks: Int, action: () -> Unit): Task {
+        gameEvents.remove(name)?.cancel()
+        val task = delay(delayTicks) {
+            gameEvents.remove(name)
+            if (phase == GamePhase.PLAYING) action()
+        }
+        gameEvents[name] = task
+        return task
+    }
+
+    fun cancelGameEvent(name: String) {
+        gameEvents.remove(name)?.cancel()
+    }
+
+    fun broadcastAlive(action: (Player) -> Unit) {
+        for (uuid in tracker.alive) {
+            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.let(action)
+        }
+    }
+
+    fun broadcastSpectators(action: (Player) -> Unit) {
+        for (uuid in tracker.spectating) {
+            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.let(action)
+        }
+    }
+
+    fun broadcastTeam(team: String, action: (Player) -> Unit) {
+        for (uuid in tracker.teamMembers(team)) {
+            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.let(action)
+        }
+    }
+
+    fun broadcastAll(action: (Player) -> Unit) {
+        defaultInstance.players.forEach(action)
+    }
+
+    protected fun lastTeamStandingName(): String? {
+        val alive = tracker.aliveTeams()
+        return if (alive.size == 1) alive.first() else null
+    }
+
+    protected fun lastPlayerStandingUuid(): UUID? =
+        if (tracker.aliveCount <= 1) tracker.alive.firstOrNull() else null
+
+    private fun autoSpectateOnEliminate(eliminated: Player) {
+        val lastAttackerUuid = tracker.recentDamagersOf(eliminated.uuid, ASSIST_WINDOW_MILLIS).firstOrNull()
+        val target = if (lastAttackerUuid != null && tracker.isAlive(lastAttackerUuid)) {
+            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(lastAttackerUuid)
+        } else {
+            resolveSpectatorTargets(eliminated).firstOrNull()
+        }
+        if (target != null) {
+            spectatorTargets[eliminated.uuid] = target.uuid
+            eliminated.spectate(target)
+        }
+    }
+
+    private fun resolveSpectatorTargets(spectator: Player): List<Player> {
+        val team = tracker.teamOf(spectator.uuid)
+        val candidateUuids = if (team != null && isTeamMode) {
+            val teammates = tracker.aliveInTeam(team)
+            if (teammates.isNotEmpty()) teammates else tracker.alive
+        } else {
+            tracker.alive
+        }
+        return candidateUuids.mapNotNull { MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(it) }
+    }
+
+    private fun creditAssists(victimUuid: UUID, killerUuid: UUID?) {
+        val damagers = tracker.recentDamagersOf(victimUuid, ASSIST_WINDOW_MILLIS)
+        for (damager in damagers) {
+            if (damager != killerUuid && damager != victimUuid) {
+                tracker.recordAssist(damager)
+            }
+        }
     }
 
     private fun handlePlayerJoin(player: Player) {
         when (phase) {
             GamePhase.WAITING -> {
+                if (tracker.size >= settings.timing.maxPlayers) {
+                    player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
+                    return
+                }
                 tracker.join(player.uuid)
                 currentHotbar?.apply(player)
                 onPlayerJoinWaiting(player)
                 checkMinPlayersThreshold()
             }
             GamePhase.STARTING -> {
+                if (tracker.size >= settings.timing.maxPlayers) {
+                    player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
+                    return
+                }
                 tracker.join(player.uuid)
                 currentHotbar?.apply(player)
                 onPlayerJoinWaiting(player)
             }
-            GamePhase.PLAYING -> {
-                if (settings.timing.allowReconnect && player.uuid in tracker && tracker.isDisconnected(player.uuid)) {
-                    disconnectTimers.remove(player.uuid)?.cancel()
-                    ReconnectionStore.delete(player.uuid)
-                    tracker.reconnect(player.uuid)
-                    onPlayerReconnected(player)
-                } else {
-                    player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
-                }
-            }
+            GamePhase.PLAYING -> handleJoinDuringPlaying(player)
             GamePhase.ENDING -> {
                 player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
             }
         }
+    }
+
+    private fun handleJoinDuringPlaying(player: Player) {
+        if (settings.timing.allowReconnect && player.uuid in tracker && tracker.isDisconnected(player.uuid)) {
+            val previousState = tracker.stateOf(player.uuid) as? PlayerState.Disconnected
+
+            disconnectTimers.remove(player.uuid)?.cancel()
+            ReconnectionStore.delete(player.uuid)
+            tracker.reconnect(player.uuid)
+
+            if (previousState?.wasRespawning == true) {
+                val pos = buildRespawnPosition(player)
+                player.teleport(pos)
+                player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
+                if (settings.respawn?.clearInventoryOnRespawn == true) player.inventory.clear()
+                buildRespawnKit()?.apply(player)
+                applyRespawnInvincibility(player)
+            } else {
+                player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
+            }
+
+            onPlayerReconnected(player)
+            return
+        }
+
+        if (canLateJoin()) {
+            lateJoinCount++
+            tracker.join(player.uuid)
+
+            if (isTeamMode) {
+                val smallestTeam = tracker.allTeams()
+                    .minByOrNull { tracker.activeInTeam(it).size }
+                if (smallestTeam != null) {
+                    tracker.assignTeam(player.uuid, smallestTeam)
+                }
+            }
+
+            val respawnConfig = settings.respawn
+            if (respawnConfig != null && respawnConfig.maxLives > 0) {
+                tracker.setLives(player.uuid, respawnConfig.maxLives)
+            }
+
+            if (settings.lateJoin?.joinAsSpectator == true) {
+                player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
+            } else {
+                player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
+            }
+
+            onLateJoin(player)
+            return
+        }
+
+        player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
     }
 
     private fun handlePlayerDisconnect(player: Player) {
@@ -253,37 +517,49 @@ abstract class GameMode : ServerMode {
                     stateMachine.transition(GamePhase.WAITING)
                 }
             }
-            GamePhase.PLAYING -> {
-                if (tracker.isAlive(player.uuid)) {
-                    val canReconnect = settings.timing.allowReconnect && !reconnectWindowExpired
-                    if (canReconnect) {
-                        tracker.disconnect(player.uuid)
-                        ReconnectionStore.save(player.uuid, ReconnectionData(
-                            serverName = Orbit.serverName,
-                            gameMode = Orbit.gameMode ?: "",
-                            disconnectedAt = System.currentTimeMillis(),
-                        ))
-                        val eliminationSeconds = settings.timing.disconnectEliminationSeconds
-                        if (eliminationSeconds > 0) {
-                            disconnectTimers[player.uuid] = delay(eliminationSeconds * 20) {
-                                autoEliminateDisconnected(player.uuid)
-                            }
-                        }
-                        onPlayerDisconnected(player)
-                    } else {
-                        tracker.eliminate(player.uuid)
-                        onPlayerEliminated(player)
-                    }
-                    val result = checkWinCondition()
-                    if (result != null) {
-                        forceEnd(result)
-                    }
-                }
-            }
+            GamePhase.PLAYING -> handleDisconnectDuringPlaying(player)
             GamePhase.ENDING -> {
                 tracker.remove(player.uuid)
             }
         }
+    }
+
+    private fun handleDisconnectDuringPlaying(player: Player) {
+        if (!tracker.isAlive(player.uuid) && !tracker.isRespawning(player.uuid)) return
+
+        respawnTimers.remove(player.uuid)?.cancel()
+        spectatorTargets.remove(player.uuid)
+
+        val combatLogSeconds = settings.timing.combatLogSeconds
+        if (combatLogSeconds > 0 && tracker.isInCombat(player.uuid, combatLogSeconds * 1000L)) {
+            tracker.eliminate(player.uuid)
+            onCombatLog(player)
+            onPlayerEliminated(player)
+            checkGameEnd()
+            return
+        }
+
+        val canReconnect = settings.timing.allowReconnect && !reconnectWindowExpired
+        if (canReconnect) {
+            tracker.disconnect(player.uuid)
+            ReconnectionStore.save(player.uuid, ReconnectionData(
+                serverName = Orbit.serverName,
+                gameMode = Orbit.gameMode ?: "",
+                disconnectedAt = System.currentTimeMillis(),
+            ))
+            val eliminationSeconds = settings.timing.disconnectEliminationSeconds
+            if (eliminationSeconds > 0) {
+                disconnectTimers[player.uuid] = delay(eliminationSeconds * 20) {
+                    autoEliminateDisconnected(player.uuid)
+                }
+            }
+            onPlayerDisconnected(player)
+        } else {
+            tracker.eliminate(player.uuid)
+            onPlayerEliminated(player)
+        }
+
+        checkGameEnd()
     }
 
     private fun autoEliminateDisconnected(uuid: UUID) {
@@ -291,8 +567,210 @@ abstract class GameMode : ServerMode {
         if (!tracker.isDisconnected(uuid)) return
         tracker.eliminate(uuid)
         ReconnectionStore.delete(uuid)
+        checkGameEnd()
+    }
+
+    private fun checkGameEnd() {
+        if (phase != GamePhase.PLAYING) return
+
         val result = checkWinCondition()
-        if (result != null) forceEnd(result)
+        if (result != null) {
+            forceEnd(result)
+            return
+        }
+
+        val minViable = settings.timing.minViablePlayers
+        if (minViable > 0 && tracker.effectiveAliveCount < minViable) {
+            forceEnd(buildTimeExpiredResult())
+            return
+        }
+
+        if (tracker.effectiveAliveCount == 0) {
+            onAllPlayersEliminated()
+        }
+    }
+
+    private fun scheduleRespawn(player: Player, config: RespawnConfig) {
+        tracker.markRespawning(player.uuid)
+        player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
+
+        respawnTimers[player.uuid] = delay(config.respawnDelayTicks) {
+            executeRespawn(player.uuid, config)
+        }
+    }
+
+    private fun executeRespawn(uuid: UUID, config: RespawnConfig) {
+        respawnTimers.remove(uuid)
+        if (!tracker.isRespawning(uuid)) return
+        if (phase != GamePhase.PLAYING) return
+
+        val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+        if (player == null) {
+            tracker.disconnect(uuid)
+            val canReconnect = settings.timing.allowReconnect && !reconnectWindowExpired
+            if (!canReconnect) {
+                tracker.eliminate(uuid)
+                checkGameEnd()
+            } else {
+                ReconnectionStore.save(uuid, ReconnectionData(
+                    serverName = Orbit.serverName,
+                    gameMode = Orbit.gameMode ?: "",
+                    disconnectedAt = System.currentTimeMillis(),
+                ))
+            }
+            return
+        }
+
+        spectatorTargets.remove(uuid)
+        player.stopSpectating()
+        tracker.revive(uuid)
+        val pos = buildRespawnPosition(player)
+        player.teleport(pos)
+        player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
+        if (config.clearInventoryOnRespawn) player.inventory.clear()
+        buildRespawnKit()?.apply(player)
+        applyRespawnInvincibility(player)
+        onPlayerRespawn(player)
+    }
+
+    private fun applyRespawnInvincibility(player: Player) {
+        val ticks = settings.respawn?.invincibilityTicks ?: return
+        if (ticks <= 0) return
+        GracePeriodManager.apply(player, RESPAWN_GRACE_NAME)
+    }
+
+    private fun canLateJoin(): Boolean {
+        val config = settings.lateJoin ?: return false
+        if (lateJoinWindowExpired) return false
+        if (config.maxLateJoiners > 0 && lateJoinCount >= config.maxLateJoiners) return false
+        return true
+    }
+
+    private fun startAfkCheck() {
+        val thresholdSeconds = settings.timing.afkEliminationSeconds
+        if (thresholdSeconds <= 0) return
+        val thresholdMillis = thresholdSeconds * 1000L
+        afkCheckTask = repeat(100) {
+            if (phase != GamePhase.PLAYING) return@repeat
+            for (uuid in tracker.alive.toSet()) {
+                if (tracker.isAfk(uuid, thresholdMillis)) {
+                    val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
+                    onAfkEliminated(player)
+                    eliminate(player)
+                }
+            }
+        }
+    }
+
+    private fun startVoidCheck() {
+        val voidY = settings.timing.voidDeathY
+        if (voidY == Double.NEGATIVE_INFINITY) return
+        voidCheckTask = repeat(10) {
+            if (phase != GamePhase.PLAYING) return@repeat
+            for (uuid in tracker.alive.toSet()) {
+                val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
+                if (player.position.y() < voidY) {
+                    handleDeath(player)
+                }
+            }
+        }
+    }
+
+    private fun startOvertime() {
+        val config = settings.overtime ?: return
+        _isOvertime = true
+        if (config.suddenDeath) _isSuddenDeath = true
+        onOvertimeStart()
+
+        overtimeTask = delay(config.durationSeconds * 20) {
+            _isOvertime = false
+            _isSuddenDeath = false
+            onOvertimeEnd()
+            forceEnd(buildOvertimeResult())
+        }
+    }
+
+    private fun installFreezeNode() {
+        if (!settings.timing.freezeDuringCountdown) return
+        val node = EventNode.all("gamemode-countdown-freeze")
+        node.addListener(PlayerMoveEvent::class.java) { event ->
+            if (phase != GamePhase.STARTING) return@addListener
+            if (!tracker.isAlive(event.player.uuid)) return@addListener
+            val old = event.player.position
+            event.newPosition = Pos(old.x(), old.y(), old.z(), event.newPosition.yaw(), event.newPosition.pitch())
+        }
+        MinecraftServer.getGlobalEventHandler().addChild(node)
+        freezeEventNode = node
+    }
+
+    private fun installGameMechanicsNode() {
+        val node = EventNode.all("gamemode-mechanics")
+        var hasListeners = false
+
+        val needsFriendlyFire = isTeamMode && !isFriendlyFireEnabled
+        val needsDamageHook = true
+        val needsDamageTracking = settings.timing.combatLogSeconds > 0
+        val needsActivityTracking = settings.timing.afkEliminationSeconds > 0
+
+        if (needsFriendlyFire || needsDamageHook || needsDamageTracking) {
+            hasListeners = true
+            node.addListener(EntityDamageEvent::class.java) { event ->
+                val victim = event.entity as? Player ?: return@addListener
+                if (phase != GamePhase.PLAYING) return@addListener
+                if (!tracker.isAlive(victim.uuid)) return@addListener
+
+                val damage = event.damage
+                val attackerEntity = if (damage is EntityDamage) damage.source else null
+                val attacker = attackerEntity as? Player
+
+                if (needsFriendlyFire && attacker != null && areTeammates(attacker.uuid, victim.uuid)) {
+                    event.isCancelled = true
+                    return@addListener
+                }
+
+                if (!onPlayerDamaged(victim, attacker, damage.amount, event)) {
+                    event.isCancelled = true
+                    return@addListener
+                }
+
+                if (event.isCancelled) return@addListener
+
+                if (attacker != null && attacker.uuid != victim.uuid) {
+                    tracker.recordDamage(attacker.uuid, victim.uuid)
+                }
+            }
+        }
+
+        if (needsActivityTracking) {
+            hasListeners = true
+            node.addListener(PlayerMoveEvent::class.java) { event ->
+                if (phase == GamePhase.PLAYING && tracker.isAlive(event.player.uuid)) {
+                    tracker.markActivity(event.player.uuid)
+                }
+            }
+        }
+
+        if (settings.timing.isolateSpectatorChat) {
+            hasListeners = true
+            node.addListener(PlayerChatEvent::class.java) { event ->
+                if (phase != GamePhase.PLAYING) return@addListener
+                val sender = event.player
+                val senderAlive = tracker.isAlive(sender.uuid)
+
+                event.recipients.removeIf { recipient ->
+                    if (!tracker.contains(recipient.uuid)) return@removeIf false
+                    val recipientAlive = tracker.isAlive(recipient.uuid)
+                    if (!senderAlive && recipientAlive) return@removeIf true
+                    if (senderAlive && !recipientAlive) return@removeIf true
+                    false
+                }
+            }
+        }
+
+        if (hasListeners) {
+            MinecraftServer.getGlobalEventHandler().addChild(node)
+            gameMechanicsNode = node
+        }
     }
 
     private fun cleanupReconnectionState() {
@@ -306,11 +784,64 @@ abstract class GameMode : ServerMode {
         }
     }
 
+    private fun cleanupRespawnTimers() {
+        respawnTimers.values.forEach { it.cancel() }
+        respawnTimers.clear()
+    }
+
+    private fun cleanupLateJoinState() {
+        lateJoinWindowTask?.cancel()
+        lateJoinWindowTask = null
+        lateJoinWindowExpired = false
+        lateJoinCount = 0
+    }
+
+    private fun cleanupGameEvents() {
+        gameEvents.values.forEach { it.cancel() }
+        gameEvents.clear()
+    }
+
+    private fun cleanupAfkCheck() {
+        afkCheckTask?.cancel()
+        afkCheckTask = null
+    }
+
+    private fun cleanupOvertime() {
+        overtimeTask?.cancel()
+        overtimeTask = null
+        _isOvertime = false
+        _isSuddenDeath = false
+    }
+
+    private fun cleanupFreezeNode() {
+        freezeEventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        freezeEventNode = null
+    }
+
+    private fun cleanupGameMechanicsNode() {
+        gameMechanicsNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        gameMechanicsNode = null
+    }
+
+    private fun cleanupVoidCheck() {
+        voidCheckTask?.cancel()
+        voidCheckTask = null
+    }
+
     private fun enterWaiting() {
         cleanupReconnectionState()
+        cleanupRespawnTimers()
+        cleanupLateJoinState()
+        cleanupGameEvents()
+        cleanupAfkCheck()
+        cleanupOvertime()
+        cleanupGameMechanicsNode()
+        cleanupVoidCheck()
+        spectatorTargets.clear()
         tracker.clear()
         lastEndResult = null
         gameStartTime = 0L
+        initialPlayerCount = 0
 
         currentLobby = lobby {
             instance = defaultInstance
@@ -340,12 +871,15 @@ abstract class GameMode : ServerMode {
     }
 
     private fun enterStarting() {
+        installFreezeNode()
+
         startingCountdown = countdown(settings.timing.countdownSeconds.seconds) {
             onTick { remaining ->
                 onCountdownTick(remaining)
             }
             onComplete {
                 startingCountdown = null
+                cleanupFreezeNode()
                 stateMachine.transition(GamePhase.PLAYING)
             }
         }
@@ -359,8 +893,10 @@ abstract class GameMode : ServerMode {
         currentHotbar = null
         startingCountdown?.stop()
         startingCountdown = null
+        cleanupFreezeNode()
 
         gameStartTime = System.currentTimeMillis()
+        initialPlayerCount = tracker.aliveCount
 
         Orbit.hostOwner?.let { owner ->
             if (!RankManager.hasPermission(owner, "*")) {
@@ -369,8 +905,35 @@ abstract class GameMode : ServerMode {
             }
         }
 
+        val teamConfig = settings.teams
+        if (teamConfig != null && teamConfig.teamCount > 0) {
+            val assignments = assignTeams(tracker.alive.toList())
+            for ((uuid, team) in assignments) {
+                tracker.assignTeam(uuid, team)
+            }
+            val grouped = assignments.entries.groupBy({ it.value }, { it.key })
+            onTeamsAssigned(grouped)
+        }
+
+        val respawnConfig = settings.respawn
+        if (respawnConfig != null && respawnConfig.maxLives > 0) {
+            for (uuid in tracker.alive) {
+                tracker.setLives(uuid, respawnConfig.maxLives)
+            }
+        }
+
+        if (respawnConfig != null && respawnConfig.invincibilityTicks > 0) {
+            gracePeriod(RESPAWN_GRACE_NAME) {
+                duration((respawnConfig.invincibilityTicks * 50L).milliseconds)
+            }
+        }
+
         val alivePlayers = tracker.alive.mapNotNull { uuid ->
             MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+        }
+
+        for (player in alivePlayers) {
+            tracker.markActivity(player.uuid)
         }
 
         onGameSetup(alivePlayers)
@@ -387,8 +950,7 @@ abstract class GameMode : ServerMode {
                 duration(settings.timing.gameDurationSeconds.seconds)
                 onEnd {
                     gameTimer = null
-                    val result = buildTimeExpiredResult()
-                    forceEnd(result)
+                    handleTimerExpired()
                 }
             }
             gameTimer!!.addAllViewers(alivePlayers)
@@ -406,7 +968,36 @@ abstract class GameMode : ServerMode {
             }
         }
 
+        lateJoinWindowExpired = false
+        lateJoinCount = 0
+        val lateJoinConfig = settings.lateJoin
+        if (lateJoinConfig != null) {
+            lateJoinWindowTask = delay(lateJoinConfig.windowSeconds * 20) {
+                lateJoinWindowExpired = true
+            }
+        }
+
+        installGameMechanicsNode()
+        startAfkCheck()
+        startVoidCheck()
+
         onPlayingStart()
+    }
+
+    private fun handleTimerExpired() {
+        val result = checkWinCondition()
+        if (result != null) {
+            forceEnd(result)
+            return
+        }
+
+        val overtimeConfig = settings.overtime
+        if (overtimeConfig != null && tracker.effectiveAliveCount > 0) {
+            startOvertime()
+            return
+        }
+
+        forceEnd(buildTimeExpiredResult())
     }
 
     private fun enterEnding() {
@@ -414,8 +1005,18 @@ abstract class GameMode : ServerMode {
         gameTimer = null
         GracePeriodManager.clearAll()
         cleanupReconnectionState()
+        cleanupRespawnTimers()
+        cleanupLateJoinState()
+        cleanupGameEvents()
+        cleanupAfkCheck()
+        cleanupOvertime()
+        cleanupGameMechanicsNode()
+        cleanupVoidCheck()
 
         val result = lastEndResult ?: matchResult { draw() }
+
+        MatchResultManager.store(result)
+        persistGameStats(result)
 
         val allPlayers = defaultInstance.players.toList()
         MatchResultDisplay.broadcast(allPlayers, result)
@@ -468,5 +1069,10 @@ abstract class GameMode : ServerMode {
         } else {
             footer(cfg.footer)
         }
+    }
+
+    private companion object {
+        const val RESPAWN_GRACE_NAME = "respawn-invincibility"
+        const val ASSIST_WINDOW_MILLIS = 10_000L
     }
 }
