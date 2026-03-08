@@ -2,7 +2,6 @@ package me.nebula.orbit.cosmetic
 
 import me.nebula.gravity.cosmetic.CosmeticCategory
 import me.nebula.gravity.cosmetic.CosmeticPlayerData
-import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.orbit.mode.config.CosmeticConfig
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.EntityType
@@ -14,6 +13,7 @@ import net.minestom.server.event.player.PlayerMoveEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.tag.Tag
+import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
 
 private val TRAIL_TICK_TAG = Tag.Long("cosmetic:trail:last_tick").defaultValue(0L)
@@ -22,6 +22,9 @@ private val SHOOTER_TAG = Tag.Integer("mechanic:projectile:shooter")
 object CosmeticListener {
 
     @Volatile var activeConfig = CosmeticConfig()
+
+    private var eventNode: EventNode<*>? = null
+    private var projectileTrailTask: Task? = null
 
     fun install(handler: GlobalEventHandler) {
         val node = EventNode.all("cosmetic-listeners")
@@ -85,6 +88,7 @@ object CosmeticListener {
         }
 
         node.addListener(PlayerDisconnectEvent::class.java) { event ->
+            CosmeticDataCache.invalidate(event.player.uuid)
             CompanionManager.despawn(event.player.uuid)
             PetManager.despawn(event.player.uuid)
             GadgetManager.unequip(event.player)
@@ -102,14 +106,23 @@ object CosmeticListener {
         }
 
         handler.addChild(node)
+        eventNode = node
 
-        net.minestom.server.MinecraftServer.getSchedulerManager()
+        projectileTrailTask = net.minestom.server.MinecraftServer.getSchedulerManager()
             .buildTask { tickProjectileTrails() }
             .repeat(TaskSchedule.tick(2)).schedule()
     }
 
+    fun uninstall() {
+        projectileTrailTask?.cancel()
+        projectileTrailTask = null
+        eventNode?.let { net.minestom.server.MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        eventNode = null
+        CosmeticDataCache.clear()
+    }
+
     fun onPlayerEliminated(killer: Player, victimPosition: Pos) {
-        val data = CosmeticStore.load(killer.uuid) ?: return
+        val data = CosmeticDataCache.get(killer.uuid) ?: return
         val killEffectId = data.equipped[CosmeticCategory.KILL_EFFECT.name] ?: return
         if (!isAllowed(CosmeticCategory.KILL_EFFECT, killEffectId)) return
         val instance = killer.instance ?: return
@@ -118,7 +131,7 @@ object CosmeticListener {
     }
 
     fun onPlayerDeath(player: Player, deathPosition: Pos) {
-        val data = CosmeticStore.load(player.uuid) ?: return
+        val data = CosmeticDataCache.get(player.uuid) ?: return
 
         val deathEffectId = data.equipped[CosmeticCategory.DEATH_EFFECT.name]
         if (deathEffectId != null && isAllowed(CosmeticCategory.DEATH_EFFECT, deathEffectId)) {
@@ -136,7 +149,7 @@ object CosmeticListener {
     }
 
     fun onGameWon(winner: Player) {
-        val data = CosmeticStore.load(winner.uuid) ?: return
+        val data = CosmeticDataCache.get(winner.uuid) ?: return
         val winEffectId = data.equipped[CosmeticCategory.WIN_EFFECT.name] ?: return
         if (!isAllowed(CosmeticCategory.WIN_EFFECT, winEffectId)) return
         val instance = winner.instance ?: return
@@ -145,7 +158,7 @@ object CosmeticListener {
     }
 
     fun resolveEliminationMessage(killer: Player, victim: Player, defaultKey: String): String {
-        val data = CosmeticStore.load(killer.uuid) ?: return defaultKey
+        val data = CosmeticDataCache.get(killer.uuid) ?: return defaultKey
         val elimMsgId = data.equipped[CosmeticCategory.ELIMINATION_MESSAGE.name] ?: return defaultKey
         if (!isAllowed(CosmeticCategory.ELIMINATION_MESSAGE, elimMsgId)) return defaultKey
         val definition = CosmeticRegistry[elimMsgId] ?: return defaultKey
@@ -155,7 +168,7 @@ object CosmeticListener {
     }
 
     fun resolveJoinMessage(player: Player, defaultKey: String): String {
-        val data = CosmeticStore.load(player.uuid) ?: return defaultKey
+        val data = CosmeticDataCache.get(player.uuid) ?: return defaultKey
         val msgId = data.equipped[CosmeticCategory.JOIN_QUIT_MESSAGE.name] ?: return defaultKey
         if (!isAllowed(CosmeticCategory.JOIN_QUIT_MESSAGE, msgId)) return defaultKey
         val definition = CosmeticRegistry[msgId] ?: return defaultKey
@@ -165,7 +178,7 @@ object CosmeticListener {
     }
 
     fun resolveQuitMessage(player: Player, defaultKey: String): String {
-        val data = CosmeticStore.load(player.uuid) ?: return defaultKey
+        val data = CosmeticDataCache.get(player.uuid) ?: return defaultKey
         val msgId = data.equipped[CosmeticCategory.JOIN_QUIT_MESSAGE.name] ?: return defaultKey
         if (!isAllowed(CosmeticCategory.JOIN_QUIT_MESSAGE, msgId)) return defaultKey
         val definition = CosmeticRegistry[msgId] ?: return defaultKey
@@ -184,7 +197,7 @@ object CosmeticListener {
                 .forEach { projectile ->
                     val shooterId = runCatching { projectile.getTag(SHOOTER_TAG) }.getOrNull() ?: return@forEach
                     val shooter = instance.players.firstOrNull { it.entityId == shooterId } ?: return@forEach
-                    val data = CosmeticStore.load(shooter.uuid) ?: return@forEach
+                    val data = CosmeticDataCache.get(shooter.uuid) ?: return@forEach
                     val trailId = data.equipped[CosmeticCategory.PROJECTILE_TRAIL.name] ?: return@forEach
                     if (!isAllowed(CosmeticCategory.PROJECTILE_TRAIL, trailId)) return@forEach
                     val level = data.owned[trailId] ?: 1
@@ -194,5 +207,5 @@ object CosmeticListener {
     }
 
     private fun loadEquipped(player: Player): CosmeticPlayerData? =
-        CosmeticStore.load(player.uuid)?.takeIf { it.equipped.isNotEmpty() }
+        CosmeticDataCache.get(player.uuid)?.takeIf { it.equipped.isNotEmpty() }
 }

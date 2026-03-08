@@ -1,8 +1,9 @@
 package me.nebula.orbit.cosmetic
 
 import me.nebula.ether.utils.logging.logger
-import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.gravity.cosmetic.CosmeticCategory
+import me.nebula.gravity.cosmetic.CosmeticDefinition
+import me.nebula.gravity.cosmetic.CosmeticDefinitions
 import java.util.concurrent.ConcurrentHashMap
 
 object CosmeticRegistry {
@@ -22,9 +23,8 @@ object CosmeticRegistry {
 
     fun all(): Collection<CosmeticDefinition> = definitions.values
 
-    fun loadFromResources(resources: ResourceManager) {
-        val catalog = resources.loadOrCopyDefault<Array<CosmeticDefinition>>("cosmetics.json", "cosmetics.json")
-        catalog.forEach { register(it) }
-        logger.info { "Loaded ${catalog.size} cosmetics from catalog" }
+    fun loadFromDefinitions() {
+        CosmeticDefinitions.ALL.forEach { register(it) }
+        logger.info { "Loaded ${CosmeticDefinitions.ALL.size} cosmetics from definitions" }
     }
 }

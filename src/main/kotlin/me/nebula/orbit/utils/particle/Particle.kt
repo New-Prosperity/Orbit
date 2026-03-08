@@ -196,7 +196,8 @@ object ParticleShapeRenderer {
             val goldenAngle = PI * (3.0 - sqrt(5.0))
             val totalPoints = shape.density * shape.density
             (0 until totalPoints).map { i ->
-                val y = 1.0 - (i.toDouble() / (totalPoints - 1)) * 2.0
+                val phi = if (totalPoints <= 1) 0.5 else i.toDouble() / (totalPoints - 1)
+                val y = 1.0 - phi * 2.0
                 val radiusAtY = sqrt(1.0 - y * y)
                 val theta = goldenAngle * i
                 Pos(

@@ -3,6 +3,7 @@ package me.nebula.orbit.mode.game
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.HotbarItemConfig
 import me.nebula.orbit.mode.config.LobbyConfig
+import me.nebula.orbit.mode.config.LobbyWorldConfig
 import me.nebula.orbit.mode.config.ScoreboardConfig
 import me.nebula.orbit.mode.config.SpawnConfig
 import me.nebula.orbit.mode.config.TabListConfig
@@ -67,4 +68,5 @@ data class GameSettings(
     val lateJoin: LateJoinConfig? = null,
     val overtime: OvertimeConfig? = null,
     val mapName: String? = null,
+    val lobbyWorld: LobbyWorldConfig? = null,
 )

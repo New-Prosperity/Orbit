@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.itembuilder
 
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.TextDecoration
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.component.DataComponents
 import net.minestom.server.item.ItemStack
@@ -9,6 +10,9 @@ import net.minestom.server.item.component.CustomModelData
 import net.minestom.server.utils.Unit as MinestomUnit
 
 private val miniMessage = MiniMessage.miniMessage()
+
+private fun Component.noItalic(): Component =
+    decorationIfAbsent(TextDecoration.ITALIC, TextDecoration.State.FALSE)
 
 class ItemBuilder @PublishedApi internal constructor(private val material: Material) {
 
@@ -31,8 +35,8 @@ class ItemBuilder @PublishedApi internal constructor(private val material: Mater
 
     @PublishedApi internal fun build(): ItemStack {
         var item = ItemStack.of(material, amount)
-        displayName?.let { item = item.with(DataComponents.CUSTOM_NAME, it) }
-        if (lore.isNotEmpty()) item = item.with(DataComponents.LORE, lore.toList())
+        displayName?.let { item = item.with(DataComponents.CUSTOM_NAME, it.noItalic()) }
+        if (lore.isNotEmpty()) item = item.with(DataComponents.LORE, lore.map { it.noItalic() })
         customModelData?.let { item = item.with(DataComponents.CUSTOM_MODEL_DATA, CustomModelData(listOf(it.toFloat()), emptyList(), emptyList(), emptyList())) }
         if (unbreakable) item = item.with(DataComponents.UNBREAKABLE, MinestomUnit.INSTANCE)
         if (glowing) item = item.with(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true)

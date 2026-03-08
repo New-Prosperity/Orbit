@@ -150,18 +150,18 @@ class AnimatedScoreboard(
     private val frameIntervalTicks: Int = 20,
 ) {
 
-    private val lines = mutableMapOf<Int, MutableList<String>>()
-    private var currentFrame = 0
-    private var sidebar: Sidebar? = null
-    private var tickTask: Task? = null
-    private val viewers = mutableSetOf<Player>()
+    private val lines = ConcurrentHashMap<Int, List<String>>()
+    @Volatile private var currentFrame = 0
+    @Volatile private var sidebar: Sidebar? = null
+    @Volatile private var tickTask: Task? = null
+    private val viewers = ConcurrentHashMap.newKeySet<Player>()
 
     fun addFrames(line: Int, frames: List<String>) {
-        lines.getOrPut(line) { mutableListOf() }.addAll(frames)
+        lines.merge(line, frames) { existing, new -> existing + new }
     }
 
     fun addStaticLine(line: Int, text: String) {
-        lines[line] = mutableListOf(text)
+        lines[line] = listOf(text)
     }
 
     fun show(player: Player) {
@@ -456,9 +456,11 @@ object ObjectiveTracker {
     private fun updateDisplay(player: Player, objective: String) {
         val config = configs[objective] ?: return
         if (ObjectiveDisplay.SIDEBAR in config.displays) {
-            sidebarCache[objective]?.forEach { (uuid, sidebar) ->
+            val entries = sidebarCache[objective]?.keys?.toList() ?: emptyList()
+            for (uuid in entries) {
+                val sidebar = sidebarCache[objective]?.get(uuid) ?: continue
                 val viewer = MinecraftServer.getConnectionManager().onlinePlayers
-                    .firstOrNull { it.uuid == uuid } ?: return@forEach
+                    .firstOrNull { it.uuid == uuid } ?: continue
                 sidebar.removeViewer(viewer)
                 val newSidebar = buildSidebar(objective, config)
                 sidebarCache[objective]?.put(uuid, newSidebar)

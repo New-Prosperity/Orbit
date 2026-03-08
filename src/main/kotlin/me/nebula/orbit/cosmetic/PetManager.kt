@@ -10,6 +10,7 @@ import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.EntityCreature
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.Player
+import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -30,12 +31,25 @@ data class ActivePet(
 object PetManager {
 
     private val pets = ConcurrentHashMap<UUID, ActivePet>()
+    private var task: Task? = null
 
     fun install() {
-        MinecraftServer.getSchedulerManager()
+        task = MinecraftServer.getSchedulerManager()
             .buildTask { tick() }
             .repeat(TaskSchedule.tick(2))
             .schedule()
+    }
+
+    fun uninstall() {
+        task?.cancel()
+        task = null
+        val iterator = pets.entries.iterator()
+        while (iterator.hasNext()) {
+            val (_, pet) = iterator.next()
+            pet.modeled.destroy()
+            pet.entity.remove()
+            iterator.remove()
+        }
     }
 
     fun spawn(player: Player, cosmeticId: String, level: Int) {
@@ -50,16 +64,16 @@ object PetManager {
         val creature = EntityCreature(EntityType.ZOMBIE)
         creature.isInvisible = true
         creature.isSilent = true
-        creature.setInstance(instance, player.position.add(1.0, 0.0, 1.0)).join()
+        creature.setInstance(instance, player.position.add(1.0, 0.0, 1.0)).thenRun {
+            val modeled = modeledEntity(creature) {
+                model(modelId, autoPlayIdle = true) { scale(scale) }
+            }
 
-        val modeled = modeledEntity(creature) {
-            model(modelId, autoPlayIdle = true) { scale(scale) }
+            val walkAnim = resolved["walkAnimation"]
+            modeled.show(player)
+
+            pets[player.uuid] = ActivePet(creature, modeled, cosmeticId, level)
         }
-
-        val walkAnim = resolved["walkAnimation"]
-        modeled.show(player)
-
-        pets[player.uuid] = ActivePet(creature, modeled, cosmeticId, level)
     }
 
     fun despawn(playerId: UUID) {
@@ -72,13 +86,13 @@ object PetManager {
 
     private fun tick() {
         val onlinePlayers = MinecraftServer.getConnectionManager().onlinePlayers
-        val onlineUuids = onlinePlayers.mapTo(HashSet()) { it.uuid }
+        val playersByUuid = onlinePlayers.associateBy { it.uuid }
 
         val iterator = pets.entries.iterator()
         while (iterator.hasNext()) {
             val (uuid, pet) = iterator.next()
-            val player = onlinePlayers.firstOrNull { it.uuid == uuid }
-            if (player == null || uuid !in onlineUuids) {
+            val player = playersByUuid[uuid]
+            if (player == null) {
                 pet.modeled.destroy()
                 pet.entity.remove()
                 iterator.remove()

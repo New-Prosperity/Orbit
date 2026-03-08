@@ -35,9 +35,10 @@ object PermissionManager {
         }
     }
 
-    private fun hasGroupPermission(groupName: String, permission: String): Boolean {
+    private fun hasGroupPermission(groupName: String, permission: String, visited: MutableSet<String> = mutableSetOf()): Boolean {
+        if (!visited.add(groupName)) return false
         val group = groups[groupName] ?: return false
-        return permission in group.permissions || group.inherits.any { hasGroupPermission(it, permission) }
+        return permission in group.permissions || group.inherits.any { hasGroupPermission(it, permission, visited) }
     }
 
     fun cleanup(uuid: UUID) = playerGroups.remove(uuid)

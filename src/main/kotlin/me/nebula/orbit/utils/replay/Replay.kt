@@ -1,85 +1,212 @@
 package me.nebula.orbit.utils.replay
 
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonDeserializationContext
+import com.google.gson.JsonDeserializer
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonSerializationContext
+import com.google.gson.JsonSerializer
+import com.google.gson.reflect.TypeToken
+import me.nebula.ether.utils.minio.MinioStorageClient
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
+import net.kyori.adventure.nbt.TagStringIO
 import net.minestom.server.item.ItemStack
+import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
+import java.io.ByteArrayOutputStream
+import java.lang.reflect.Type
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 sealed class ReplayFrame(val tickOffset: Int) {
-    class Position(tickOffset: Int, val uuid: UUID, val pos: Pos) : ReplayFrame(tickOffset)
+    class Position(tickOffset: Int, val uuid: UUID, val pos: Pos, val sneaking: Boolean = false) : ReplayFrame(tickOffset)
     class BlockChange(tickOffset: Int, val x: Int, val y: Int, val z: Int, val blockId: Int) : ReplayFrame(tickOffset)
     class Chat(tickOffset: Int, val uuid: UUID, val message: String) : ReplayFrame(tickOffset)
     class ItemHeld(tickOffset: Int, val uuid: UUID, val slot: Int, val item: ItemStack) : ReplayFrame(tickOffset)
+    class EntitySpawn(tickOffset: Int, val uuid: UUID, val name: String, val skinValue: String?, val skinSignature: String?) : ReplayFrame(tickOffset)
+    class EntityDespawn(tickOffset: Int, val uuid: UUID) : ReplayFrame(tickOffset)
+    class Death(tickOffset: Int, val uuid: UUID, val killerUuid: UUID?) : ReplayFrame(tickOffset)
 }
+
+data class ReplayMetadata(
+    val gameMode: String = "",
+    val mapName: String = "",
+    val recordedAt: Long = System.currentTimeMillis(),
+    val playerCount: Int = 0,
+    val winnerUuid: UUID? = null,
+    val winnerName: String? = null,
+    val durationTicks: Int = 0,
+)
 
 class ReplayRecorder {
 
-    private val frames = mutableListOf<ReplayFrame>()
-    private var startTick = 0L
-    private var recording = false
+    private val frames = java.util.Collections.synchronizedList(mutableListOf<ReplayFrame>())
+    private var startTimeMillis = 0L
+    @Volatile private var recording = false
+    private val playerNames = ConcurrentHashMap<UUID, String>()
 
     fun start() {
-        startTick = System.currentTimeMillis()
-        frames.clear()
+        startTimeMillis = System.currentTimeMillis()
+        synchronized(frames) { frames.clear() }
+        playerNames.clear()
         recording = true
     }
 
     fun stop(): ReplayData {
         recording = false
-        return ReplayData(frames.toList())
+        val snapshot = synchronized(frames) { frames.toList() }
+        return ReplayData(snapshot, playerNames.toMap())
     }
+
+    private fun offset(): Int = ((System.currentTimeMillis() - startTimeMillis) / 50).toInt()
 
     fun recordPosition(player: Player) {
         if (!recording) return
-        val offset = ((System.currentTimeMillis() - startTick) / 50).toInt()
-        frames.add(ReplayFrame.Position(offset, player.uuid, player.position))
+        frames.add(ReplayFrame.Position(offset(), player.uuid, player.position, player.isSneaking))
     }
 
     fun recordBlockChange(x: Int, y: Int, z: Int, blockId: Int) {
         if (!recording) return
-        val offset = ((System.currentTimeMillis() - startTick) / 50).toInt()
-        frames.add(ReplayFrame.BlockChange(offset, x, y, z, blockId))
+        frames.add(ReplayFrame.BlockChange(offset(), x, y, z, blockId))
     }
 
     fun recordChat(player: Player, message: String) {
         if (!recording) return
-        val offset = ((System.currentTimeMillis() - startTick) / 50).toInt()
-        frames.add(ReplayFrame.Chat(offset, player.uuid, message))
+        frames.add(ReplayFrame.Chat(offset(), player.uuid, message))
+    }
+
+    fun recordItemHeld(player: Player, slot: Int, item: ItemStack) {
+        if (!recording) return
+        frames.add(ReplayFrame.ItemHeld(offset(), player.uuid, slot, item))
+    }
+
+    fun recordPlayerJoin(player: Player) {
+        if (!recording) return
+        playerNames[player.uuid] = player.username
+        val skin = player.skin
+        frames.add(ReplayFrame.EntitySpawn(
+            offset(), player.uuid, player.username,
+            skin?.textures(), skin?.signature(),
+        ))
+    }
+
+    fun recordPlayerLeave(player: Player) {
+        if (!recording) return
+        frames.add(ReplayFrame.EntityDespawn(offset(), player.uuid))
+    }
+
+    fun recordDeath(victim: Player, killer: Player?) {
+        if (!recording) return
+        frames.add(ReplayFrame.Death(offset(), victim.uuid, killer?.uuid))
     }
 
     val isRecording: Boolean get() = recording
 }
 
-data class ReplayData(val frames: List<ReplayFrame>) {
+data class ReplayData(
+    val frames: List<ReplayFrame>,
+    val playerNames: Map<UUID, String> = emptyMap(),
+) {
     val durationTicks: Int get() = frames.maxOfOrNull { it.tickOffset } ?: 0
 }
 
 class ReplayPlayer(private val data: ReplayData) {
 
+    private val framesByTick: Map<Int, List<ReplayFrame>> = data.frames.groupBy { it.tickOffset }
     private var playing = false
     private var currentTick = 0
+    private var speed = 1.0
+    private var task: Task? = null
+    private var perspective: UUID? = null
+    private var onFrame: ((ReplayFrame) -> Unit)? = null
+    private var onSpeedChange: ((Double) -> Unit)? = null
+    private var onPerspectiveChange: ((UUID?) -> Unit)? = null
+    private var onComplete: (() -> Unit)? = null
+    private var tickAccumulator = 0.0
 
     fun play(onFrame: (ReplayFrame) -> Unit) {
+        this.onFrame = onFrame
         playing = true
         currentTick = 0
+        tickAccumulator = 0.0
 
-        MinecraftServer.getSchedulerManager().buildTask {
+        task = MinecraftServer.getSchedulerManager().buildTask {
             if (!playing) return@buildTask
-            val tickFrames = data.frames.filter { it.tickOffset == currentTick }
-            tickFrames.forEach(onFrame)
-            currentTick++
-            if (currentTick > data.durationTicks) playing = false
+
+            tickAccumulator += speed
+            while (tickAccumulator >= 1.0) {
+                val tickFrames = framesByTick[currentTick]
+                tickFrames?.forEach { frame ->
+                    onFrame(frame)
+                }
+                currentTick++
+                tickAccumulator -= 1.0
+
+                if (currentTick > data.durationTicks) {
+                    playing = false
+                    task?.cancel()
+                    task = null
+                    onComplete?.invoke()
+                    return@buildTask
+                }
+            }
         }.repeat(TaskSchedule.tick(1)).schedule()
     }
 
     fun stop() {
         playing = false
+        task?.cancel()
+        task = null
     }
 
+    fun pause() {
+        playing = false
+    }
+
+    fun resume() {
+        if (task == null && onFrame != null) {
+            play(onFrame!!)
+        } else {
+            playing = true
+        }
+    }
+
+    fun setSpeed(newSpeed: Double) {
+        require(newSpeed > 0) { "Speed must be positive" }
+        speed = newSpeed
+        onSpeedChange?.invoke(newSpeed)
+    }
+
+    fun getSpeed(): Double = speed
+
+    fun seekTo(tick: Int) {
+        currentTick = tick.coerceIn(0, data.durationTicks)
+    }
+
+    fun setPerspective(uuid: UUID?) {
+        perspective = uuid
+        onPerspectiveChange?.invoke(uuid)
+    }
+
+    fun getPerspective(): UUID? = perspective
+
+    fun availablePerspectives(): Set<UUID> =
+        data.frames.filterIsInstance<ReplayFrame.EntitySpawn>().map { it.uuid }.toSet()
+
+    fun onSpeedChange(handler: (Double) -> Unit) { onSpeedChange = handler }
+    fun onPerspectiveChange(handler: (UUID?) -> Unit) { onPerspectiveChange = handler }
+    fun onComplete(handler: () -> Unit) { onComplete = handler }
+
     val isPlaying: Boolean get() = playing
+    val currentPlayTick: Int get() = currentTick
+    val totalTicks: Int get() = data.durationTicks
+    val progressPercent: Double get() = if (data.durationTicks == 0) 0.0 else currentTick.toDouble() / data.durationTicks
 }
 
 object ReplayManager {
@@ -95,4 +222,150 @@ object ReplayManager {
     fun delete(name: String) = recordings.remove(name)
 
     fun list(): Set<String> = recordings.keys.toSet()
+
+    fun clear() = recordings.clear()
+}
+
+object ReplayStorage {
+
+    private var minioClient: MinioStorageClient? = null
+    private val gson: Gson = GsonBuilder()
+        .registerTypeAdapter(ReplayFrame::class.java, ReplayFrameSerializer())
+        .create()
+
+    fun configure(client: MinioStorageClient) {
+        minioClient = client
+    }
+
+    fun upload(name: String, data: ReplayData, metadata: ReplayMetadata = ReplayMetadata()) {
+        val client = minioClient ?: error("MinIO client not configured for ReplayStorage")
+        val wrapper = ReplayWrapper(metadata, data.playerNames, data.frames)
+        val json = gson.toJson(wrapper)
+        val compressed = compress(json.toByteArray())
+        client.upload("replays/$name.replay.gz", compressed)
+    }
+
+    fun download(name: String): Pair<ReplayMetadata, ReplayData>? {
+        val client = minioClient ?: error("MinIO client not configured for ReplayStorage")
+        if (!client.exists("replays/$name.replay.gz")) return null
+
+        val compressed = client.downloadBytes("replays/$name.replay.gz")
+        val json = String(decompress(compressed))
+        val wrapper = gson.fromJson(json, ReplayWrapper::class.java)
+        return wrapper.metadata to ReplayData(wrapper.frames, wrapper.playerNames)
+    }
+
+    fun delete(name: String) {
+        val client = minioClient ?: error("MinIO client not configured for ReplayStorage")
+        client.delete("replays/$name.replay.gz")
+    }
+
+    fun list(): List<String> {
+        val client = minioClient ?: return emptyList()
+        return client.list("replays/").map {
+            it.name.removePrefix("replays/").removeSuffix(".replay.gz")
+        }.toList()
+    }
+
+    fun exists(name: String): Boolean {
+        val client = minioClient ?: return false
+        return client.exists("replays/$name.replay.gz")
+    }
+
+    private fun compress(data: ByteArray): ByteArray {
+        val bos = ByteArrayOutputStream(data.size)
+        GZIPOutputStream(bos).use { it.write(data) }
+        return bos.toByteArray()
+    }
+
+    private fun decompress(data: ByteArray): ByteArray =
+        GZIPInputStream(data.inputStream()).use { it.readAllBytes() }
+}
+
+private data class ReplayWrapper(
+    val metadata: ReplayMetadata,
+    val playerNames: Map<UUID, String>,
+    val frames: List<ReplayFrame>,
+)
+
+private class ReplayFrameSerializer : JsonSerializer<ReplayFrame>, JsonDeserializer<ReplayFrame> {
+
+    override fun serialize(src: ReplayFrame, typeOfSrc: Type, context: JsonSerializationContext): JsonElement {
+        val obj = JsonObject()
+        obj.addProperty("tick", src.tickOffset)
+        when (src) {
+            is ReplayFrame.Position -> {
+                obj.addProperty("type", "pos")
+                obj.addProperty("uuid", src.uuid.toString())
+                obj.addProperty("x", src.pos.x())
+                obj.addProperty("y", src.pos.y())
+                obj.addProperty("z", src.pos.z())
+                obj.addProperty("yaw", src.pos.yaw())
+                obj.addProperty("pitch", src.pos.pitch())
+                obj.addProperty("sneak", src.sneaking)
+            }
+            is ReplayFrame.BlockChange -> {
+                obj.addProperty("type", "block")
+                obj.addProperty("x", src.x)
+                obj.addProperty("y", src.y)
+                obj.addProperty("z", src.z)
+                obj.addProperty("bid", src.blockId)
+            }
+            is ReplayFrame.Chat -> {
+                obj.addProperty("type", "chat")
+                obj.addProperty("uuid", src.uuid.toString())
+                obj.addProperty("msg", src.message)
+            }
+            is ReplayFrame.ItemHeld -> {
+                obj.addProperty("type", "item")
+                obj.addProperty("uuid", src.uuid.toString())
+                obj.addProperty("slot", src.slot)
+                obj.addProperty("snbt", TagStringIO.get().asString(src.item.toItemNBT()))
+            }
+            is ReplayFrame.EntitySpawn -> {
+                obj.addProperty("type", "spawn")
+                obj.addProperty("uuid", src.uuid.toString())
+                obj.addProperty("name", src.name)
+                src.skinValue?.let { obj.addProperty("sv", it) }
+                src.skinSignature?.let { obj.addProperty("ss", it) }
+            }
+            is ReplayFrame.EntityDespawn -> {
+                obj.addProperty("type", "despawn")
+                obj.addProperty("uuid", src.uuid.toString())
+            }
+            is ReplayFrame.Death -> {
+                obj.addProperty("type", "death")
+                obj.addProperty("uuid", src.uuid.toString())
+                src.killerUuid?.let { obj.addProperty("killer", it.toString()) }
+            }
+        }
+        return obj
+    }
+
+    override fun deserialize(json: JsonElement, typeOfT: Type, context: JsonDeserializationContext): ReplayFrame {
+        val obj = json.asJsonObject
+        val tick = obj.get("tick").asInt
+        return when (obj.get("type").asString) {
+            "pos" -> ReplayFrame.Position(
+                tick, UUID.fromString(obj.get("uuid").asString),
+                Pos(obj.get("x").asDouble, obj.get("y").asDouble, obj.get("z").asDouble,
+                    obj.get("yaw").asFloat, obj.get("pitch").asFloat),
+                obj.get("sneak")?.asBoolean ?: false,
+            )
+            "block" -> ReplayFrame.BlockChange(tick, obj.get("x").asInt, obj.get("y").asInt, obj.get("z").asInt, obj.get("bid").asInt)
+            "chat" -> ReplayFrame.Chat(tick, UUID.fromString(obj.get("uuid").asString), obj.get("msg").asString)
+            "item" -> {
+                val snbt = obj.get("snbt")?.asString
+                val item = if (snbt != null) ItemStack.fromItemNBT(TagStringIO.get().asCompound(snbt)) else ItemStack.AIR
+                ReplayFrame.ItemHeld(tick, UUID.fromString(obj.get("uuid").asString), obj.get("slot").asInt, item)
+            }
+            "spawn" -> ReplayFrame.EntitySpawn(
+                tick, UUID.fromString(obj.get("uuid").asString), obj.get("name").asString,
+                obj.get("sv")?.asString, obj.get("ss")?.asString,
+            )
+            "despawn" -> ReplayFrame.EntityDespawn(tick, UUID.fromString(obj.get("uuid").asString))
+            "death" -> ReplayFrame.Death(tick, UUID.fromString(obj.get("uuid").asString), obj.get("killer")?.let { UUID.fromString(it.asString) })
+            else -> error("Unknown replay frame type: ${obj.get("type").asString}")
+        }
+    }
 }

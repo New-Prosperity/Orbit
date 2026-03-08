@@ -1,9 +1,16 @@
 package me.nebula.orbit.cosmetic
 
 import me.nebula.gravity.cosmetic.CosmeticCategory
+import me.nebula.gravity.cosmetic.CosmeticDefinition
 import me.nebula.gravity.cosmetic.CosmeticPlayerData
 import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.gravity.cosmetic.EquipCosmeticProcessor
+import me.nebula.gravity.cosmetic.UnlockCosmeticProcessor
+import me.nebula.gravity.economy.AddBalanceProcessor
+import me.nebula.gravity.economy.EconomyStore
+import me.nebula.gravity.economy.PurchaseCosmeticProcessor
+import me.nebula.orbit.progression.mission.MissionTracker
+import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.gui.openGui
@@ -59,13 +66,19 @@ object CosmeticMenu {
                 val material = Material.fromKey(definition.material) ?: Material.BARRIER
 
                 item(buildCosmeticItem(player, definition, material, owned, equipped, level)) { p ->
-                    if (!owned) return@item
-                    if (equipped) {
-                        CosmeticStore.executeOnKey(p.uuid, EquipCosmeticProcessor(category.name, null))
-                    } else {
-                        CosmeticStore.executeOnKey(p.uuid, EquipCosmeticProcessor(category.name, definition.id))
+                    if (owned) {
+                        if (equipped) {
+                            CosmeticStore.executeOnKey(p.uuid, EquipCosmeticProcessor(category.name, null))
+                        } else {
+                            CosmeticStore.executeOnKey(p.uuid, EquipCosmeticProcessor(category.name, definition.id))
+                            MissionTracker.onUseCategory(p, category.name)
+                        }
+                        CosmeticDataCache.invalidate(p.uuid)
+                        openCosmeticList(p, category)
+                    } else if (definition.price > 0) {
+                        val cost = purchaseCost(definition, level)
+                        openConfirmation(p, definition, category, cost)
                     }
-                    openCosmeticList(p, category)
                 }
             }
 
@@ -75,6 +88,48 @@ object CosmeticMenu {
         }
         gui.open(player)
     }
+
+    private fun openConfirmation(player: Player, definition: CosmeticDefinition, category: CosmeticCategory, cost: Int) {
+        val material = Material.fromKey(definition.material) ?: Material.BARRIER
+
+        val confirmGui = gui(player.translateRaw("orbit.cosmetic.confirm.title"), rows = 3) {
+            slot(11, itemStack(Material.GREEN_WOOL) {
+                name("<green>${player.translateRaw("orbit.cosmetic.confirm.accept")}")
+                lore(player.translateRaw("orbit.cosmetic.confirm.cost", "price" to cost.toString()))
+            }) { p ->
+                val purchased = EconomyStore.executeOnKey(p.uuid, PurchaseCosmeticProcessor("coins", cost.toDouble()))
+                if (!purchased) {
+                    p.sendMessage(p.translate("orbit.cosmetic.insufficient_funds"))
+                    openCosmeticList(p, category)
+                    return@slot
+                }
+                val unlocked = CosmeticStore.executeOnKey(p.uuid, UnlockCosmeticProcessor(definition.id, definition.maxLevel))
+                if (!unlocked) {
+                    EconomyStore.executeOnKey(p.uuid, AddBalanceProcessor("coins", cost.toDouble()))
+                    openCosmeticList(p, category)
+                    return@slot
+                }
+                CosmeticDataCache.invalidate(p.uuid)
+                p.sendMessage(p.translate("orbit.cosmetic.purchased", "cosmetic" to p.translateRaw(definition.nameKey)))
+                openCosmeticList(p, category)
+            }
+
+            slot(13, itemStack(material) {
+                name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
+                lore(player.translateRaw("orbit.cosmetic.confirm.cost", "price" to cost.toString()))
+            })
+
+            slot(15, itemStack(Material.RED_WOOL) {
+                name("<red>${player.translateRaw("orbit.cosmetic.confirm.cancel")}")
+            }) { p -> openCosmeticList(p, category) }
+
+            fill(Material.GRAY_STAINED_GLASS_PANE)
+        }
+        player.openGui(confirmGui)
+    }
+
+    private fun purchaseCost(definition: CosmeticDefinition, currentLevel: Int): Int =
+        if (definition.maxLevel > 1) definition.price * (currentLevel + 1) else definition.price
 
     private fun buildCosmeticItem(
         player: Player,
@@ -104,7 +159,13 @@ object CosmeticMenu {
                 lore("<yellow>${player.translateRaw("orbit.cosmetic.action.equip")}")
             }
             else -> {
-                lore("<red>${player.translateRaw("orbit.cosmetic.status.locked")}")
+                if (definition.price > 0) {
+                    val cost = purchaseCost(definition, level)
+                    lore("<gold>${player.translateRaw("orbit.cosmetic.price", "price" to cost.toString())}")
+                    lore("<yellow>${player.translateRaw("orbit.cosmetic.action.purchase")}")
+                } else {
+                    lore("<red>${player.translateRaw("orbit.cosmetic.status.locked")}")
+                }
             }
         }
     }

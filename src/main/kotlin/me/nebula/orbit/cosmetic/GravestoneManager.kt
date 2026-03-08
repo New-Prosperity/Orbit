@@ -6,6 +6,7 @@ import me.nebula.orbit.utils.modelengine.model.standAloneModel
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.instance.Instance
+import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -21,12 +22,24 @@ data class ActiveGravestone(
 object GravestoneManager {
 
     private val gravestones = ConcurrentHashMap<UUID, ActiveGravestone>()
+    private var task: Task? = null
 
     fun install() {
-        MinecraftServer.getSchedulerManager()
+        task = MinecraftServer.getSchedulerManager()
             .buildTask { tick() }
             .repeat(TaskSchedule.tick(20))
             .schedule()
+    }
+
+    fun uninstall() {
+        task?.cancel()
+        task = null
+        val iterator = gravestones.entries.iterator()
+        while (iterator.hasNext()) {
+            val (_, gravestone) = iterator.next()
+            gravestone.owner.remove()
+            iterator.remove()
+        }
     }
 
     fun spawn(instance: Instance, position: Pos, cosmeticId: String, level: Int, playerUuid: UUID) {

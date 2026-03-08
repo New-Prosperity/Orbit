@@ -16,6 +16,7 @@ import net.minestom.server.entity.Player
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.tag.Tag
+import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -36,15 +37,30 @@ data class ActiveMount(
 object CosmeticMountManager {
 
     private val mounts = ConcurrentHashMap<UUID, ActiveMount>()
+    private var task: Task? = null
 
     const val MOUNT_SLOT = 8
 
     fun install() {
         MountManager.install()
-        MinecraftServer.getSchedulerManager()
+        task = MinecraftServer.getSchedulerManager()
             .buildTask { tick() }
             .repeat(TaskSchedule.tick(1))
             .schedule()
+    }
+
+    fun uninstall() {
+        task?.cancel()
+        task = null
+        val iterator = mounts.entries.iterator()
+        while (iterator.hasNext()) {
+            val (uuid, mount) = iterator.next()
+            MountManager.evictPlayer(uuid)
+            mount.modeled.destroy()
+            mount.entity.remove()
+            iterator.remove()
+        }
+        MountManager.uninstall()
     }
 
     fun spawn(player: Player, cosmeticId: String, level: Int) {
@@ -61,35 +77,35 @@ object CosmeticMountManager {
         val creature = EntityCreature(EntityType.ZOMBIE)
         creature.isInvisible = true
         creature.isSilent = true
-        creature.setInstance(instance, player.position.add(2.0, 0.0, 0.0)).join()
+        creature.setInstance(instance, player.position.add(2.0, 0.0, 0.0)).thenRun {
+            val modeled = modeledEntity(creature) {
+                model(modelId, autoPlayIdle = true) { scale(scale) }
+            }
 
-        val modeled = modeledEntity(creature) {
-            model(modelId, autoPlayIdle = true) { scale(scale) }
+            val activeModel = modeled.models.values.firstOrNull() ?: run {
+                modeled.destroy()
+                creature.remove()
+                return@thenRun
+            }
+            val bone = activeModel.bones[seatBone] ?: run {
+                modeled.destroy()
+                creature.remove()
+                return@thenRun
+            }
+            val seatOffsetY = resolved["seatOffsetY"]?.toDoubleOrNull() ?: 0.0
+            val mountBehavior = MountBehavior(bone, seatOffset = Vec(0.0, seatOffsetY, 0.0))
+            bone.addBehavior(mountBehavior)
+            mountBehavior.onAdd(modeled)
+
+            modeled.show(player)
+
+            val item = itemStack(Material.SADDLE) {
+                name("<yellow>${player.translateRaw(definition.nameKey)}")
+            }.withTag(MOUNT_TAG, cosmeticId)
+            player.inventory.setItemStack(MOUNT_SLOT, item)
+
+            mounts[player.uuid] = ActiveMount(creature, modeled, mountBehavior, cosmeticId, level, speed)
         }
-
-        val activeModel = modeled.models.values.firstOrNull() ?: run {
-            modeled.destroy()
-            creature.remove()
-            return
-        }
-        val bone = activeModel.bones[seatBone] ?: run {
-            modeled.destroy()
-            creature.remove()
-            return
-        }
-        val seatOffsetY = resolved["seatOffsetY"]?.toDoubleOrNull() ?: 0.0
-        val mountBehavior = MountBehavior(bone, seatOffset = Vec(0.0, seatOffsetY, 0.0))
-        bone.addBehavior(mountBehavior)
-        mountBehavior.onAdd(modeled)
-
-        modeled.show(player)
-
-        val item = itemStack(Material.SADDLE) {
-            name("<yellow>${player.translateRaw(definition.nameKey)}")
-        }.withTag(MOUNT_TAG, cosmeticId)
-        player.inventory.setItemStack(MOUNT_SLOT, item)
-
-        mounts[player.uuid] = ActiveMount(creature, modeled, mountBehavior, cosmeticId, level, speed)
     }
 
     fun despawn(playerId: UUID) {
@@ -120,13 +136,13 @@ object CosmeticMountManager {
 
     private fun tick() {
         val onlinePlayers = MinecraftServer.getConnectionManager().onlinePlayers
-        val onlineUuids = onlinePlayers.mapTo(HashSet()) { it.uuid }
+        val playersByUuid = onlinePlayers.associateBy { it.uuid }
 
         val iterator = mounts.entries.iterator()
         while (iterator.hasNext()) {
             val (uuid, mount) = iterator.next()
-            val player = onlinePlayers.firstOrNull { it.uuid == uuid }
-            if (player == null || uuid !in onlineUuids) {
+            val player = playersByUuid[uuid]
+            if (player == null) {
                 MountManager.evictPlayer(uuid)
                 mount.modeled.destroy()
                 mount.entity.remove()

@@ -1,7 +1,6 @@
 package me.nebula.orbit.mode.hub
 
 import me.nebula.ether.utils.logging.logger
-import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.gravity.messaging.HostProvisionStatusMessage
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.queue.QueueStore
@@ -10,9 +9,14 @@ import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.session.SessionStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.ServerMode
+import me.nebula.orbit.translation.resolveTranslated
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.cosmetic.CosmeticMenu
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.placeholderResolver
+import me.nebula.orbit.progression.BattlePassMenu
+import me.nebula.orbit.progression.achievement.AchievementMenu
+import me.nebula.orbit.progression.mission.MissionMenu
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
 import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.hotbar.hotbar
@@ -41,10 +45,10 @@ import java.nio.file.Path
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
-class HubMode(private val resources: ResourceManager) : ServerMode {
+class HubMode : ServerMode {
 
     private val logger = logger("HubMode")
-    private val config = resources.loadOrCopyDefault<HubModeConfig>("hub.json", "modes/hub.json")
+    private val config = HubDefinitions.CONFIG
 
     private val resolver = placeholderResolver {
         global("online") { SessionStore.cachedSize.toString() }
@@ -98,37 +102,25 @@ class HubMode(private val resources: ResourceManager) : ServerMode {
 
         val actions = mapOf<String, (net.minestom.server.entity.Player) -> Unit>(
             "open_selector" to { player -> selectorGui.open(player) },
-            "open_host" to { player -> HostMenu.openGameModeMenu(player) }
+            "open_host" to { player -> HostMenu.openGameModeMenu(player) },
+            "open_cosmetics" to { player -> CosmeticMenu.openCategoryMenu(player) },
+            "open_battlepass" to { player -> BattlePassMenu.open(player) },
+            "open_missions" to { player -> MissionMenu.open(player) },
+            "open_achievements" to { player -> AchievementMenu.open(player) },
         )
 
         scoreboard = liveScoreboard {
-            if (resolver.hasPlaceholders(config.scoreboard.title)) {
-                title { player -> resolver.resolve(config.scoreboard.title, player) }
-            } else {
-                title(config.scoreboard.title)
-            }
+            title { player -> resolver.resolveTranslated(config.scoreboard.title, player) }
             refreshEvery(config.scoreboard.refreshSeconds.seconds)
             for (line in config.scoreboard.lines) {
-                if (resolver.hasPlaceholders(line)) {
-                    line { player -> resolver.resolve(line, player) }
-                } else {
-                    line(line)
-                }
+                line { player -> resolver.resolveTranslated(line, player) }
             }
         }
 
         tabList = liveTabList {
             refreshEvery(config.tabList.refreshSeconds.seconds)
-            if (resolver.hasPlaceholders(config.tabList.header)) {
-                header { player -> resolver.resolve(config.tabList.header, player) }
-            } else {
-                header(config.tabList.header)
-            }
-            if (resolver.hasPlaceholders(config.tabList.footer)) {
-                footer { player -> resolver.resolve(config.tabList.footer, player) }
-            } else {
-                footer(config.tabList.footer)
-            }
+            header { player -> resolver.resolveTranslated(config.tabList.header, player) }
+            footer { player -> resolver.resolveTranslated(config.tabList.footer, player) }
         }
 
         hotbar = hotbar("hub") {

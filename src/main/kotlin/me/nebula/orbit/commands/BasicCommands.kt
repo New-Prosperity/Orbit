@@ -12,6 +12,7 @@ import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.attribute.Attribute
+import net.minestom.server.event.EventNode
 import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.item.ItemStack
@@ -20,6 +21,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 private val godPlayers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+private var eventNode: EventNode<*>? = null
 
 fun installBasicCommands(commandManager: CommandManager) {
     listOf(
@@ -40,16 +42,24 @@ fun installBasicCommands(commandManager: CommandManager) {
         invseeCommand(),
     ).forEach(commandManager::register)
 
-    val global = MinecraftServer.getGlobalEventHandler()
-    global.addListener(EntityDamageEvent::class.java) { event ->
+    val node = EventNode.all("basic-commands")
+    node.addListener(EntityDamageEvent::class.java) { event ->
         val entity = event.entity
         if (entity is Player && entity.uuid in godPlayers) {
             event.isCancelled = true
         }
     }
-    global.addListener(PlayerDisconnectEvent::class.java) { event ->
+    node.addListener(PlayerDisconnectEvent::class.java) { event ->
         godPlayers.remove(event.player.uuid)
     }
+    MinecraftServer.getGlobalEventHandler().addChild(node)
+    eventNode = node
+}
+
+fun uninstallBasicCommands() {
+    eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+    eventNode = null
+    godPlayers.clear()
 }
 
 private fun resolveOnline(name: String): Player? =

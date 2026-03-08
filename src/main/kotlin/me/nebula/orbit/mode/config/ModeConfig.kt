@@ -33,6 +33,12 @@ data class LobbyConfig(
     val voidTeleportY: Double,
 )
 
+data class LobbyWorldConfig(
+    val worldPath: String,
+    val preloadRadius: Int,
+    val spawn: SpawnConfig,
+)
+
 data class HotbarItemConfig(
     val slot: Int,
     val material: String,
@@ -42,6 +48,6 @@ data class HotbarItemConfig(
 )
 
 data class CosmeticConfig(
-    val enabledCategories: List<String> = me.nebula.gravity.cosmetic.CosmeticCategory.entries.map { it.name },
-    val blacklist: List<String> = emptyList(),
+    val enabledCategories: Set<String> = me.nebula.gravity.cosmetic.CosmeticCategory.entries.mapTo(mutableSetOf()) { it.name },
+    val blacklist: Set<String> = emptySet(),
 )

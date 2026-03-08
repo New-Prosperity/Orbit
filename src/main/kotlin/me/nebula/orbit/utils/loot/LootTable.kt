@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.loot
 
+import me.nebula.orbit.utils.itemresolver.ItemResolver
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import kotlin.random.Random
@@ -57,6 +58,10 @@ class LootTableBuilder @PublishedApi internal constructor(private val name: Stri
 
     fun entry(material: Material, weight: Int = 1, minCount: Int = 1, maxCount: Int = 1) {
         entries.add(LootEntry(ItemStack.of(material), weight, minCount, maxCount))
+    }
+
+    fun entry(key: String, weight: Int = 1, minCount: Int = 1, maxCount: Int = 1) {
+        entries.add(LootEntry(ItemResolver.resolve(key), weight, minCount, maxCount))
     }
 
     fun rolls(count: Int) { rolls = count..count }

@@ -80,6 +80,12 @@ class PlayerTracker {
         players.remove(uuid)
         teams.remove(uuid)
         lives.remove(uuid)
+        kills.remove(uuid)
+        deaths.remove(uuid)
+        streaks.remove(uuid)
+        assists.remove(uuid)
+        scores.remove(uuid)
+        eliminationOrder.remove(uuid)
         lastCombatTime.remove(uuid)
         lastActivityTime.remove(uuid)
         recentDamagers.remove(uuid)
@@ -168,7 +174,7 @@ class PlayerTracker {
         val now = System.currentTimeMillis()
         lastCombatTime[attacker] = now
         lastCombatTime[victim] = now
-        val records = recentDamagers.getOrPut(victim) { mutableListOf() }
+        val records = recentDamagers.computeIfAbsent(victim) { mutableListOf() }
         synchronized(records) {
             records.removeAll { it.attacker == attacker }
             records.add(DamageRecord(attacker, now))

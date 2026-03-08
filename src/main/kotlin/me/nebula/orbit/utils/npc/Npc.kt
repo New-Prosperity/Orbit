@@ -27,6 +27,7 @@ import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import java.util.EnumSet
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 private val miniMessage = MiniMessage.miniMessage()
@@ -231,21 +232,20 @@ class Npc internal constructor(
     }
 
     private inline fun forEachViewer(action: (Player) -> Unit) {
-        _viewers.forEach { uuid ->
-            MinecraftServer.getConnectionManager()
-                .onlinePlayers.firstOrNull { it.uuid == uuid }?.let(action)
-        }
+        val playersByUuid = MinecraftServer.getConnectionManager()
+            .onlinePlayers.associateBy { it.uuid }
+        _viewers.forEach { uuid -> playersByUuid[uuid]?.let(action) }
     }
 }
 
 object NpcRegistry {
 
     private val npcs = ConcurrentHashMap<Int, Npc>()
-    @Volatile private var installed = false
+    private val installed = AtomicBoolean(false)
 
     fun register(npc: Npc) {
         npcs[npc.entityId] = npc
-        if (!installed) install()
+        if (installed.compareAndSet(false, true)) install()
     }
 
     fun unregister(npc: Npc) {
@@ -262,8 +262,6 @@ object NpcRegistry {
     }
 
     private fun install() {
-        installed = true
-
         val node = net.minestom.server.event.EventNode.all("npc-registry")
 
         node.addListener(net.minestom.server.event.entity.EntityAttackEvent::class.java) { event ->

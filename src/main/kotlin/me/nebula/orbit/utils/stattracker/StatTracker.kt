@@ -76,9 +76,9 @@ object StatTracker {
     }
 
     fun top(stat: String, limit: Int = 10): List<Pair<UUID, Long>> {
-        if (derivedStats.containsKey(stat)) {
+        derivedStats[stat]?.let { derived ->
             return stats.entries
-                .map { (uuid, playerMap) -> uuid to derivedStats[stat]!!.compute(playerMap).toLong() }
+                .map { (uuid, playerMap) -> uuid to derived.compute(playerMap).toLong() }
                 .sortedByDescending { it.second }
                 .take(limit)
         }
@@ -92,9 +92,9 @@ object StatTracker {
     }
 
     fun topDouble(stat: String, limit: Int = 10): List<Pair<UUID, Double>> {
-        if (derivedStats.containsKey(stat)) {
+        derivedStats[stat]?.let { derived ->
             return stats.entries
-                .map { (uuid, playerMap) -> uuid to derivedStats[stat]!!.compute(playerMap) }
+                .map { (uuid, playerMap) -> uuid to derived.compute(playerMap) }
                 .sortedByDescending { it.second }
                 .take(limit)
         }
@@ -127,7 +127,7 @@ object StatTracker {
     fun players(): Set<UUID> = stats.keys.toSet()
 
     private fun playerStats(uuid: UUID): ConcurrentHashMap<String, Long> =
-        stats.getOrPut(uuid) { ConcurrentHashMap() }
+        stats.computeIfAbsent(uuid) { ConcurrentHashMap() }
 }
 
 private class DerivedStat(
@@ -158,7 +158,7 @@ class StatTrackerBuilder @PublishedApi internal constructor() {
     }
 }
 
-@PublishedApi internal data class DerivedStatDef(
+@PublishedApi internal class DerivedStatDef(
     val name: String,
     val inputs: List<String>,
     val compute: (Map<String, Long>) -> Double,

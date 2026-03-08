@@ -1,6 +1,7 @@
 package me.nebula.orbit.translation
 
 import me.nebula.orbit.Orbit
+import me.nebula.orbit.mode.config.PlaceholderResolver
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
@@ -29,4 +30,10 @@ fun translateFor(uuid: UUID, key: String, vararg args: Pair<String, String>): Co
     val locale = Orbit.localeOf(uuid)
     val resolvers = args.map { (k, v) -> Placeholder.unparsed(k, v) }.toTypedArray<TagResolver>()
     return Orbit.deserialize(key, locale, *resolvers)
+}
+
+fun PlaceholderResolver.resolveTranslated(key: String, player: Player): String {
+    val locale = Orbit.localeOf(player.uuid)
+    val template = Orbit.translations.get(key, locale) ?: key
+    return resolve(template, player)
 }

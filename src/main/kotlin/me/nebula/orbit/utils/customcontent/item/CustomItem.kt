@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.customcontent.item
 
 import me.nebula.orbit.utils.itembuilder.itemStack
+import me.nebula.orbit.utils.itemresolver.ITEM_ID_TAG
 import net.minestom.server.component.DataComponents
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
@@ -25,6 +26,7 @@ data class CustomItem(
             if (this@CustomItem.unbreakable) unbreakable()
             if (this@CustomItem.glowing) glowing()
         }
+        stack = stack.withTag(ITEM_ID_TAG, id)
         if (maxStackSize != baseMaterial.maxStackSize()) {
             stack = stack.with(DataComponents.MAX_STACK_SIZE, maxStackSize)
         }

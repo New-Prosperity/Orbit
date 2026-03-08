@@ -29,8 +29,8 @@ object GracePeriodManager {
 
     private val active = ConcurrentHashMap<UUID, GraceEntry>()
     private val configs = ConcurrentHashMap<String, GracePeriodConfig>()
-    private var eventNode: EventNode<*>? = null
-    private var cleanupTask: Task? = null
+    @Volatile private var eventNode: EventNode<*>? = null
+    @Volatile private var cleanupTask: Task? = null
 
     fun register(config: GracePeriodConfig) {
         configs[config.name] = config

@@ -11,6 +11,12 @@ interface ServerMode {
 
     val spawnPoint: Pos
 
+    val activeInstance: InstanceContainer get() = defaultInstance
+
+    val activeSpawnPoint: Pos get() = spawnPoint
+
+    val maxPlayers: Int get() = 0
+
     val cosmeticConfig: CosmeticConfig get() = CosmeticConfig()
 
     fun install(handler: GlobalEventHandler)

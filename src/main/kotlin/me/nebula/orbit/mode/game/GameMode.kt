@@ -11,6 +11,12 @@ import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.PlaceholderResolver
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
+import me.nebula.orbit.utils.ceremony.Ceremony
+import me.nebula.orbit.utils.deathrecap.DeathRecapTracker
+import me.nebula.orbit.utils.gamechat.GameChatPipeline
+import me.nebula.orbit.utils.killfeed.KillFeed
+import me.nebula.orbit.utils.rewards.RewardDistributor
+import me.nebula.orbit.utils.spectatortoolkit.SpectatorToolkit
 import me.nebula.orbit.utils.countdown.Countdown
 import me.nebula.orbit.utils.countdown.countdown
 import me.nebula.orbit.utils.gamestate.GameStateMachine
@@ -33,6 +39,7 @@ import me.nebula.orbit.utils.scoreboard.LiveScoreboard
 import me.nebula.orbit.utils.scoreboard.liveScoreboard
 import me.nebula.orbit.utils.tablist.LiveTabList
 import me.nebula.orbit.utils.tablist.liveTabList
+import me.nebula.orbit.translation.resolveTranslated
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
@@ -48,6 +55,7 @@ import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.timer.Task
 import java.nio.file.Files
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -58,6 +66,8 @@ abstract class GameMode : ServerMode {
     private val logger = logger("GameMode")
 
     abstract val settings: GameSettings
+
+    override val maxPlayers: Int get() = settings.timing.maxPlayers
 
     override val cosmeticConfig: CosmeticConfig get() = settings.cosmetics ?: CosmeticConfig()
 
@@ -95,6 +105,14 @@ abstract class GameMode : ServerMode {
     open fun buildLobbyHotbar(): Hotbar? = null
     open fun buildRespawnKit(): Kit? = null
     open fun buildRespawnPosition(player: Player): Pos = spawnPoint
+    open fun buildChatPipeline(): GameChatPipeline? = null
+    open fun buildSpectatorToolkit(): SpectatorToolkit? = null
+    open fun buildKillFeed(): KillFeed? = null
+    open fun buildDeathRecapTracker(): DeathRecapTracker? = null
+    open fun buildRewardDistributor(): RewardDistributor? = null
+    open fun buildCeremony(result: MatchResult): Ceremony? = null
+
+    open fun resolveGameDuration(): Int = settings.timing.gameDurationSeconds
 
     open fun buildTimeExpiredResult(): MatchResult = matchResult {
         draw()
@@ -135,22 +153,68 @@ abstract class GameMode : ServerMode {
     private val respawnTimers = ConcurrentHashMap<UUID, Task>()
     private val gameEvents = ConcurrentHashMap<String, Task>()
     private val spectatorTargets = ConcurrentHashMap<UUID, UUID>()
-    private var reconnectWindowTask: Task? = null
-    private var lateJoinWindowTask: Task? = null
-    private var afkCheckTask: Task? = null
-    private var overtimeTask: Task? = null
-    private var voidCheckTask: Task? = null
-    private var freezeEventNode: EventNode<*>? = null
-    private var gameMechanicsNode: EventNode<*>? = null
+    @Volatile private var reconnectWindowTask: Task? = null
+    @Volatile private var lateJoinWindowTask: Task? = null
+    @Volatile private var afkCheckTask: Task? = null
+    @Volatile private var overtimeTask: Task? = null
+    @Volatile private var voidCheckTask: Task? = null
+    @Volatile private var freezeEventNode: EventNode<*>? = null
+    @Volatile private var gameMechanicsNode: EventNode<*>? = null
     @Volatile private var reconnectWindowExpired = false
     @Volatile private var lateJoinWindowExpired = false
-    @Volatile private var lateJoinCount = 0
+    private val lateJoinCount = java.util.concurrent.atomic.AtomicInteger(0)
     @Volatile private var _isOvertime = false
     @Volatile private var _isSuddenDeath = false
+    @Volatile private var chatPipeline: GameChatPipeline? = null
+    @Volatile private var spectatorToolkit: SpectatorToolkit? = null
+    @Volatile private var killFeed: KillFeed? = null
+    @Volatile private var deathRecapTracker: DeathRecapTracker? = null
+    @Volatile private var rewardDistributor: RewardDistributor? = null
+    @Volatile private var ceremony: Ceremony? = null
 
     override val spawnPoint: Pos by lazy { settings.spawn.toPos() }
 
-    override val defaultInstance: InstanceContainer by lazy {
+    val isDualInstance: Boolean get() = settings.lobbyWorld != null
+
+    val lobbyInstance: InstanceContainer by lazy {
+        val lobbyWorld = settings.lobbyWorld ?: return@lazy gameInstance
+        val worldPath = java.nio.file.Path.of(lobbyWorld.worldPath)
+        worldPath.parent?.let { Files.createDirectories(it) }
+        val lobbySpawn = lobbyWorld.spawn.toPos()
+        val centerX = lobbySpawn.blockX() shr 4
+        val centerZ = lobbySpawn.blockZ() shr 4
+        val (instance, future) = AnvilWorldLoader.loadAndPreload(
+            "lobby-${this::class.simpleName?.lowercase()}", worldPath,
+            centerX, centerZ, lobbyWorld.preloadRadius,
+        )
+        future.join()
+        instance
+    }
+
+    val lobbySpawnPoint: Pos by lazy {
+        settings.lobbyWorld?.spawn?.toPos() ?: spawnPoint
+    }
+
+    override val activeInstance: InstanceContainer
+        get() = when (phase) {
+            GamePhase.WAITING, GamePhase.STARTING -> lobbyInstance
+            GamePhase.PLAYING, GamePhase.ENDING -> gameInstance
+        }
+
+    override val activeSpawnPoint: Pos
+        get() = when (phase) {
+            GamePhase.WAITING, GamePhase.STARTING -> lobbySpawnPoint
+            GamePhase.PLAYING, GamePhase.ENDING -> spawnPoint
+        }
+
+    @Volatile private var _gameInstance: InstanceContainer? = null
+
+    val gameInstance: InstanceContainer
+        get() = _gameInstance ?: createGameInstance().also { _gameInstance = it }
+
+    override val defaultInstance: InstanceContainer get() = gameInstance
+
+    protected open fun createGameInstance(): InstanceContainer {
         val worldPath = java.nio.file.Path.of(settings.worldPath)
         worldPath.parent?.let { Files.createDirectories(it) }
         val centerX = spawnPoint.blockX() shr 4
@@ -160,7 +224,16 @@ abstract class GameMode : ServerMode {
             centerX, centerZ, settings.preloadRadius,
         )
         future.join()
-        instance
+        return instance
+    }
+
+    protected fun invalidateGameInstance() {
+        val old = _gameInstance ?: return
+        _gameInstance = null
+        if (isDualInstance) {
+            old.players.toList().forEach { it.setInstance(lobbyInstance, lobbySpawnPoint) }
+        }
+        MinecraftServer.getInstanceManager().unregisterInstance(old)
     }
 
     private val resolver: PlaceholderResolver by lazy { buildPlaceholderResolver() }
@@ -179,14 +252,14 @@ abstract class GameMode : ServerMode {
         }
     }
 
-    private var currentLobby: Lobby? = null
-    private var currentHotbar: Hotbar? = null
-    private var startingCountdown: Countdown? = null
-    private var gameTimer: MinigameTimer? = null
-    private var endingCountdown: Countdown? = null
+    @Volatile private var currentLobby: Lobby? = null
+    @Volatile private var currentHotbar: Hotbar? = null
+    @Volatile private var startingCountdown: Countdown? = null
+    @Volatile private var gameTimer: MinigameTimer? = null
+    @Volatile private var endingCountdown: Countdown? = null
     private lateinit var scoreboard: LiveScoreboard
     private lateinit var tabList: LiveTabList
-    private var lastEndResult: MatchResult? = null
+    @Volatile private var lastEndResult: MatchResult? = null
 
     override fun install(handler: GlobalEventHandler) {
         logger.info { "Installing game mode: ${this::class.simpleName}" }
@@ -216,6 +289,8 @@ abstract class GameMode : ServerMode {
         scoreboard.uninstall()
         tabList.uninstall()
         GracePeriodManager.uninstall()
+        chatPipeline?.uninstall()
+        spectatorToolkit?.uninstall()
         cleanupReconnectionState()
         cleanupRespawnTimers()
         cleanupLateJoinState()
@@ -238,6 +313,7 @@ abstract class GameMode : ServerMode {
         player.teleport(spawnPoint)
 
         autoSpectateOnEliminate(player)
+        spectatorToolkit?.apply(player)
         onPlayerEliminated(player)
         checkGameEnd()
     }
@@ -246,6 +322,7 @@ abstract class GameMode : ServerMode {
         if (phase != GamePhase.PLAYING) return
         if (!tracker.isSpectating(player.uuid)) return
 
+        spectatorToolkit?.remove(player)
         spectatorTargets.remove(player.uuid)
         player.stopSpectating()
         tracker.revive(player.uuid)
@@ -266,6 +343,9 @@ abstract class GameMode : ServerMode {
         }
 
         creditAssists(player.uuid, killer?.uuid)
+
+        killFeed?.reportKill(me.nebula.orbit.utils.killfeed.KillEvent(killer = killer, victim = player))
+        deathRecapTracker?.sendRecap(player)
 
         onPlayerDeath(player, killer)
 
@@ -375,7 +455,7 @@ abstract class GameMode : ServerMode {
     }
 
     fun broadcastAll(action: (Player) -> Unit) {
-        defaultInstance.players.forEach(action)
+        activeInstance.players.forEach(action)
     }
 
     protected fun lastTeamStandingName(): String? {
@@ -471,7 +551,7 @@ abstract class GameMode : ServerMode {
         }
 
         if (canLateJoin()) {
-            lateJoinCount++
+            lateJoinCount.incrementAndGet()
             tracker.join(player.uuid)
 
             if (isTeamMode) {
@@ -498,6 +578,7 @@ abstract class GameMode : ServerMode {
         }
 
         player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
+        spectatorToolkit?.apply(player)
     }
 
     private fun handlePlayerDisconnect(player: Player) {
@@ -621,6 +702,7 @@ abstract class GameMode : ServerMode {
             return
         }
 
+        spectatorToolkit?.remove(player)
         spectatorTargets.remove(uuid)
         player.stopSpectating()
         tracker.revive(uuid)
@@ -642,7 +724,7 @@ abstract class GameMode : ServerMode {
     private fun canLateJoin(): Boolean {
         val config = settings.lateJoin ?: return false
         if (lateJoinWindowExpired) return false
-        if (config.maxLateJoiners > 0 && lateJoinCount >= config.maxLateJoiners) return false
+        if (config.maxLateJoiners > 0 && lateJoinCount.get() >= config.maxLateJoiners) return false
         return true
     }
 
@@ -738,6 +820,13 @@ abstract class GameMode : ServerMode {
                 if (attacker != null && attacker.uuid != victim.uuid) {
                     tracker.recordDamage(attacker.uuid, victim.uuid)
                 }
+
+                deathRecapTracker?.recordDamage(victim.uuid, me.nebula.orbit.utils.deathrecap.DamageEntry(
+                    attackerUuid = attacker?.uuid,
+                    attackerName = attacker?.username ?: damage.type.key().value(),
+                    amount = damage.amount,
+                    source = if (attacker != null) "PLAYER" else damage.type.key().value(),
+                ))
             }
         }
 
@@ -750,7 +839,7 @@ abstract class GameMode : ServerMode {
             }
         }
 
-        if (settings.timing.isolateSpectatorChat) {
+        if (settings.timing.isolateSpectatorChat && chatPipeline == null) {
             hasListeners = true
             node.addListener(PlayerChatEvent::class.java) { event ->
                 if (phase != GamePhase.PLAYING) return@addListener
@@ -793,7 +882,7 @@ abstract class GameMode : ServerMode {
         lateJoinWindowTask?.cancel()
         lateJoinWindowTask = null
         lateJoinWindowExpired = false
-        lateJoinCount = 0
+        lateJoinCount.set(0)
     }
 
     private fun cleanupGameEvents() {
@@ -837,6 +926,17 @@ abstract class GameMode : ServerMode {
         cleanupOvertime()
         cleanupGameMechanicsNode()
         cleanupVoidCheck()
+        chatPipeline?.uninstall()
+        chatPipeline = null
+        spectatorToolkit?.uninstall()
+        spectatorToolkit = null
+        killFeed?.clear()
+        killFeed = null
+        deathRecapTracker?.clear()
+        deathRecapTracker = null
+        rewardDistributor = null
+        ceremony?.stop()
+        ceremony = null
         spectatorTargets.clear()
         tracker.clear()
         lastEndResult = null
@@ -844,8 +944,8 @@ abstract class GameMode : ServerMode {
         initialPlayerCount = 0
 
         currentLobby = lobby {
-            instance = defaultInstance
-            spawnPoint = this@GameMode.spawnPoint
+            instance = lobbyInstance
+            spawnPoint = lobbySpawnPoint
             gameMode = net.minestom.server.entity.GameMode.valueOf(settings.lobby.gameMode)
             protectBlocks = settings.lobby.protectBlocks
             disableDamage = settings.lobby.disableDamage
@@ -858,10 +958,20 @@ abstract class GameMode : ServerMode {
         currentHotbar = buildLobbyHotbar()
         currentHotbar?.install()
 
-        for (player in defaultInstance.players) {
+        if (isDualInstance) {
+            val gameInst = _gameInstance
+            if (gameInst != null) {
+                val transfers = gameInst.players.toList().map { player ->
+                    player.setInstance(lobbyInstance, lobbySpawnPoint)
+                }
+                CompletableFuture.allOf(*transfers.toTypedArray()).join()
+            }
+        }
+
+        for (player in lobbyInstance.players) {
             tracker.join(player.uuid)
             player.gameMode = net.minestom.server.entity.GameMode.valueOf(settings.lobby.gameMode)
-            player.teleport(spawnPoint)
+            if (!isDualInstance) player.teleport(lobbySpawnPoint)
             currentHotbar?.apply(player)
         }
 
@@ -932,6 +1042,13 @@ abstract class GameMode : ServerMode {
             MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
         }
 
+        if (isDualInstance) {
+            val transfers = alivePlayers.map { player ->
+                player.setInstance(gameInstance, spawnPoint)
+            }
+            CompletableFuture.allOf(*transfers.toTypedArray()).join()
+        }
+
         for (player in alivePlayers) {
             tracker.markActivity(player.uuid)
         }
@@ -945,9 +1062,10 @@ abstract class GameMode : ServerMode {
             alivePlayers.forEach { GracePeriodManager.apply(it, config.name) }
         }
 
-        if (settings.timing.gameDurationSeconds > 0) {
+        val resolvedDuration = resolveGameDuration()
+        if (resolvedDuration > 0) {
             gameTimer = minigameTimer("game-timer") {
-                duration(settings.timing.gameDurationSeconds.seconds)
+                duration(resolvedDuration.seconds)
                 onEnd {
                     gameTimer = null
                     handleTimerExpired()
@@ -969,7 +1087,7 @@ abstract class GameMode : ServerMode {
         }
 
         lateJoinWindowExpired = false
-        lateJoinCount = 0
+        lateJoinCount.set(0)
         val lateJoinConfig = settings.lateJoin
         if (lateJoinConfig != null) {
             lateJoinWindowTask = delay(lateJoinConfig.windowSeconds * 20) {
@@ -977,9 +1095,19 @@ abstract class GameMode : ServerMode {
             }
         }
 
+        chatPipeline = buildChatPipeline()
+        chatPipeline?.install()
+
         installGameMechanicsNode()
         startAfkCheck()
         startVoidCheck()
+
+        spectatorToolkit = buildSpectatorToolkit()
+        spectatorToolkit?.install()
+
+        killFeed = buildKillFeed()
+        deathRecapTracker = buildDeathRecapTracker()
+        rewardDistributor = buildRewardDistributor()
 
         onPlayingStart()
     }
@@ -1017,9 +1145,13 @@ abstract class GameMode : ServerMode {
 
         MatchResultManager.store(result)
         persistGameStats(result)
+        rewardDistributor?.distribute(result, tracker.all)
 
-        val allPlayers = defaultInstance.players.toList()
+        val allPlayers = gameInstance.players.toList()
         MatchResultDisplay.broadcast(allPlayers, result)
+
+        ceremony = buildCeremony(result)
+        ceremony?.start(allPlayers)
 
         onEndingStart(result)
 
@@ -1041,34 +1173,18 @@ abstract class GameMode : ServerMode {
 
     private fun buildLiveScoreboard(): LiveScoreboard = liveScoreboard {
         val cfg = settings.scoreboard
-        if (resolver.hasPlaceholders(cfg.title)) {
-            title { player -> resolver.resolve(cfg.title, player) }
-        } else {
-            title(cfg.title)
-        }
+        title { player -> resolver.resolveTranslated(cfg.title, player) }
         refreshEvery(cfg.refreshSeconds.seconds)
         for (line in cfg.lines) {
-            if (resolver.hasPlaceholders(line)) {
-                line { player -> resolver.resolve(line, player) }
-            } else {
-                line(line)
-            }
+            line { player -> resolver.resolveTranslated(line, player) }
         }
     }
 
     private fun buildLiveTabList(): LiveTabList = liveTabList {
         val cfg = settings.tabList
         refreshEvery(cfg.refreshSeconds.seconds)
-        if (resolver.hasPlaceholders(cfg.header)) {
-            header { player -> resolver.resolve(cfg.header, player) }
-        } else {
-            header(cfg.header)
-        }
-        if (resolver.hasPlaceholders(cfg.footer)) {
-            footer { player -> resolver.resolve(cfg.footer, player) }
-        } else {
-            footer(cfg.footer)
-        }
+        header { player -> resolver.resolveTranslated(cfg.header, player) }
+        footer { player -> resolver.resolveTranslated(cfg.footer, player) }
     }
 
     private companion object {

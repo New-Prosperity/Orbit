@@ -42,7 +42,7 @@ class Lobby(
         }
 
         if (lockInventory) {
-            eventNode.addListener(InventoryPreClickEvent::class.java) { it.isCancelled = true }
+            eventNode.addListener(InventoryPreClickEvent::class.java) { if (it.inventory == null) it.isCancelled = true }
             eventNode.addListener(ItemDropEvent::class.java) { it.isCancelled = true }
             eventNode.addListener(PlayerSwapItemEvent::class.java) { it.isCancelled = true }
         }
@@ -52,7 +52,6 @@ class Lobby(
             player.gameMode = gameMode
             player.teleport(spawnPoint)
             player.health = 20f
-            player.food = 20
             if (disableHunger) player.food = 20
 
             hotbarItems.forEach { (slot, entry) ->

@@ -6,6 +6,7 @@ import me.nebula.orbit.utils.modelengine.model.standAloneModel
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
+import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -21,12 +22,24 @@ object CompanionManager {
 
     private val companions = ConcurrentHashMap<UUID, ActiveCompanion>()
     private val tickCounter = AtomicLong(0L)
+    private var task: Task? = null
 
     fun install() {
-        MinecraftServer.getSchedulerManager()
+        task = MinecraftServer.getSchedulerManager()
             .buildTask { tick() }
             .repeat(TaskSchedule.tick(1))
             .schedule()
+    }
+
+    fun uninstall() {
+        task?.cancel()
+        task = null
+        val iterator = companions.entries.iterator()
+        while (iterator.hasNext()) {
+            val (_, companion) = iterator.next()
+            companion.owner.remove()
+            iterator.remove()
+        }
     }
 
     fun spawn(player: Player, cosmeticId: String, level: Int) {
@@ -36,11 +49,11 @@ object CompanionManager {
         val modelId = resolved["modelId"] ?: return
         if (ModelEngine.blueprintOrNull(modelId) == null) return
         val scale = resolved["scale"]?.toFloatOrNull() ?: 1.0f
-        val noIdle = resolved["idleAnimation"]?.let { false } ?: false
+        val hasCustomIdle = resolved["idleAnimation"] != null
 
         val companionPos = companionPosition(player.position, tickCounter.get())
         val model = standAloneModel(companionPos) {
-            model(modelId, autoPlayIdle = !noIdle) { scale(scale) }
+            model(modelId, autoPlayIdle = !hasCustomIdle) { scale(scale) }
         }
 
         val idleAnim = resolved["idleAnimation"]
@@ -62,13 +75,13 @@ object CompanionManager {
     private fun tick() {
         val tick = tickCounter.incrementAndGet()
         val onlinePlayers = MinecraftServer.getConnectionManager().onlinePlayers
-        val onlineUuids = onlinePlayers.mapTo(HashSet()) { it.uuid }
+        val playersByUuid = onlinePlayers.associateBy { it.uuid }
 
         val iterator = companions.entries.iterator()
         while (iterator.hasNext()) {
             val (uuid, companion) = iterator.next()
-            val player = onlinePlayers.firstOrNull { it.uuid == uuid }
-            if (player == null || uuid !in onlineUuids) {
+            val player = playersByUuid[uuid]
+            if (player == null) {
                 companion.owner.remove()
                 iterator.remove()
                 continue

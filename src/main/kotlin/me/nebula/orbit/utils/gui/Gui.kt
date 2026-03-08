@@ -6,6 +6,7 @@ import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.inventory.InventoryCloseEvent
 import net.minestom.server.event.inventory.InventoryPreClickEvent
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.inventory.Inventory
 import net.minestom.server.inventory.InventoryType
 import net.minestom.server.item.ItemStack
@@ -61,6 +62,13 @@ class Gui(
         slots.forEach { (i, slot) -> inventory.setItemStack(i, slot.item) }
 
         val guiNode = EventNode.all("gui-${System.identityHashCode(inventory)}")
+        val removed = java.util.concurrent.atomic.AtomicBoolean(false)
+        val cleanup = { player: Player ->
+            if (removed.compareAndSet(false, true)) {
+                onClose?.invoke(player)
+                MinecraftServer.getGlobalEventHandler().removeChild(guiNode)
+            }
+        }
         guiNode.addListener(InventoryPreClickEvent::class.java) { event ->
             val clicked = event.inventory ?: return@addListener
             if (clicked !== inventory) return@addListener
@@ -69,8 +77,11 @@ class Gui(
         }
         guiNode.addListener(InventoryCloseEvent::class.java) { event ->
             if (event.inventory !== inventory) return@addListener
-            onClose?.invoke(event.player)
-            MinecraftServer.getGlobalEventHandler().removeChild(guiNode)
+            cleanup(event.player)
+        }
+        guiNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            if (event.player.openInventory !== inventory) return@addListener
+            cleanup(event.player)
         }
         MinecraftServer.getGlobalEventHandler().addChild(guiNode)
 

@@ -29,12 +29,19 @@ import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.gravity.sanction.SanctionStore
 import me.nebula.gravity.server.ProvisionStore
 import me.nebula.gravity.server.ServerStore
-import me.nebula.gravity.session.ServerOccupancyStore
+import me.nebula.gravity.server.ConnectPlayerProcessor
+import me.nebula.gravity.server.DisconnectPlayerProcessor
+import me.nebula.gravity.server.SetMaxPlayersProcessor
+import me.nebula.gravity.server.SyncConnectedPlayersProcessor
 import me.nebula.gravity.session.SessionStore
+import me.nebula.gravity.achievement.AchievementStore
+import me.nebula.gravity.battlepass.BattlePassStore
+import me.nebula.gravity.mission.MissionStore
 import me.nebula.gravity.stats.StatsStore
 import me.nebula.orbit.utils.commandbuilder.OnlinePlayerCache
 import me.nebula.orbit.mode.ServerMode
-import me.nebula.orbit.mode.game.hoplite.HopliteMode
+import me.nebula.gravity.battleroyale.BattleRoyaleKitStore
+import me.nebula.orbit.mode.game.battleroyale.BattleRoyaleMode
 import me.nebula.orbit.mode.hub.HubMode
 import me.nebula.orbit.translation.OrbitTranslations
 import me.nebula.orbit.utils.customcontent.CustomContentRegistry
@@ -52,6 +59,12 @@ import me.nebula.orbit.cosmetic.CosmeticRegistry
 import me.nebula.orbit.cosmetic.GadgetManager
 import me.nebula.orbit.cosmetic.GravestoneManager
 import me.nebula.orbit.cosmetic.PetManager
+import me.nebula.orbit.progression.BattlePassMenu
+import me.nebula.orbit.progression.achievement.AchievementMenu
+import me.nebula.orbit.progression.achievement.registerAchievementContent
+import me.nebula.orbit.progression.mission.MissionMenu
+import me.nebula.orbit.progression.mission.MissionRegistry
+import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.orbit.commands.installBasicCommands
 import me.nebula.orbit.commands.installGameCommands
 import me.nebula.orbit.utils.commandbuilder.command
@@ -64,7 +77,10 @@ import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
+import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.timer.TaskSchedule
+import net.minestom.server.world.biome.Biome
+import net.minestom.server.world.biome.BiomeEffects
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.nio.file.Path
@@ -78,6 +94,8 @@ object Orbit {
     lateinit var serverName: String
         private set
     lateinit var mode: ServerMode
+        private set
+    var provisionUuid: String? = null
         private set
     var gameMode: String? = null
         private set
@@ -99,6 +117,12 @@ object Orbit {
 
     fun evictLocale(playerId: UUID) {
         localeCache.remove(playerId)
+    }
+
+    fun syncConnectedPlayers() {
+        val pUuid = provisionUuid ?: return
+        val playerIds = MinecraftServer.getConnectionManager().onlinePlayers.mapTo(mutableSetOf()) { it.uuid }
+        ServerStore.executeOnKey(pUuid, SyncConnectedPlayersProcessor(playerIds))
     }
 
     fun deserialize(key: String, locale: String, vararg resolvers: TagResolver): Component =
@@ -141,7 +165,6 @@ object Orbit {
                         +PlayerStore
                         +SanctionStore
                         +SessionStore
-                        +ServerOccupancyStore
                         +EconomyStore
                         +EconomyTransactionStore
                         +RankStore
@@ -159,6 +182,10 @@ object Orbit {
                         +HostTicketStore
                         +HostRequestStore
                         +HostRequestLookupStore
+                        +BattleRoyaleKitStore
+                        +AchievementStore
+                        +BattlePassStore
+                        +MissionStore
                     }
                 }
             }
@@ -179,6 +206,7 @@ object Orbit {
             val cached = ProvisionStore.load(serverUuid)
             if (cached != null) {
                 val (provision, server) = cached
+                provisionUuid = provision.uuid
                 gameMode = provision.metadata?.get("game_mode")
                 hostOwner = provision.metadata?.get("host_owner")?.let { runCatching { UUID.fromString(it) }.getOrNull() }
                 mapName = provision.metadata?.get("map")
@@ -224,8 +252,18 @@ object Orbit {
         commandManager.register(command("cosmetics") {
             onPlayerExecute { CosmeticMenu.openCategoryMenu(player) }
         })
+        commandManager.register(command("battlepass") {
+            onPlayerExecute { BattlePassMenu.open(player) }
+        })
+        commandManager.register(command("missions") {
+            onPlayerExecute { MissionMenu.open(player) }
+        })
+        commandManager.register(command("achievements") {
+            onPlayerExecute { AchievementMenu.open(player) }
+        })
 
-        CosmeticRegistry.loadFromResources(app.resources)
+        CosmeticRegistry.loadFromDefinitions()
+        registerAchievementContent()
         CosmeticListener.activeConfig = mode.cosmeticConfig
         CosmeticListener.install(handler)
         AuraManager.install()
@@ -241,12 +279,40 @@ object Orbit {
             val playerData = PlayerStore.load(player.uuid)
             val locale = playerData?.language ?: translations.defaultLocale
             cacheLocale(player.uuid, locale)
-            event.spawningInstance = mode.defaultInstance
-            player.respawnPoint = mode.spawnPoint
+            event.spawningInstance = mode.activeInstance
+            player.respawnPoint = mode.activeSpawnPoint
+            AchievementRegistry.loadPlayer(player.uuid)
+            if (MissionStore.load(player.uuid) == null) {
+                val daily = MissionRegistry.randomDaily(3).map { t ->
+                    me.nebula.gravity.mission.ActiveMission(t.id, t.type, t.target, xpReward = t.xpReward, coinReward = t.coinReward)
+                }
+                val weekly = MissionRegistry.randomWeekly(3).map { t ->
+                    me.nebula.gravity.mission.ActiveMission(t.id, t.type, t.target, xpReward = t.xpReward, coinReward = t.coinReward)
+                }
+                val now = System.currentTimeMillis()
+                MissionStore.save(player.uuid, me.nebula.gravity.mission.MissionData(
+                    dailyMissions = daily,
+                    weeklyMissions = weekly,
+                    dailyResetAt = nextDailyReset(now),
+                    weeklyResetAt = nextWeeklyReset(now),
+                ))
+            }
+        }
+
+        handler.addListener(PlayerSpawnEvent::class.java) { event ->
+            val pUuid = provisionUuid
+            if (pUuid != null) {
+                ServerStore.executeOnKey(pUuid, ConnectPlayerProcessor(event.player.uuid))
+            }
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
+            AchievementRegistry.unloadPlayer(event.player.uuid)
             evictLocale(event.player.uuid)
+            val pUuid = provisionUuid
+            if (pUuid != null) {
+                ServerStore.executeOnKey(pUuid, DisconnectPlayerProcessor(event.player.uuid))
+            }
         }
 
         MinecraftServer.getSchedulerManager()
@@ -260,9 +326,20 @@ object Orbit {
             logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid, address=$serverHost)" }
             NetworkMessenger.publish(ServerRegistrationMessage(serverUuid, serverHost))
             logger.info { "ServerRegistrationMessage published" }
-
         } else {
             logger.warn { "P_SERVER_UUID is empty, skipping server registration" }
+        }
+
+        val pUuid = provisionUuid
+        if (pUuid != null) {
+            if (mode.maxPlayers > 0) {
+                ServerStore.executeOnKey(pUuid, SetMaxPlayersProcessor(mode.maxPlayers))
+                logger.info { "Reported maxPlayers=${mode.maxPlayers} for provision $pUuid" }
+            }
+            MinecraftServer.getSchedulerManager()
+                .buildTask { syncConnectedPlayers() }
+                .repeat(TaskSchedule.seconds(5))
+                .schedule()
         }
 
         Runtime.getRuntime().addShutdownHook(Thread {
@@ -273,16 +350,34 @@ object Orbit {
                 logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
                 NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid))
             }
+            CosmeticListener.uninstall()
+            AuraManager.uninstall()
+            CompanionManager.uninstall()
+            PetManager.uninstall()
+            GravestoneManager.uninstall()
+            CosmeticMountManager.uninstall()
             ModelEngine.uninstall()
             mode.shutdown()
             app.stop().join()
         })
     }
 
+    private fun nextDailyReset(now: Long): Long {
+        val tomorrow = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC)
+            .toLocalDate().plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC)
+        return tomorrow.toInstant().toEpochMilli()
+    }
+
+    private fun nextWeeklyReset(now: Long): Long {
+        val date = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+        val nextMonday = date.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY))
+        return nextMonday.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+    }
+
     private fun resolveMode(): ServerMode =
         when (gameMode) {
-            null -> HubMode(app.resources)
-            "hoplite" -> HopliteMode(app.resources)
+            null -> HubMode()
+            "battleroyale" -> BattleRoyaleMode()
             else -> error("Unknown game mode: $gameMode")
         }
 }

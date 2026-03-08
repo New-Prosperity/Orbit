@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.kit
 
+import me.nebula.orbit.utils.itemresolver.ItemResolver
 import net.minestom.server.entity.EquipmentSlot
 import net.minestom.server.entity.Player
 import net.minestom.server.item.ItemStack
@@ -42,18 +43,24 @@ class KitBuilder @PublishedApi internal constructor(private val name: String) {
 
     fun item(slot: Int, item: ItemStack) { items[slot] = item }
     fun item(slot: Int, material: Material, amount: Int = 1) { items[slot] = ItemStack.of(material, amount) }
+    fun item(slot: Int, key: String, amount: Int = 1) { items[slot] = ItemResolver.resolve(key, amount) }
 
     fun helmet(item: ItemStack) { armor[EquipmentSlot.HELMET] = item }
     fun helmet(material: Material) { armor[EquipmentSlot.HELMET] = ItemStack.of(material) }
+    fun helmet(key: String) { armor[EquipmentSlot.HELMET] = ItemResolver.resolve(key) }
     fun chestplate(item: ItemStack) { armor[EquipmentSlot.CHESTPLATE] = item }
     fun chestplate(material: Material) { armor[EquipmentSlot.CHESTPLATE] = ItemStack.of(material) }
+    fun chestplate(key: String) { armor[EquipmentSlot.CHESTPLATE] = ItemResolver.resolve(key) }
     fun leggings(item: ItemStack) { armor[EquipmentSlot.LEGGINGS] = item }
     fun leggings(material: Material) { armor[EquipmentSlot.LEGGINGS] = ItemStack.of(material) }
+    fun leggings(key: String) { armor[EquipmentSlot.LEGGINGS] = ItemResolver.resolve(key) }
     fun boots(item: ItemStack) { armor[EquipmentSlot.BOOTS] = item }
     fun boots(material: Material) { armor[EquipmentSlot.BOOTS] = ItemStack.of(material) }
+    fun boots(key: String) { armor[EquipmentSlot.BOOTS] = ItemResolver.resolve(key) }
 
     fun offhand(item: ItemStack) { offhand = item }
     fun offhand(material: Material) { offhand = ItemStack.of(material) }
+    fun offhand(key: String) { offhand = ItemResolver.resolve(key) }
 
     @PublishedApi internal fun build(): Kit = Kit(
         name = name,

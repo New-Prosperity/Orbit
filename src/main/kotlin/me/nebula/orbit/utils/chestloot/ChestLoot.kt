@@ -1,19 +1,31 @@
 package me.nebula.orbit.utils.chestloot
 
-import me.nebula.orbit.utils.region.Region
+import me.nebula.orbit.utils.itemresolver.ItemResolver
+import me.nebula.orbit.utils.region.*
+import net.minestom.server.coordinate.Pos
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.block.Block
 import net.minestom.server.inventory.Inventory
 import net.minestom.server.inventory.InventoryType
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
+enum class LootMode { GLOBAL, PER_PLAYER }
+
 data class LootItem(
-    val material: Material,
+    val baseItem: ItemStack,
     val amountRange: IntRange,
     val weight: Int,
+    val maxPerChest: Int = Int.MAX_VALUE,
+)
+
+data class LootZone(
+    val name: String,
+    val region: Region,
+    val tierWeights: Map<String, Int>,
 )
 
 class LootTier @PublishedApi internal constructor(
@@ -23,21 +35,29 @@ class LootTier @PublishedApi internal constructor(
 ) {
 
     fun rollItem(): ItemStack {
-        if (items.isEmpty()) return ItemStack.AIR
-        var remaining = Random.nextInt(totalWeight)
-        for (item in items) {
-            remaining -= item.weight
-            if (remaining < 0) {
-                val amount = if (item.amountRange.first == item.amountRange.last) {
-                    item.amountRange.first
-                } else {
-                    Random.nextInt(item.amountRange.first, item.amountRange.last + 1)
-                }
-                return ItemStack.of(item.material, amount)
-            }
+        val entry = rollEntry() ?: return ItemStack.AIR
+        return entry.roll()
+    }
+
+    fun rollEntry(itemCounts: Map<ItemStack, Int> = emptyMap()): LootItem? {
+        val available = items.filter { item ->
+            val key = item.baseItem.withAmount(1)
+            (itemCounts[key] ?: 0) < item.maxPerChest
         }
-        val last = items.last()
-        return ItemStack.of(last.material, Random.nextInt(last.amountRange.first, last.amountRange.last + 1))
+        if (available.isEmpty()) return null
+        val availableWeight = available.sumOf { it.weight }
+        var remaining = Random.nextInt(availableWeight)
+        for (item in available) {
+            remaining -= item.weight
+            if (remaining < 0) return item
+        }
+        return available.last()
+    }
+
+    private fun LootItem.roll(): ItemStack {
+        val amount = if (amountRange.first == amountRange.last) amountRange.first
+        else Random.nextInt(amountRange.first, amountRange.last + 1)
+        return baseItem.withAmount(amount)
     }
 }
 
@@ -45,13 +65,27 @@ class LootTierBuilder @PublishedApi internal constructor(private val name: Strin
 
     @PublishedApi internal val items = mutableListOf<LootItem>()
 
-    fun item(material: Material, amount: IntRange = 1..1, weight: Int = 1) {
+    fun item(material: Material, amount: IntRange = 1..1, weight: Int = 1, maxPerChest: Int = Int.MAX_VALUE) {
         require(weight > 0) { "Weight must be positive" }
-        items.add(LootItem(material, amount, weight))
+        items += LootItem(ItemStack.of(material), amount, weight, maxPerChest)
     }
 
-    fun item(material: Material, amount: Int, weight: Int = 1) {
-        item(material, amount..amount, weight)
+    fun item(material: Material, amount: Int, weight: Int = 1, maxPerChest: Int = Int.MAX_VALUE) {
+        item(material, amount..amount, weight, maxPerChest)
+    }
+
+    fun item(stack: ItemStack, amount: IntRange = 1..1, weight: Int = 1, maxPerChest: Int = Int.MAX_VALUE) {
+        require(weight > 0) { "Weight must be positive" }
+        items += LootItem(stack, amount, weight, maxPerChest)
+    }
+
+    fun item(key: String, amount: IntRange = 1..1, weight: Int = 1, maxPerChest: Int = Int.MAX_VALUE) {
+        require(weight > 0) { "Weight must be positive" }
+        items += LootItem(ItemResolver.resolve(key), amount, weight, maxPerChest)
+    }
+
+    fun item(key: String, amount: Int, weight: Int = 1, maxPerChest: Int = Int.MAX_VALUE) {
+        item(key, amount..amount, weight, maxPerChest)
     }
 
     @PublishedApi internal fun build(): LootTier = LootTier(name, items.toList(), items.sumOf { it.weight })
@@ -71,34 +105,57 @@ data class ChestLootTable(
 
     private val totalDistWeight = distribution.sumOf { it.weight }
 
-    fun generateItems(): List<ItemStack> {
+    fun generateItems(tierWeightOverrides: Map<String, Int>? = null): List<ItemStack> {
         if (tiers.isEmpty()) return emptyList()
         val count = if (itemsPerChest.first == itemsPerChest.last) {
             itemsPerChest.first
         } else {
             Random.nextInt(itemsPerChest.first, itemsPerChest.last + 1)
         }
-        return (1..count).mapNotNull {
-            val tier = selectTier() ?: return@mapNotNull null
-            tier.rollItem()
-        }.filter { it != ItemStack.AIR }
+
+        val effectiveDist = tierWeightOverrides?.map { (tier, weight) -> TierDistribution(tier, weight) }
+            ?: distribution
+        val effectiveTotalWeight = effectiveDist.sumOf { it.weight }
+
+        val itemCounts = mutableMapOf<ItemStack, Int>()
+        val result = mutableListOf<ItemStack>()
+
+        repeat(count) {
+            val tier = selectTier(effectiveDist, effectiveTotalWeight) ?: return@repeat
+            val entry = tier.rollEntry(itemCounts) ?: return@repeat
+            val key = entry.baseItem.withAmount(1)
+            itemCounts[key] = (itemCounts[key] ?: 0) + 1
+            result += entry.baseItem.withAmount(rollAmount(entry))
+        }
+
+        return result.filter { it != ItemStack.AIR }
     }
 
-    private fun selectTier(): LootTier? {
-        if (distribution.isEmpty()) return tiers.values.firstOrNull()
-        var remaining = Random.nextInt(totalDistWeight)
-        for (dist in distribution) {
-            remaining -= dist.weight
-            if (remaining < 0) return tiers[dist.tierName]
+    private fun selectTier(dist: List<TierDistribution>, totalWeight: Int): LootTier? {
+        if (dist.isEmpty()) return tiers.values.firstOrNull()
+        var remaining = Random.nextInt(totalWeight)
+        for (d in dist) {
+            remaining -= d.weight
+            if (remaining < 0) return tiers[d.tierName]
         }
-        return tiers[distribution.last().tierName]
+        return tiers[dist.last().tierName]
     }
+
+    private fun rollAmount(item: LootItem): Int =
+        if (item.amountRange.first == item.amountRange.last) item.amountRange.first
+        else Random.nextInt(item.amountRange.first, item.amountRange.last + 1)
 }
 
 object ChestLootManager {
 
+    var mode: LootMode = LootMode.GLOBAL
+
     private val tables = ConcurrentHashMap<String, ChestLootTable>()
-    private val populatedChests = ConcurrentHashMap<Long, Inventory>()
+    private val globalChests = ConcurrentHashMap<Long, Inventory>()
+    private val chestTables = ConcurrentHashMap<Long, ChestLootTable>()
+    private val playerChests = ConcurrentHashMap<Long, ConcurrentHashMap<UUID, Inventory>>()
+    private val zones = mutableListOf<LootZone>()
+    private val chestZoneWeights = ConcurrentHashMap<Long, Map<String, Int>>()
 
     fun register(table: ChestLootTable) {
         require(!tables.containsKey(table.name)) { "Loot table '${table.name}' already exists" }
@@ -113,8 +170,17 @@ object ChestLootManager {
     fun require(name: String): ChestLootTable = requireNotNull(tables[name]) { "Loot table '$name' not found" }
     fun all(): Map<String, ChestLootTable> = tables.toMap()
 
-    fun populateChest(table: ChestLootTable, inventory: Inventory) {
-        val items = table.generateItems()
+    fun registerZone(zone: LootZone) {
+        zones += zone
+    }
+
+    fun clearZones() {
+        zones.clear()
+        chestZoneWeights.clear()
+    }
+
+    fun populateChest(table: ChestLootTable, inventory: Inventory, tierWeightOverrides: Map<String, Int>? = null) {
+        val items = table.generateItems(tierWeightOverrides)
         val slots = (0 until inventory.size).shuffled().take(items.size)
         items.forEachIndexed { index, item ->
             if (index < slots.size) {
@@ -125,34 +191,34 @@ object ChestLootManager {
 
     fun fillChestsInRegion(table: ChestLootTable, region: Region, instance: Instance) {
         val minX = when (region) {
-            is me.nebula.orbit.utils.region.CuboidRegion -> region.min.blockX()
-            is me.nebula.orbit.utils.region.SphereRegion -> (region.center.blockX() - region.radius).toInt()
-            is me.nebula.orbit.utils.region.CylinderRegion -> (region.center.blockX() - region.radius).toInt()
+            is CuboidRegion -> region.min.blockX()
+            is SphereRegion -> (region.center.blockX() - region.radius).toInt()
+            is CylinderRegion -> (region.center.blockX() - region.radius).toInt()
         }
         val maxX = when (region) {
-            is me.nebula.orbit.utils.region.CuboidRegion -> region.max.blockX()
-            is me.nebula.orbit.utils.region.SphereRegion -> (region.center.blockX() + region.radius).toInt()
-            is me.nebula.orbit.utils.region.CylinderRegion -> (region.center.blockX() + region.radius).toInt()
+            is CuboidRegion -> region.max.blockX()
+            is SphereRegion -> (region.center.blockX() + region.radius).toInt()
+            is CylinderRegion -> (region.center.blockX() + region.radius).toInt()
         }
         val minY = when (region) {
-            is me.nebula.orbit.utils.region.CuboidRegion -> region.min.blockY()
-            is me.nebula.orbit.utils.region.SphereRegion -> (region.center.blockY() - region.radius).toInt()
-            is me.nebula.orbit.utils.region.CylinderRegion -> region.center.blockY()
+            is CuboidRegion -> region.min.blockY()
+            is SphereRegion -> (region.center.blockY() - region.radius).toInt()
+            is CylinderRegion -> region.center.blockY()
         }
         val maxY = when (region) {
-            is me.nebula.orbit.utils.region.CuboidRegion -> region.max.blockY()
-            is me.nebula.orbit.utils.region.SphereRegion -> (region.center.blockY() + region.radius).toInt()
-            is me.nebula.orbit.utils.region.CylinderRegion -> (region.center.blockY() + region.height).toInt()
+            is CuboidRegion -> region.max.blockY()
+            is SphereRegion -> (region.center.blockY() + region.radius).toInt()
+            is CylinderRegion -> (region.center.blockY() + region.height).toInt()
         }
         val minZ = when (region) {
-            is me.nebula.orbit.utils.region.CuboidRegion -> region.min.blockZ()
-            is me.nebula.orbit.utils.region.SphereRegion -> (region.center.blockZ() - region.radius).toInt()
-            is me.nebula.orbit.utils.region.CylinderRegion -> (region.center.blockZ() - region.radius).toInt()
+            is CuboidRegion -> region.min.blockZ()
+            is SphereRegion -> (region.center.blockZ() - region.radius).toInt()
+            is CylinderRegion -> (region.center.blockZ() - region.radius).toInt()
         }
         val maxZ = when (region) {
-            is me.nebula.orbit.utils.region.CuboidRegion -> region.max.blockZ()
-            is me.nebula.orbit.utils.region.SphereRegion -> (region.center.blockZ() + region.radius).toInt()
-            is me.nebula.orbit.utils.region.CylinderRegion -> (region.center.blockZ() + region.radius).toInt()
+            is CuboidRegion -> region.max.blockZ()
+            is SphereRegion -> (region.center.blockZ() + region.radius).toInt()
+            is CylinderRegion -> (region.center.blockZ() + region.radius).toInt()
         }
 
         for (x in minX..maxX) {
@@ -160,31 +226,97 @@ object ChestLootManager {
                 for (z in minZ..maxZ) {
                     val block = instance.getBlock(x, y, z)
                     if (block.compare(Block.CHEST) || block.compare(Block.TRAPPED_CHEST) || block.compare(Block.BARREL)) {
-                        val key = packPosition(x, y, z)
-                        val inventory = Inventory(InventoryType.CHEST_3_ROW, "Loot")
-                        populateChest(table, inventory)
-                        populatedChests[key] = inventory
+                        fillChestAt(table, x, y, z)
                     }
                 }
             }
         }
     }
 
-    fun resetChests() {
-        populatedChests.clear()
+    fun fillChestAt(table: ChestLootTable, x: Int, y: Int, z: Int) {
+        val key = packPosition(x, y, z)
+        chestTables[key] = table
+        val zoneWeights = findZoneWeights(x, y, z)
+        if (zoneWeights != null) chestZoneWeights[key] = zoneWeights
+        if (mode == LootMode.GLOBAL) {
+            val inventory = Inventory(InventoryType.CHEST_3_ROW, "Loot")
+            populateChest(table, inventory, zoneWeights)
+            globalChests[key] = inventory
+        }
     }
 
-    fun getChestInventory(x: Int, y: Int, z: Int): Inventory? =
-        populatedChests[packPosition(x, y, z)]
+    fun getChestInventory(x: Int, y: Int, z: Int): Inventory? {
+        val key = packPosition(x, y, z)
+        return globalChests[key]
+    }
+
+    fun getChestInventory(x: Int, y: Int, z: Int, playerId: UUID): Inventory? {
+        val key = packPosition(x, y, z)
+        return when (mode) {
+            LootMode.GLOBAL -> globalChests[key]
+            LootMode.PER_PLAYER -> {
+                val table = chestTables[key] ?: return null
+                val zoneWeights = chestZoneWeights[key]
+                playerChests.computeIfAbsent(key) { ConcurrentHashMap() }
+                    .computeIfAbsent(playerId) {
+                        Inventory(InventoryType.CHEST_3_ROW, "Loot").also { populateChest(table, it, zoneWeights) }
+                    }
+            }
+        }
+    }
+
+    fun resetChests() {
+        globalChests.clear()
+        playerChests.clear()
+        chestZoneWeights.clear()
+    }
 
     fun clear() {
         tables.clear()
-        populatedChests.clear()
+        globalChests.clear()
+        chestTables.clear()
+        playerChests.clear()
+        zones.clear()
+        chestZoneWeights.clear()
     }
+
+    private fun findZoneWeights(x: Int, y: Int, z: Int): Map<String, Int>? =
+        zones.firstOrNull { it.region.contains(x.toDouble(), y.toDouble(), z.toDouble()) }?.tierWeights
 
     private fun packPosition(x: Int, y: Int, z: Int): Long =
         (x.toLong() and 0x3FFFFFF shl 38) or (z.toLong() and 0x3FFFFFF shl 12) or (y.toLong() and 0xFFF)
 }
+
+class LootZoneBuilder @PublishedApi internal constructor(private val name: String) {
+
+    @PublishedApi internal var region: Region? = null
+    @PublishedApi internal val tierWeights = mutableMapOf<String, Int>()
+
+    fun sphere(center: Pos, radius: Double) {
+        region = SphereRegion(name, center, radius)
+    }
+
+    fun cylinder(center: Pos, radius: Double, height: Double = 384.0) {
+        region = CylinderRegion(name, center, radius, height)
+    }
+
+    fun cuboid(min: Pos, max: Pos) {
+        region = cuboidRegion(name, min, max)
+    }
+
+    fun tier(tierName: String, weight: Int) {
+        tierWeights[tierName] = weight
+    }
+
+    @PublishedApi internal fun build(): LootZone {
+        val r = requireNotNull(region) { "LootZone '$name' must define a region" }
+        require(tierWeights.isNotEmpty()) { "LootZone '$name' must define at least one tier weight" }
+        return LootZone(name, r, tierWeights.toMap())
+    }
+}
+
+inline fun lootZone(name: String, block: LootZoneBuilder.() -> Unit): LootZone =
+    LootZoneBuilder(name).apply(block).build()
 
 class ChestLootBuilder @PublishedApi internal constructor(private val name: String) {
 

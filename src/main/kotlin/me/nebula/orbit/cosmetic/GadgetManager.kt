@@ -1,6 +1,5 @@
 package me.nebula.orbit.cosmetic
 
-import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.cooldown.Cooldown
 import me.nebula.orbit.utils.itembuilder.itemStack
@@ -45,7 +44,7 @@ object GadgetManager {
     fun onUse(player: Player) {
         val cosmeticId = activeGadgets[player.uuid] ?: return
         val definition = CosmeticRegistry[cosmeticId] ?: return
-        val data = CosmeticStore.load(player.uuid) ?: return
+        val data = CosmeticDataCache.get(player.uuid) ?: return
         val level = data.owned[cosmeticId] ?: return
         val resolved = definition.resolveData(level)
 
