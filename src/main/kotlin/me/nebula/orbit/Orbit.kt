@@ -16,6 +16,8 @@ import me.nebula.gravity.economy.EconomyTransactionStore
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.ServerDeregistrationMessage
 import me.nebula.gravity.messaging.ServerRegistrationMessage
+import me.nebula.gravity.party.PartyLookupStore
+import me.nebula.gravity.party.PartyStore
 import me.nebula.gravity.player.PlayerStore
 import me.nebula.gravity.player.PreferenceStore
 import me.nebula.gravity.property.PropertyStore
@@ -43,9 +45,15 @@ import me.nebula.orbit.mode.ServerMode
 import me.nebula.gravity.battleroyale.BattleRoyaleKitStore
 import me.nebula.orbit.mode.game.battleroyale.BattleRoyaleMode
 import me.nebula.orbit.mode.hub.HubMode
-import me.nebula.orbit.translation.OrbitTranslations
 import me.nebula.orbit.utils.customcontent.CustomContentRegistry
 import me.nebula.orbit.utils.customcontent.customContentCommand
+import me.nebula.orbit.utils.hud.HudAnchor
+import me.nebula.orbit.utils.hud.HudManager
+import me.nebula.orbit.utils.hud.hudLayout
+import me.nebula.orbit.utils.hud.showHud
+import me.nebula.orbit.utils.hud.hideHud
+import me.nebula.orbit.utils.hud.isHudShowing
+import me.nebula.orbit.utils.hud.updateHud
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.cinematic.cinematicTestCommand
@@ -170,6 +178,8 @@ object Orbit {
                         +RankStore
                         +PlayerRankStore
                         +PreferenceStore
+                        +PartyStore
+                        +PartyLookupStore
                         +QueueStore
                         +PoolConfigStore
                         +RankingStore
@@ -196,7 +206,6 @@ object Orbit {
                     defaultLocale("en")
                     fallback(true)
                 }
-                OrbitTranslations.register(translations)
             }
         }
 
@@ -241,6 +250,36 @@ object Orbit {
 
         CustomContentRegistry.mergePack()
 
+        HudManager.register(hudLayout("test-hud") {
+            bar("health") {
+                anchor(HudAnchor.BOTTOM_LEFT)
+                offset(0.02f, 0.88f)
+                sprites(bg = "bar_bg", fill = "bar_fill_red", empty = "bar_empty")
+                segments(10)
+            }
+            bar("mana") {
+                anchor(HudAnchor.BOTTOM_LEFT)
+                offset(0.02f, 0.84f)
+                sprites(bg = "bar_bg", fill = "bar_fill_blue", empty = "bar_empty")
+                segments(10)
+            }
+            sprite("compass") {
+                anchor(HudAnchor.TOP_CENTER)
+                offset(0f, 0.02f)
+                sprite("icon_health")
+            }
+            text("score") {
+                anchor(HudAnchor.TOP_RIGHT)
+                offset(-0.05f, 0.02f)
+            }
+            text("timer") {
+                anchor(HudAnchor.TOP_CENTER)
+                offset(0f, 0.06f)
+            }
+        })
+
+        HudManager.install(handler)
+
         val commandManager = MinecraftServer.getCommandManager()
         installBasicCommands(commandManager)
         installGameCommands(commandManager)
@@ -260,6 +299,19 @@ object Orbit {
         })
         commandManager.register(command("achievements") {
             onPlayerExecute { AchievementMenu.open(player) }
+        })
+        commandManager.register(command("hud") {
+            onPlayerExecute {
+                if (player.isHudShowing("test-hud")) {
+                    player.hideHud("test-hud")
+                } else {
+                    player.showHud("test-hud")
+                    player.updateHud("health", 7)
+                    player.updateHud("mana", 4)
+                    player.updateHud("score", "42")
+                    player.updateHud("timer", "3:45")
+                }
+            }
         })
 
         CosmeticRegistry.loadFromDefinitions()
@@ -320,6 +372,11 @@ object Orbit {
             .repeat(TaskSchedule.seconds(5))
             .schedule()
 
+        MinecraftServer.getSchedulerManager()
+            .buildTask { HudManager.tick() }
+            .repeat(TaskSchedule.tick(2))
+            .schedule()
+
         server.start("0.0.0.0", port)
 
         if (serverUuid.isNotEmpty()) {
@@ -344,7 +401,7 @@ object Orbit {
 
         Runtime.getRuntime().addShutdownHook(Thread {
             for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
-                player.kick(Component.text("Server shutting down"))
+                player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid)))
             }
             if (serverUuid.isNotEmpty()) {
                 logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
