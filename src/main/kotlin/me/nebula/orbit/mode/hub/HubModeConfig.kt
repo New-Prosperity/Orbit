@@ -77,7 +77,7 @@ object HubDefinitions {
             rows = 3,
             border = "minecraft:gray_stained_glass_pane",
             items = listOf(
-                SelectorItemConfig("battle_royale", 13, "minecraft:iron_sword"),
+                SelectorItemConfig("battleroyale", 13, "minecraft:iron_sword"),
             ),
         ),
         cosmetics = CosmeticConfig(
