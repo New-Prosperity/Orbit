@@ -3,7 +3,8 @@ package me.nebula.orbit.mode.hub
 import me.nebula.ether.utils.logging.logger
 import me.nebula.gravity.messaging.HostProvisionStatusMessage
 import me.nebula.gravity.messaging.NetworkMessenger
-import me.nebula.gravity.queue.QueueStore
+import me.nebula.gravity.messaging.QueueAssignmentMessage
+import me.nebula.gravity.messaging.QueueRemovedMessage
 import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.session.SessionStore
@@ -18,7 +19,6 @@ import me.nebula.orbit.progression.BattlePassMenu
 import me.nebula.orbit.progression.achievement.AchievementMenu
 import me.nebula.orbit.progression.mission.MissionMenu
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
-import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.hotbar.hotbar
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.lobby.Lobby
@@ -70,6 +70,8 @@ class HubMode : ServerMode {
     private lateinit var tabList: LiveTabList
     private lateinit var hotbar: me.nebula.orbit.utils.hotbar.Hotbar
     private var hostStatusSubscription: UUID? = null
+    private var queueRemovedSubscription: UUID? = null
+    private var queueAssignmentSubscription: UUID? = null
 
     private fun createInstance(): InstanceContainer {
         val worldPath = Path.of(config.worldPath)
@@ -96,12 +98,8 @@ class HubMode : ServerMode {
     override fun install(handler: GlobalEventHandler) {
         logger.info { "Installing hub mode (spawn=$spawnPoint)" }
 
-        val selectorGui = gui(config.selector.title, config.selector.rows) {
-            border(Material.fromKey(config.selector.border) ?: Material.GRAY_STAINED_GLASS_PANE)
-        }
-
         val actions = mapOf<String, (net.minestom.server.entity.Player) -> Unit>(
-            "open_selector" to { player -> selectorGui.open(player) },
+            "open_selector" to { player -> SelectorMenu.open(player) },
             "open_host" to { player -> HostMenu.openGameModeMenu(player) },
             "open_cosmetics" to { player -> CosmeticMenu.openCategoryMenu(player) },
             "open_battlepass" to { player -> BattlePassMenu.open(player) },
@@ -161,6 +159,7 @@ class HubMode : ServerMode {
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             hotbar.remove(event.player)
             HostMenu.removePending(event.player.uuid)
+            SelectorMenu.removeQueued(event.player.uuid)
         }
 
         hostStatusSubscription = NetworkMessenger.subscribe<HostProvisionStatusMessage> { msg ->
@@ -179,11 +178,25 @@ class HubMode : ServerMode {
             }
         }
 
+        queueRemovedSubscription = NetworkMessenger.subscribe<QueueRemovedMessage> { msg ->
+            SelectorMenu.removeQueued(msg.playerId)
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(msg.playerId)
+            player?.sendMessage(player.translate("orbit.queue.removed"))
+        }
+
+        queueAssignmentSubscription = NetworkMessenger.subscribe<QueueAssignmentMessage> { msg ->
+            for (playerId in msg.playerIds) {
+                SelectorMenu.removeQueued(playerId)
+            }
+        }
+
         logger.info { "Hub mode installed" }
     }
 
     override fun shutdown() {
         hostStatusSubscription?.let { NetworkMessenger.unsubscribe<HostProvisionStatusMessage>(it) }
+        queueRemovedSubscription?.let { NetworkMessenger.unsubscribe<QueueRemovedMessage>(it) }
+        queueAssignmentSubscription?.let { NetworkMessenger.unsubscribe<QueueAssignmentMessage>(it) }
         scoreboard.uninstall()
         tabList.uninstall()
         lobby.uninstall()

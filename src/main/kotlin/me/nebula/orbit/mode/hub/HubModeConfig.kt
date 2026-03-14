@@ -24,6 +24,13 @@ data class SelectorConfig(
     val title: String,
     val rows: Int,
     val border: String,
+    val items: List<SelectorItemConfig> = emptyList(),
+)
+
+data class SelectorItemConfig(
+    val gameMode: String,
+    val slot: Int,
+    val material: String,
 )
 
 object HubDefinitions {
@@ -66,9 +73,12 @@ object HubDefinitions {
             HotbarItemConfig(8, "minecraft:diamond", "<aqua><bold>Achievements", glowing = false, action = "open_achievements"),
         ),
         selector = SelectorConfig(
-            title = "<gradient:#7B68EE:#00CED1><bold>Server Selector</bold></gradient>",
+            title = "orbit.selector.title",
             rows = 3,
             border = "minecraft:gray_stained_glass_pane",
+            items = listOf(
+                SelectorItemConfig("battle_royale", 13, "minecraft:iron_sword"),
+            ),
         ),
         cosmetics = CosmeticConfig(
             enabledCategories = setOf(
