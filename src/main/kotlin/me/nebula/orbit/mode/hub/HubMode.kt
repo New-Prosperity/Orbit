@@ -76,24 +76,18 @@ class HubMode : ServerMode {
     private var queuePositionSubscription: UUID? = null
 
     private fun createInstance(): InstanceContainer {
-        val worldPath = Path.of(config.worldPath)
-        worldPath.parent?.let { Files.createDirectories(it) }
-        if (Files.isDirectory(worldPath)) {
-            logger.info { "Loading hub world from ${worldPath.toAbsolutePath()}" }
-            val centerChunkX = spawnPoint.blockX() shr 4
-            val centerChunkZ = spawnPoint.blockZ() shr 4
-            val (instance, future) = AnvilWorldLoader.loadAndPreload(
-                "hub", worldPath, centerChunkX, centerChunkZ, config.preloadRadius
-            )
-            future.join()
-            if (!AnvilWorldLoader.verifyLoaded(instance, spawnPoint)) {
-                logger.warn { "Hub world loaded but no blocks found at spawn $spawnPoint — world may be empty or built at different coordinates" }
-            }
-            return instance
+        val name = Path.of(config.worldPath).fileName.toString()
+        val worldPath = me.nebula.orbit.utils.maploader.MapLoader.resolve("hub", name)
+        logger.info { "Loading hub world from $worldPath" }
+        val centerChunkX = spawnPoint.blockX() shr 4
+        val centerChunkZ = spawnPoint.blockZ() shr 4
+        val (instance, future) = AnvilWorldLoader.loadAndPreload(
+            "hub", worldPath, centerChunkX, centerChunkZ, config.preloadRadius
+        )
+        future.join()
+        if (!AnvilWorldLoader.verifyLoaded(instance, spawnPoint)) {
+            logger.warn { "Hub world loaded but no blocks found at spawn $spawnPoint — world may be empty or built at different coordinates" }
         }
-        logger.warn { "No hub world at ${worldPath.toAbsolutePath()}, using flat generator" }
-        val instance = MinecraftServer.getInstanceManager().createInstanceContainer()
-        instance.setGenerator { unit -> unit.modifier().fillHeight(0, 40, Block.GRASS_BLOCK) }
         return instance
     }
 
