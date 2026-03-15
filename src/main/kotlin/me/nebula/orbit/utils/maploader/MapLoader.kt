@@ -8,8 +8,8 @@ import java.nio.file.StandardCopyOption
 object MapLoader {
 
     private val logger = logger("MapLoader")
-    private val mountDir = Path.of("/maps")
-    private val workDir = Path.of("/worlds")
+    private val mountDir = Path.of("maps")
+    private val workDir = Path.of("worlds")
 
     fun resolve(vararg parts: String): Path {
         val source = parts.fold(mountDir) { path, part -> path.resolve(part) }
