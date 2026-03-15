@@ -182,8 +182,7 @@ abstract class GameMode : ServerMode {
 
     val lobbyInstance: InstanceContainer by lazy {
         val lobbyWorld = settings.lobbyWorld ?: return@lazy gameInstance
-        val worldPath = java.nio.file.Path.of(lobbyWorld.worldPath)
-        worldPath.parent?.let { Files.createDirectories(it) }
+        val worldPath = resolveWorldPath(lobbyWorld.worldPath)
         val lobbySpawn = lobbyWorld.spawn.toPos()
         val centerX = lobbySpawn.blockX() shr 4
         val centerZ = lobbySpawn.blockZ() shr 4
@@ -219,8 +218,7 @@ abstract class GameMode : ServerMode {
     override val defaultInstance: InstanceContainer get() = gameInstance
 
     protected open fun createGameInstance(): InstanceContainer {
-        val worldPath = java.nio.file.Path.of(settings.worldPath)
-        worldPath.parent?.let { Files.createDirectories(it) }
+        val worldPath = resolveWorldPath(settings.worldPath)
         val centerX = spawnPoint.blockX() shr 4
         val centerZ = spawnPoint.blockZ() shr 4
         val (instance, future) = AnvilWorldLoader.loadAndPreload(
@@ -229,6 +227,17 @@ abstract class GameMode : ServerMode {
         )
         future.join()
         return instance
+    }
+
+    private fun resolveWorldPath(configPath: String): java.nio.file.Path {
+        val localPath = java.nio.file.Path.of(configPath)
+        if (Files.isDirectory(localPath)) return localPath
+
+        val storage = Orbit.storage ?: error("World path '$configPath' does not exist and no storage configured")
+        val worldScope = storage.scope("worlds")
+        val name = localPath.fileName.toString()
+        logger.info { "World '$name' not found locally, downloading from storage..." }
+        return me.nebula.orbit.utils.maploader.MapLoader.loadWorld("$name.zip", worldScope)
     }
 
     protected fun invalidateGameInstance() {

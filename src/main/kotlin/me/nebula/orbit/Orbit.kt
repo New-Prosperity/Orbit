@@ -91,6 +91,8 @@ object Orbit {
         private set
     var mapName: String? = null
         private set
+    var storage: me.nebula.ether.utils.storage.StorageClient? = null
+        private set
 
     private val logger = logger("Orbit")
     private val miniMessage = MiniMessage.miniMessage()
@@ -214,29 +216,30 @@ object Orbit {
             serverName = "orbit-local"
         }
 
+        val storageUrl = env.all["STORAGE_URL"]?.ifEmpty { null }
+        val storageToken = env.all["STORAGE_TOKEN"]?.ifEmpty { null }
+        if (storageUrl != null && storageToken != null) {
+            storage = me.nebula.ether.utils.storage.storageClient {
+                url = storageUrl
+                token = storageToken
+            }
+            me.nebula.orbit.utils.replay.ReplayStorage.initialize(storage!!.scope("replays"))
+        }
+
         var resolvedWorldPath: String? = null
-        if (gameMode != null) {
-            val storageUrl = env.all["STORAGE_URL"]?.ifEmpty { null }
-            val storageToken = env.all["STORAGE_TOKEN"]?.ifEmpty { null }
-            if (storageUrl != null && storageToken != null) {
-                val storage = me.nebula.ether.utils.storage.storageClient {
-                    url = storageUrl
-                    token = storageToken
-                }
-                me.nebula.orbit.utils.replay.ReplayStorage.initialize(storage.scope("replays"))
-                val mapScope = storage.scope("maps")
-                val targetMap = mapName
-                    ?: PoolConfigStore.load(gameMode!!)?.maps?.randomOrNull()
-                if (targetMap != null) {
-                    logger.info { "Loading map '$targetMap' for $gameMode..." }
-                    resolvedWorldPath = runCatching {
-                        me.nebula.orbit.utils.maploader.MapLoader.load(targetMap, mapScope).toString()
-                    }.onFailure { e ->
-                        logger.error(e) { "Failed to load map '$targetMap', falling back to default world" }
-                    }.getOrNull()
-                    if (resolvedWorldPath != null) {
-                        logger.info { "Map loaded: $resolvedWorldPath" }
-                    }
+        if (gameMode != null && storage != null) {
+            val mapScope = storage!!.scope("maps")
+            val targetMap = mapName
+                ?: PoolConfigStore.load(gameMode!!)?.maps?.randomOrNull()
+            if (targetMap != null) {
+                logger.info { "Loading map '$targetMap' for $gameMode..." }
+                resolvedWorldPath = runCatching {
+                    me.nebula.orbit.utils.maploader.MapLoader.load(targetMap, mapScope).toString()
+                }.onFailure { e ->
+                    logger.error(e) { "Failed to load map '$targetMap', falling back to default world" }
+                }.getOrNull()
+                if (resolvedWorldPath != null) {
+                    logger.info { "Map loaded: $resolvedWorldPath" }
                 }
             }
         }

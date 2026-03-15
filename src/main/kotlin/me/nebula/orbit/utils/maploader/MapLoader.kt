@@ -7,12 +7,14 @@ import java.io.ByteArrayInputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
 object MapLoader {
 
     private val logger = logger("MapLoader")
     private val cacheDir = Path.of("data/maps")
+    private val worldCacheDir = Path.of("data/worlds")
 
     fun load(mapName: String, storage: StorageScope): Path {
         val entry = MapStore.load(mapName)
@@ -46,6 +48,30 @@ object MapLoader {
         val mapName = maps.random()
         logger.info { "Selected random map '$mapName' for $gameMode" }
         return load(mapName, storage)
+    }
+
+    fun loadWorld(storagePath: String, storage: StorageScope): Path {
+        val name = storagePath.substringAfterLast("/").substringBeforeLast(".")
+        val targetDir = worldCacheDir.resolve(name)
+
+        if (Files.isDirectory(targetDir) && Files.list(targetDir).use { it.findAny().isPresent }) {
+            val regionDir = targetDir.resolve("region")
+            if (Files.isDirectory(regionDir)) {
+                logger.info { "World '$name' found in cache" }
+                return targetDir
+            }
+            logger.warn { "Cached world '$name' is corrupted, re-downloading..." }
+            targetDir.toFile().deleteRecursively()
+        }
+
+        logger.info { "Downloading world '$name' (path=$storagePath)..." }
+        val bytes = storage.download(storagePath)
+
+        Files.createDirectories(targetDir)
+        extractZip(bytes, targetDir)
+
+        logger.info { "World '$name' extracted to $targetDir (${bytes.size / 1024}KB)" }
+        return targetDir
     }
 
     private fun extractZip(bytes: ByteArray, targetDir: Path) {
