@@ -13,8 +13,8 @@ import java.util.zip.ZipInputStream
 object MapLoader {
 
     private val logger = logger("MapLoader")
-    private val cacheDir = Path.of("data/maps")
-    private val worldCacheDir = Path.of("data/worlds")
+    private val cacheDir = Path.of("/maps")
+    private val worldCacheDir = Path.of("/maps")
 
     fun load(mapName: String, storage: StorageScope): Path {
         val entry = MapStore.load(mapName)
