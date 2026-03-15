@@ -229,40 +229,9 @@ abstract class GameMode : ServerMode {
         return instance
     }
 
-    private val workingDir = java.nio.file.Path.of("data/worlds")
-    private var workingCopyCounter = 0
-
     private fun resolveWorldPath(configPath: String): java.nio.file.Path {
-        val localPath = java.nio.file.Path.of(configPath)
-        val sourcePath = if (Files.isDirectory(localPath)) {
-            localPath
-        } else {
-            val storage = Orbit.storage ?: error("World path '$configPath' does not exist and no storage configured")
-            val worldScope = storage.scope("worlds")
-            val name = localPath.fileName.toString()
-            logger.info { "World '$name' not found locally, downloading from storage..." }
-            me.nebula.orbit.utils.maploader.MapLoader.loadWorld("$name.zip", worldScope)
-        }
-
-        val copyName = "${sourcePath.fileName}-${workingCopyCounter++}"
-        val copyPath = workingDir.resolve(copyName)
-        logger.info { "Cloning world '${sourcePath.fileName}' to working copy $copyPath" }
-        copyDirectory(sourcePath, copyPath)
-        return copyPath
-    }
-
-    private fun copyDirectory(source: java.nio.file.Path, target: java.nio.file.Path) {
-        Files.walk(source).use { stream ->
-            stream.forEach { src ->
-                val dest = target.resolve(source.relativize(src))
-                if (Files.isDirectory(src)) {
-                    Files.createDirectories(dest)
-                } else {
-                    dest.parent?.let { Files.createDirectories(it) }
-                    Files.copy(src, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-                }
-            }
-        }
+        val name = java.nio.file.Path.of(configPath).fileName.toString()
+        return me.nebula.orbit.utils.maploader.MapLoader.resolve(name)
     }
 
     protected fun invalidateGameInstance() {
