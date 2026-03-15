@@ -12,11 +12,12 @@ object MapLoader {
     private val workDir = Path.of("data/worlds")
     private var counter = 0
 
-    fun resolve(name: String): Path {
-        val source = mountDir.resolve(name)
-        require(Files.isDirectory(source)) { "World '$name' not found on mount at $source" }
+    fun resolve(vararg parts: String): Path {
+        val source = parts.fold(mountDir) { path, part -> path.resolve(part) }
+        require(Files.isDirectory(source)) { "World '${parts.joinToString("/")}' not found on mount at $source" }
+        val name = parts.last()
         val copy = workDir.resolve("$name-${counter++}")
-        logger.info { "Cloning world '$name' → $copy" }
+        logger.info { "Cloning world '${parts.joinToString("/")}' → $copy" }
         copyDirectory(source, copy)
         return copy
     }
