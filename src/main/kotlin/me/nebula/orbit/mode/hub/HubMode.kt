@@ -76,8 +76,7 @@ class HubMode : ServerMode {
     private var queuePositionSubscription: UUID? = null
 
     private fun createInstance(): InstanceContainer {
-        val name = Path.of(config.worldPath).fileName.toString()
-        val worldPath = me.nebula.orbit.utils.maploader.MapLoader.resolve("hub", name)
+        val worldPath = me.nebula.orbit.utils.maploader.MapLoader.resolve("hub")
         logger.info { "Loading hub world from $worldPath" }
         val centerChunkX = spawnPoint.blockX() shr 4
         val centerChunkZ = spawnPoint.blockZ() shr 4
