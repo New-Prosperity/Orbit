@@ -20,6 +20,7 @@ import me.nebula.orbit.progression.BattlePassMenu
 import me.nebula.orbit.progression.achievement.AchievementMenu
 import me.nebula.orbit.progression.mission.MissionMenu
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
+import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.hotbar.hotbar
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.lobby.Lobby
@@ -76,7 +77,7 @@ class HubMode : ServerMode {
     private var queuePositionSubscription: UUID? = null
 
     private fun createInstance(): InstanceContainer {
-        val worldPath = me.nebula.orbit.utils.maploader.MapLoader.resolve("hub", "hub")
+        val worldPath = MapLoader.resolve("hub", "hub")
         logger.info { "Loading hub world from $worldPath" }
         val centerChunkX = spawnPoint.blockX() shr 4
         val centerChunkZ = spawnPoint.blockZ() shr 4

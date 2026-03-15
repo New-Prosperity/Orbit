@@ -5,8 +5,12 @@ import me.nebula.ether.utils.app.appDelegate
 import me.nebula.ether.utils.environment.environment
 import me.nebula.ether.utils.hazelcast.hazelcastModule
 import me.nebula.ether.utils.logging.logger
+import me.nebula.ether.utils.storage.StorageClient
+import me.nebula.ether.utils.storage.storageClient
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
+import me.nebula.orbit.utils.maploader.MapLoader
+import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.gravity.achievement.AchievementStore
 import me.nebula.gravity.battlepass.BattlePassStore
 import me.nebula.gravity.battleroyale.BattleRoyaleKitStore
@@ -91,7 +95,7 @@ object Orbit {
         private set
     var mapName: String? = null
         private set
-    var storage: me.nebula.ether.utils.storage.StorageClient? = null
+    var storage: StorageClient? = null
         private set
 
     private val logger = logger("Orbit")
@@ -219,11 +223,11 @@ object Orbit {
         val storageUrl = env.all["STORAGE_URL"]?.ifEmpty { null }
         val storageToken = env.all["STORAGE_TOKEN"]?.ifEmpty { null }
         if (storageUrl != null && storageToken != null) {
-            storage = me.nebula.ether.utils.storage.storageClient {
+            storage = storageClient {
                 url = storageUrl
                 token = storageToken
             }
-            me.nebula.orbit.utils.replay.ReplayStorage.initialize(storage!!.scope("replays"))
+            ReplayStorage.initialize(storage!!.scope("replays"))
         }
 
         var resolvedWorldPath: String? = null
@@ -232,7 +236,7 @@ object Orbit {
                 ?: PoolConfigStore.load(gameMode!!)?.maps?.randomOrNull()
             if (targetMap != null) {
                 resolvedWorldPath = runCatching {
-                    me.nebula.orbit.utils.maploader.MapLoader.resolve(targetMap).toString()
+                    MapLoader.resolve(targetMap).toString()
                 }.onFailure { e ->
                     logger.error(e) { "Failed to resolve map '$targetMap', falling back to default world" }
                 }.getOrNull()

@@ -11,6 +11,7 @@ import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.PlaceholderResolver
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
+import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.ceremony.Ceremony
 import me.nebula.orbit.utils.deathrecap.DeathRecapTracker
 import me.nebula.orbit.utils.gamechat.GameChatPipeline
@@ -231,7 +232,7 @@ abstract class GameMode : ServerMode {
 
     private fun resolveWorldPath(configPath: String): java.nio.file.Path {
         val name = java.nio.file.Path.of(configPath).fileName.toString()
-        return me.nebula.orbit.utils.maploader.MapLoader.resolve(name)
+        return MapLoader.resolve(name)
     }
 
     protected fun invalidateGameInstance() {
