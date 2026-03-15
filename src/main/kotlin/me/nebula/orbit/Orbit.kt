@@ -99,7 +99,7 @@ object Orbit {
         private set
 
     private val logger = logger("Orbit")
-    private val miniMessage = MiniMessage.miniMessage()
+    val miniMessage = MiniMessage.miniMessage()
     private val localeCache = ConcurrentHashMap<UUID, String>()
 
     fun localeOf(playerId: UUID): String =
@@ -243,9 +243,7 @@ object Orbit {
             }
         }
 
-        val velocitySecret = env.all["VELOCITY_SECRET"]!!
-        logger.info { "VELOCITY_SECRET=${velocitySecret.take(8)}... (len=${velocitySecret.length})" }
-        val server = MinecraftServer.init(Auth.Velocity(velocitySecret))
+        val server = MinecraftServer.init(Auth.Velocity(env.all["VELOCITY_SECRET"]!!))
 
         mode = resolveMode(resolvedWorldPath)
         logger.info { "Server mode: ${mode::class.simpleName}" }
