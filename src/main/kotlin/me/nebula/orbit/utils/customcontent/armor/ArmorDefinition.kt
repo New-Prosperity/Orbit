@@ -24,6 +24,7 @@ data class ArmorCube(
     val rotationLevels: List<ArmorRotationLevel>,
     val uvFaces: Map<String, ArmorCubeUv>,
     val textureIndex: Int = 0,
+    val emissive: Float = 0f,
 ) {
     val hasRotation: Boolean get() = rotationLevels.isNotEmpty()
 }

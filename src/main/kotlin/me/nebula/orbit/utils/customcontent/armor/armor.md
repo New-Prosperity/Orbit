@@ -22,13 +22,12 @@ Bones without a recognized prefix are ignored. Nested prefixed sub-groups are su
 
 ## Group Rotations
 
-Non-prefixed sub-groups with rotation are fully supported. The parser uses multi-level rotation:
-- Rotates element centers through each group's origin (innermost first) for correct positioning
-- Stores each rotation level separately with its own pivot (group pivot or element pivot)
-- Single-level rotations (element-only or group-only) use the `ADD_BOX_WITH_ROTATION_ROTATE` macro
-- Multi-level rotations (element inside rotated group) generate inline GLSL that sequentially undoes each rotation around its own pivot
+Non-prefixed sub-groups with rotation are fully supported. The parser collects rotation levels (element + parent groups), each with its own pivot. The generator pre-bakes the rotated center position in Kotlin by applying forward rotations through each level, then emits a single `ADD_BOX_EXT_WITH_ROTATION_ROTATE` macro call with:
+- Composed rotation matrix: `PIX * R_outer * ... * R_inner`
+- Baked center position (all pivots resolved)
+- Zero pivot (`vec3(0,0,0)`)
 
-This correctly handles elements with rotation inside rotated sub-groups, where different pivots require sequential undo transforms.
+This avoids the mathematically unsolvable problem of expressing arbitrary TBN pivots in PIX-local space within the macro formula.
 
 ## Texture Layer Splitting
 
@@ -55,6 +54,10 @@ player.inventory.addItemStack(chestplate)
 - `/armor list` — show all registered armors
 - `/armor equip <armor_id>` — equip full set
 - `/armor give <armor_id> <slot>` — give single piece (helmet, chestplate, right_arm, etc.)
+
+## Emissive Support
+
+Elements with `light_emission > 0` in Blockbench (0-15 scale) are marked as emissive. If any cube in an armor piece has emissive, the entire piece renders as full-bright — skipping lighting, ColorModulator, and fog in the fragment shader (via `dynamicEmissive = 1`).
 
 ## How It Works
 

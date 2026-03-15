@@ -44,10 +44,10 @@ if(isPartOne) {
 
 if(isPartTwo) {
     if(cube==ARMOR_RIGHT_ARM) {
-        cube = STASIS_RIGHT_LEG;
+        cube = STASIS_LEFT_LEG;
     }
     else if(cube==ARMOR_LEFT_ARM) {
-        cube = STASIS_LEFT_LEG;
+        cube = STASIS_RIGHT_LEG;
     } else
     if(cube==ARMOR_CHESTPLATE) {
         cube = STASIS_INNER_ARMOR;

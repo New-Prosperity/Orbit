@@ -15,4 +15,7 @@
 #define ARMOR_LEFT_FEET 3
 #define ARMOR_RIGHT_FEET 4
 
+
+#define ARMOR_SCALE 2.0
+
 #moj_import<mods/armor/parts.glsl>

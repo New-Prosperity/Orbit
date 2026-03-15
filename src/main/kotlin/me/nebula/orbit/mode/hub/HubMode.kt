@@ -4,6 +4,7 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.gravity.messaging.HostProvisionStatusMessage
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.QueueAssignmentMessage
+import me.nebula.gravity.messaging.QueuePositionMessage
 import me.nebula.gravity.messaging.QueueRemovedMessage
 import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankStore
@@ -72,6 +73,7 @@ class HubMode : ServerMode {
     private var hostStatusSubscription: UUID? = null
     private var queueRemovedSubscription: UUID? = null
     private var queueAssignmentSubscription: UUID? = null
+    private var queuePositionSubscription: UUID? = null
 
     private fun createInstance(): InstanceContainer {
         val worldPath = Path.of(config.worldPath)
@@ -190,6 +192,13 @@ class HubMode : ServerMode {
             }
         }
 
+        queuePositionSubscription = NetworkMessenger.subscribe<QueuePositionMessage> { msg ->
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(msg.playerId)
+            player?.sendActionBar(player.translate("orbit.queue.position",
+                "position" to msg.position.toString(),
+                "total" to msg.totalInQueue.toString()))
+        }
+
         logger.info { "Hub mode installed" }
     }
 
@@ -197,6 +206,7 @@ class HubMode : ServerMode {
         hostStatusSubscription?.let { NetworkMessenger.unsubscribe<HostProvisionStatusMessage>(it) }
         queueRemovedSubscription?.let { NetworkMessenger.unsubscribe<QueueRemovedMessage>(it) }
         queueAssignmentSubscription?.let { NetworkMessenger.unsubscribe<QueueAssignmentMessage>(it) }
+        queuePositionSubscription?.let { NetworkMessenger.unsubscribe<QueuePositionMessage>(it) }
         scoreboard.uninstall()
         tabList.uninstall()
         lobby.uninstall()

@@ -9,7 +9,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
 import com.google.gson.reflect.TypeToken
-import me.nebula.ether.utils.minio.MinioStorageClient
+import me.nebula.ether.utils.storage.StorageScope
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
@@ -228,48 +228,50 @@ object ReplayManager {
 
 object ReplayStorage {
 
-    private var minioClient: MinioStorageClient? = null
+    @Volatile private var scope: StorageScope? = null
     private val gson: Gson = GsonBuilder()
         .registerTypeAdapter(ReplayFrame::class.java, ReplayFrameSerializer())
         .create()
 
-    fun configure(client: MinioStorageClient) {
-        minioClient = client
+    fun initialize(scope: StorageScope) {
+        this.scope = scope
     }
 
-    fun upload(name: String, data: ReplayData, metadata: ReplayMetadata = ReplayMetadata()) {
-        val client = minioClient ?: error("MinIO client not configured for ReplayStorage")
+    fun isInitialized(): Boolean = scope != null
+
+    fun save(name: String, data: ReplayData, metadata: ReplayMetadata = ReplayMetadata()) {
+        val s = scope ?: error("ReplayStorage not initialized")
         val wrapper = ReplayWrapper(metadata, data.playerNames, data.frames)
         val json = gson.toJson(wrapper)
         val compressed = compress(json.toByteArray())
-        client.upload("replays/$name.replay.gz", compressed)
+        s.upload("$name.replay.gz", compressed)
     }
 
-    fun download(name: String): Pair<ReplayMetadata, ReplayData>? {
-        val client = minioClient ?: error("MinIO client not configured for ReplayStorage")
-        if (!client.exists("replays/$name.replay.gz")) return null
+    fun load(name: String): Pair<ReplayMetadata, ReplayData>? {
+        val s = scope ?: error("ReplayStorage not initialized")
+        if (!s.exists("$name.replay.gz")) return null
 
-        val compressed = client.downloadBytes("replays/$name.replay.gz")
+        val compressed = s.download("$name.replay.gz")
         val json = String(decompress(compressed))
         val wrapper = gson.fromJson(json, ReplayWrapper::class.java)
         return wrapper.metadata to ReplayData(wrapper.frames, wrapper.playerNames)
     }
 
     fun delete(name: String) {
-        val client = minioClient ?: error("MinIO client not configured for ReplayStorage")
-        client.delete("replays/$name.replay.gz")
+        val s = scope ?: error("ReplayStorage not initialized")
+        s.delete("$name.replay.gz")
     }
 
     fun list(): List<String> {
-        val client = minioClient ?: return emptyList()
-        return client.list("replays/").map {
-            it.name.removePrefix("replays/").removeSuffix(".replay.gz")
-        }.toList()
+        val s = scope ?: return emptyList()
+        return s.list().map {
+            it.name.removeSuffix(".replay.gz")
+        }
     }
 
     fun exists(name: String): Boolean {
-        val client = minioClient ?: return false
-        return client.exists("replays/$name.replay.gz")
+        val s = scope ?: return false
+        return s.exists("$name.replay.gz")
     }
 
     private fun compress(data: ByteArray): ByteArray {

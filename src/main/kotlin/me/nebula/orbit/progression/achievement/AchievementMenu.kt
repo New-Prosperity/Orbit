@@ -62,8 +62,10 @@ object AchievementMenu {
                 val material = if (completed) Material.LIME_DYE else achievement.icon
 
                 item(itemStack(material) {
-                    name(if (completed) "<green>${achievement.name}" else "<white>${achievement.name}")
-                    lore("<gray>${achievement.description}")
+                    val achName = player.translateRaw("orbit.achievement.${achievement.id}.name")
+                    val achDesc = player.translateRaw("orbit.achievement.${achievement.id}.description")
+                    name(if (completed) "<green>$achName" else "<white>$achName")
+                    lore("<gray>$achDesc")
                     if (achievement.maxProgress > 1) {
                         lore(player.translateRaw("orbit.achievement.progress",
                             "completed" to progress.toString(),

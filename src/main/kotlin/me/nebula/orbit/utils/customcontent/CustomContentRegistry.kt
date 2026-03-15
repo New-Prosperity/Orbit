@@ -4,7 +4,8 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.customcontent.armor.ArmorShaderPack
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
-import me.nebula.orbit.utils.screen.shader.MapShaderPack
+import me.nebula.orbit.utils.hud.font.HudFontProvider
+import me.nebula.orbit.utils.hud.shader.HudShaderPack
 import me.nebula.orbit.utils.customcontent.block.*
 import me.nebula.orbit.utils.customcontent.event.CustomBlockBreakHandler
 import me.nebula.orbit.utils.customcontent.event.CustomBlockInteractHandler
@@ -149,10 +150,13 @@ object CustomContentRegistry {
             emptyMap()
         }
 
-        val mapScreenEntries = MapShaderPack.generate()
-        logger.info { "Generated map screen shader pack: ${mapScreenEntries.size} entries" }
+        val hudShaderEntries = HudShaderPack.generate()
+        logger.info { "Generated HUD shader pack: ${hudShaderEntries.size} entries" }
 
-        val allShaderEntries = armorEntries + mapScreenEntries
+        val hudFontEntries = HudFontProvider.generate()
+        logger.info { "Generated HUD font provider: ${hudFontEntries.size} entries" }
+
+        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries
         val result = PackMerger.merge(resources, MODELS_DIR, allRaw, allShaderEntries)
         mergeResult = result
 

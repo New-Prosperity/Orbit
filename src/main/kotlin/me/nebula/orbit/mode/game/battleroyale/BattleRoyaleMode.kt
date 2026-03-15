@@ -39,6 +39,7 @@ import me.nebula.orbit.utils.mapgen.GeneratedMap
 import me.nebula.orbit.utils.mapgen.MapPresets
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.utils.matchresult.matchResult
+import me.nebula.orbit.utils.deathrecap.DamageEntry
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.spectatortoolkit.SpectatorToolkit
@@ -57,13 +58,13 @@ import net.minestom.server.item.Material
 import net.minestom.server.tag.Tag
 import net.minestom.server.timer.Task
 
-class BattleRoyaleMode : GameMode() {
+class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
 
     private val logger = logger("BattleRoyaleMode")
     private val season = SeasonConfig.current
 
     override val settings: GameSettings = GameSettings(
-        worldPath = season.worldPath,
+        worldPath = worldPathOverride ?: season.worldPath,
         preloadRadius = season.preloadRadius,
         spawn = season.spawn,
         scoreboard = season.scoreboard,
@@ -91,6 +92,7 @@ class BattleRoyaleMode : GameMode() {
     override val spawnPoint: Pos
         get() = generatedMap?.center ?: super.spawnPoint
 
+    private val brDeathRecapTracker = DeathRecapTracker()
     private val lastAttackerTag = Tag.UUID("br_last_attacker")
     private val lastAttackerTimeTag = Tag.Long("br_last_attacker_time")
     private var worldBorder: ManagedWorldBorder? = null
@@ -116,10 +118,9 @@ class BattleRoyaleMode : GameMode() {
     }
 
     override fun buildLobbyHotbar(): Hotbar = hotbar("br-lobby") {
-        slot(3, BattleRoyaleKitManager.buildKitSelectorItem(
-            MinecraftServer.getConnectionManager().onlinePlayers.firstOrNull()
-                ?: return@hotbar
-        )) { player ->
+        slot(3, itemStack(Material.BOOK) {
+            name("<green><bold>Kit Selector")
+        }) { player ->
             BattleRoyaleKitManager.openKitMenu(player)
         }
         slot(5, itemStack(Material.PAPER) {
@@ -245,6 +246,13 @@ class BattleRoyaleMode : GameMode() {
             victim.setTag(lastAttackerTimeTag, System.currentTimeMillis())
         }
 
+        brDeathRecapTracker.recordDamage(victim.uuid, DamageEntry(
+            attackerUuid = attacker?.uuid,
+            attackerName = attacker?.username ?: event.damage.type.key().value(),
+            amount = amount,
+            source = if (attacker != null) "PLAYER" else event.damage.type.key().value(),
+        ))
+
         if (victim.health - amount <= 0) {
             event.isCancelled = true
             victim.health = victim.getAttributeValue(Attribute.MAX_HEALTH).toFloat()
@@ -270,7 +278,24 @@ class BattleRoyaleMode : GameMode() {
                 }
             }
 
+            brDeathRecapTracker.sendRecap(victim)
+            val recap = brDeathRecapTracker.buildRecap(victim)
+
             eliminate(victim)
+
+            if (recap?.killerUuid != null) {
+                val killerTarget = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(recap.killerUuid)
+                if (killerTarget != null) {
+                    victim.spectate(killerTarget)
+                    delay(60) {
+                        if (victim.gameMode == net.minestom.server.entity.GameMode.SPECTATOR) {
+                            victim.stopSpectating()
+                        }
+                    }
+                }
+            }
+
+            brDeathRecapTracker.clearPlayer(victim.uuid)
             victim.removeTag(lastAttackerTag)
             victim.removeTag(lastAttackerTimeTag)
             return false
@@ -287,6 +312,7 @@ class BattleRoyaleMode : GameMode() {
         worldBorder?.setDiameter(season.border.initialDiameter)
         worldBorder = null
         StatTracker.clear()
+        brDeathRecapTracker.clear()
         deathmatchActive = false
         spawnBlocking = false
         spawnModeResult?.let { SpawnModeExecutor.cleanup(it) }

@@ -45,6 +45,8 @@ object BlockbenchParser {
         inflate = obj["inflate"]?.asFloat ?: 0f,
         faces = obj.getAsJsonObject("faces")?.entrySet()?.associate { (k, v) -> k to parseFace(v.asJsonObject) } ?: emptyMap(),
         visibility = obj["visibility"]?.asBoolean ?: true,
+        mirrorUv = obj["mirror_uv"]?.asBoolean ?: false,
+        lightEmission = obj["light_emission"]?.asInt ?: 0,
     )
 
     private fun parseFace(obj: JsonObject): BbFace = BbFace(

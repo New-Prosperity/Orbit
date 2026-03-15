@@ -14,6 +14,9 @@ import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
 import me.nebula.orbit.utils.ceremony.Ceremony
 import me.nebula.orbit.utils.deathrecap.DeathRecapTracker
 import me.nebula.orbit.utils.gamechat.GameChatPipeline
+import me.nebula.orbit.utils.replay.ReplayMetadata
+import me.nebula.orbit.utils.replay.ReplayRecorder
+import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.orbit.utils.killfeed.KillFeed
 import me.nebula.orbit.utils.rewards.RewardDistributor
 import me.nebula.orbit.utils.spectatortoolkit.SpectatorToolkit
@@ -171,6 +174,7 @@ abstract class GameMode : ServerMode {
     @Volatile private var deathRecapTracker: DeathRecapTracker? = null
     @Volatile private var rewardDistributor: RewardDistributor? = null
     @Volatile private var ceremony: Ceremony? = null
+    private val replayRecorder = ReplayRecorder()
 
     override val spawnPoint: Pos by lazy { settings.spawn.toPos() }
 
@@ -750,6 +754,7 @@ abstract class GameMode : ServerMode {
         voidCheckTask = repeat(10) {
             if (phase != GamePhase.PLAYING) return@repeat
             for (uuid in tracker.alive.toSet()) {
+                if (tracker.isRespawning(uuid)) continue
                 val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
                 if (player.position.y() < voidY) {
                     handleDeath(player)
@@ -1109,6 +1114,8 @@ abstract class GameMode : ServerMode {
         deathRecapTracker = buildDeathRecapTracker()
         rewardDistributor = buildRewardDistributor()
 
+        replayRecorder.start()
+
         onPlayingStart()
     }
 
@@ -1145,6 +1152,23 @@ abstract class GameMode : ServerMode {
 
         MatchResultManager.store(result)
         persistGameStats(result)
+
+        val replayData = replayRecorder.stop()
+        if (replayData.frames.isNotEmpty() && ReplayStorage.isInitialized()) {
+            Thread.startVirtualThread {
+                runCatching {
+                    val metadata = ReplayMetadata(
+                        gameMode = Orbit.gameMode ?: "unknown",
+                        mapName = Orbit.mapName ?: "",
+                        recordedAt = System.currentTimeMillis(),
+                        playerCount = initialPlayerCount,
+                        durationTicks = replayData.durationTicks,
+                    )
+                    ReplayStorage.save("${Orbit.serverName}-${System.currentTimeMillis()}", replayData, metadata)
+                }.onFailure { logger.warn { "Failed to save replay: ${it.message}" } }
+            }
+        }
+
         rewardDistributor?.distribute(result, tracker.all)
 
         val allPlayers = gameInstance.players.toList()
@@ -1159,7 +1183,11 @@ abstract class GameMode : ServerMode {
             onComplete {
                 endingCountdown = null
                 onEndingComplete()
-                stateMachine.transition(GamePhase.WAITING)
+                logger.info { "Game ended, terminating server..." }
+                Thread.startVirtualThread {
+                    Orbit.app.stop().join()
+                    Runtime.getRuntime().halt(0)
+                }
             }
         }
         endingCountdown!!.start()

@@ -15,7 +15,8 @@ Standalone Minestom game server for the Nebula network. Runs on every server —
 - **Provision self-discovery**: When `P_SERVER_UUID` is set, Orbit looks up `ProvisionStore.load(serverUuid)` from the distributed Hazelcast store (populated by Pulsar's `ServerSynchronizer.sync()`), deriving `serverName` from the provision's server name and `gameMode` from `provision.metadata["game_mode"]`. No direct Proton API call needed — Orbit relies on the cluster-synced store. When `P_SERVER_UUID` is empty or no provision found, `serverName` defaults to `"orbit-local"` and `gameMode` to `null` (hub mode).
 - Hazelcast: **client mode** with 22 stores (includes ReconnectionStore, HostTicketStore, HostRequestStore, HostRequestLookupStore, BattleRoyaleKitStore). Smart client auto-discovers all members after initial connection. Near-cache configs wired automatically by HazelcastModule for stores with `nearCacheSeconds > 0`.
 - **Provision metadata**: Extracts `game_mode`, `host_owner` (UUID), and `map` from provision metadata. `Orbit.hostOwner` and `Orbit.mapName` are set when server is host-provisioned.
-- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `ModelEngine.install()` → `CustomContentRegistry.init()` (loads items, blocks, armors) → load `.bbmodel` model files → `CustomContentRegistry.mergePack()` (generates armor shaders, merges all) → register commands (basic, game, model, cc, cinematic, screen, armor) → `mode.install(handler)` → common listeners → `server.start()` → registration → shutdown hook.
+- **Map loading**: When `gameMode` is set and `STORAGE_URL`/`STORAGE_TOKEN` are provided, loads map via `MapLoader.load()` wrapped in `runCatching` — on failure, logs the error and falls back to the season default world path (null `resolvedWorldPath`). `MapLoader` validates cached maps have a `region/` directory; corrupted caches (missing `region/`) are deleted and re-downloaded. Also initializes `ReplayStorage` with a `"replays"` scope from the same storage client.
+- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → map loading (with fallback) → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `ModelEngine.install()` → `CustomContentRegistry.init()` (loads items, blocks, armors) → load `.bbmodel` model files → `CustomContentRegistry.mergePack()` (generates armor shaders + HUD shaders + HUD font, merges all) → register HUD test layout → `HudManager.install(handler)` → register commands (basic, game, model, cc, cinematic, screen, armor, hud) → `mode.install(handler)` → common listeners → HUD tick task (2 ticks) → `server.start()` → registration → shutdown hook.
 - **Graceful shutdown**: Shutdown hook kicks all connected players ("Server shutting down") before deregistering, so Velocity redirects them to a hub instead of disconnecting.
 - **Resource pack**: Pack is merged at startup but NOT sent from Orbit — pack distribution is delegated to the proxy.
 - Common listeners: `AsyncPlayerConfigurationEvent` (locale cache, set spawning instance/respawn from mode), `PlayerDisconnectEvent` (evict locale), `OnlinePlayerCache` refresh (5s).
@@ -62,6 +63,7 @@ Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Or
 - **Placeholders**: Global `{online}` (SessionStore.cachedSize), `{server}` (Orbit.serverName). Per-player `{rank}` (PlayerRankStore/RankStore lookup).
 - **Action system**: Hotbar items reference click actions by string name (e.g., `"open_selector"`, `"open_host"`). Immutable actions map built locally in `install()`. Unknown actions and invalid material keys logged as warnings.
 - **Host system**: `"open_host"` action opens `HostMenu.openGameModeMenu(player)`. Subscribes to `HostProvisionStatusMessage` for real-time player feedback (provisioning/ready/failed). Cleans `HostMenu.pendingPlayers` on READY/FAILED status. Unsubscribes on shutdown.
+- **Queue feedback**: Subscribes to `QueuePositionMessage` — sends action bar with position and total queue size every 3s (QueueProcessor interval). Unsubscribes on shutdown.
 - **Disconnect cleanup**: `PlayerDisconnectEvent` removes hotbar and clears `HostMenu.removePending(uuid)` to prevent stale pending state.
 - **Hub instance**: Validates and loads Anvil world from `config.worldPath` (requires `region/` with `.mca` files), preloads chunks with `config.preloadRadius`, verifies block data post-load. Falls back to flat grass generator if directory missing.
 - **Lobby**: Built from `config.lobby` — `GameMode.valueOf(config.lobby.gameMode)`, all protection flags from config.
@@ -70,19 +72,19 @@ Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Or
 - **Hotbar**: Built from `config.hotbar` — `Material.fromKey()`, maps action strings via registered actions.
 - **Server selector**: Built from `config.selector` — title, rows, border material.
 - No `MechanicLoader` — hub mode has no mechanics enabled.
-- `shutdown()` unsubscribes host status listener, uninstalls scoreboard, tab list, lobby, and hotbar.
+- `shutdown()` unsubscribes host status, queue removed, queue assignment, and queue position listeners; uninstalls scoreboard, tab list, lobby, and hotbar.
 
 ### Game Engine — `mode/game/`
 Abstract lifecycle framework for minigames. Concrete modes subclass `GameMode` and implement only game-specific logic; the base class owns phases, player tracking, countdowns, timers, and cleanup.
 
 #### Phase Lifecycle
 ```
-WAITING ──(minPlayers)──> STARTING ──(countdown)──> PLAYING ──(win / timer)──> ENDING ──(end timer)──> WAITING
+WAITING ──(minPlayers)──> STARTING ──(countdown)──> PLAYING ──(win / timer)──> ENDING ──(end timer)──> server termination
 ```
 - **WAITING**: Lobby protection, scoreboard/tablist/hotbar. Tracks players. → STARTING when `tracker.aliveCount >= minPlayers`.
 - **STARTING**: Countdown (`timing.countdownSeconds`). Cancels → WAITING if players drop below `minPlayers`.
 - **PLAYING**: `onGameSetup(players)` for game-specific prep. Grace period + game timer if configured. `eliminate(player)` → spectator, check win condition.
-- **ENDING**: `MatchResultDisplay.broadcast()`. End countdown, then reset → WAITING.
+- **ENDING**: `MatchResultDisplay.broadcast()`. End countdown, then terminates the server (`Orbit.app.stop()` + `Runtime.halt(0)` on virtual thread).
 
 #### `GamePhase.kt`
 `enum class GamePhase { WAITING, STARTING, PLAYING, ENDING }`
@@ -124,6 +126,7 @@ Abstract `ServerMode` implementation. Fields: `spawnPoint` (lazy), `gameInstance
 - `createGameInstance()` — open, override in subclass for custom instance creation (e.g. procedural generation). Base loads from `settings.worldPath` via `AnvilWorldLoader`.
 - `invalidateGameInstance()` — transfers remaining players to lobby, unregisters old instance. Called by subclass in `onGameReset()` for round-based regeneration.
 - Player transfer: `enterPlaying()` transfers all alive players from `lobbyInstance` → `gameInstance` (blocking `CompletableFuture.allOf`). `enterWaiting()` transfers all players from `gameInstance` → `lobbyInstance`.
+- **Replay recording**: `ReplayRecorder` field in `GameMode` base. `enterPlaying()` calls `replayRecorder.start()`, `enterEnding()` calls `replayRecorder.stop()` and persists via `ReplayStorage.save()` on a virtual thread if `ReplayStorage.isInitialized()`. Replay key: `"${serverName}-${timestamp}"`.
 
 **Composed utilities** (managed by base):
 
@@ -138,7 +141,7 @@ Abstract `ServerMode` implementation. Fields: `spawnPoint` (lazy), `gameInstance
 | `GracePeriodManager` | PLAYING start | `timing.gracePeriodSeconds`. 0 = skipped. Also manages respawn invincibility |
 | `MatchResultDisplay` | ENDING | Broadcasts result to all instance players |
 | `MatchResultManager` | ENDING | Stores result in local history |
-| `Countdown` | ENDING | `timing.endingDurationSeconds`. Complete → reset to WAITING |
+| `Countdown` | ENDING | `timing.endingDurationSeconds`. Complete → server termination |
 
 **Abstract** (must implement): `settings: GameSettings`, `buildPlaceholderResolver()`, `onGameSetup(players)`, `checkWinCondition(): MatchResult?`.
 
@@ -261,6 +264,7 @@ Abstract `ServerMode` implementation. Fields: `spawnPoint` (lazy), `gameInstance
 
 **Void death handling** (enabled when `timing.voidDeathY != NEGATIVE_INFINITY`):
 - Repeating task (every 10 ticks) checks if alive players are below the Y threshold.
+- Skips players who are currently respawning to prevent killing players mid-respawn.
 - Triggers `handleDeath(player)` — integrates with respawn system, lives, kill streaks, etc.
 - Cleaned up on phase transitions.
 
@@ -306,7 +310,7 @@ FFA last-player-standing battle royale with kit system, legendary weapons, golde
   - `KitDefinitionConfig(id, nameKey, descriptionKey, material, locked, maxLevel, xpPerLevel, tiers: Map<Int, KitTierConfig>)` — per-kit definitions with leveled tier progression.
   - `KitTierConfig(helmet?, chestplate?, leggings?, boots?, items)` — gear at a specific kit level.
   - `StarterKitConfig(helmet?, chestplate?, leggings?, boots?, items)` — default gear when no kit selected.
-- **Map presets**: `mapPreset: String?` field in `Season` references a programmatic `MapPresets[name]` entry. `"perfect"` preset: tuned 250-radius map with dense ores, caves, rivers, overhangs, all custom biomes.
+- **Map presets**: `mapPreset: String?` field in `Season` references a programmatic `MapPresets[name]` entry. `"perfect"` / `"battleroyale"` preset: seed-based randomized map (radius 200-300, sea level 60-65, cave/ore/population variance) with all custom biomes.
 - **Placeholders**: Global `{online}`, `{server}`, `{alive}`, `{phase}`, `{deathmatch}`. Per-player `{kills}`.
 
 #### Season System (`SeasonConfig.kt`, `SeasonDsl.kt`, `seasons/`)
@@ -369,7 +373,7 @@ Pre-game voting during WAITING phase. Players vote on game settings via GUI hotb
 - **Application**: `votedValues["duration"]` → overrides `resolveGameDuration()` (base GameMode hook). `votedValues["health"]` → sets `MAX_HEALTH` attribute + heals. `votedValues["border"]` → multiplies border phase durations (0.6x fast, 1.5x slow).
 
 #### Gameplay
-- **WAITING**: Lobby protection + kit selection hotbar (slot 3) + vote settings hotbar (slot 5).
+- **WAITING**: Lobby protection + kit selection hotbar (slot 3, static Book item) + vote settings hotbar (slot 5).
 - **STARTING**: 15s countdown with freeze during countdown.
 - **PLAYING**:
   - Vote resolution: game settings (duration, health, border speed) applied from vote results.
@@ -379,7 +383,8 @@ Pre-game voting during WAITING phase. Players vote on game settings via GUI hotb
   - Grace period: 30s PvP protection (managed by base `GracePeriodManager`).
   - Border: multi-phase progressive shrink with escalating damage (1→2→3 per second), speed scaled by vote multiplier. Falls back to legacy single-phase if `borderPhases` empty.
   - Border damage: 1-second tick checks all alive players outside border, applies `DamageType.OUT_OF_WORLD`.
-  - Kill tracking: `EntityDamageEvent` via `EventNode.all()`. Tags target with last attacker UUID + timestamp (10s expiry). On lethal damage: cancels event, heals, credits killer, awards XP, drops golden head, calls `eliminate()`.
+  - Kill tracking: `EntityDamageEvent` via `EventNode.all()`. Tags target with last attacker UUID + timestamp (10s expiry). On lethal damage: cancels event, heals, credits killer, awards XP, drops golden head, sends death recap, does kill cam (spectate killer for 3s), calls `eliminate()`.
+  - Death recap: `brDeathRecapTracker` records all damage in `onPlayerDamaged()`. On lethal hit: `sendRecap(victim)` displays damage summary, then victim spectates killer for 60 ticks (kill cam). Cleared per-player on death and globally on `onGameReset()`.
   - Deathmatch: triggers when alive count ≤ `triggerAtPlayers`. Teleports all alive to center (uses generated map center when available), shrinks border to `borderDiameter`.
   - Elimination: awards survival XP to eliminated player, broadcasts translated message. Triggers deathmatch check.
   - Win condition: `tracker.aliveCount <= 1` → winner is last alive, wins XP awarded. On timer expiry: top killer wins.
@@ -895,9 +900,9 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 | File | Summary |
 |---|---|
 | `ArmorPart.kt` | Sealed class: 9 armor body parts (`Helmet`, `Chestplate`, `RightArm`, `LeftArm`, `InnerArmor`, `RightLeg`, `LeftLeg`, `RightBoot`, `LeftBoot`) with bone prefix, STASIS constant, layer, `cemYOffset` (CEM TOP-face Y correction), `isLeft`. `fromBoneName()` auto-detection |
-| `ArmorDefinition.kt` | Data classes: `ArmorCube` (center, halfSize, rotation, pivot, uvFaces), `ArmorCubeUv`, `ParsedArmorPiece`, `ParsedArmor`, `RegisteredArmor` (id, colorId, RGB, parsed data) |
-| `ArmorParser.kt` | Parses `.bbmodel` via `BlockbenchParser`, walks bone hierarchy, auto-detects armor pieces by prefix. Coordinate transform: BB → TBN space (bone-relative positioning) with per-part `cemYOffset` correction for TOP-face canvas origin. Left-part 180° mirror via sign multiplier. Handles nested prefixed sub-groups, multi-level rotations |
-| `ArmorGlslGenerator.kt` | Converts parsed cubes → GLSL `ADD_BOX_WITH_ROTATION_ROTATE` macros. `generateArmorGlsl()` produces dual-section file (`#ifdef VSH`/`#ifdef FSH`). `generateArmorcordsGlsl()` produces RGB → armorId mapping |
+| `ArmorDefinition.kt` | Data classes: `ArmorCube` (center, halfSize, rotation, pivot, uvFaces, emissive), `ArmorCubeUv`, `ParsedArmorPiece`, `ParsedArmor`, `RegisteredArmor` (id, colorId, RGB, parsed data) |
+| `ArmorParser.kt` | Parses `.bbmodel` via `BlockbenchParser`, walks bone hierarchy, auto-detects armor pieces by prefix. Coordinate transform: BB → TBN space (bone-relative positioning) with per-part `cemYOffset` correction for TOP-face canvas origin. Left-part 180° mirror via sign multiplier. Handles nested prefixed sub-groups, multi-level rotations. Passes `lightEmission` (0-15) normalized to `emissive` (0.0-1.0) |
+| `ArmorGlslGenerator.kt` | Converts parsed cubes → GLSL `ADD_BOX_WITH_ROTATION_ROTATE` macros. `generateArmorGlsl()` produces dual-section file (`#ifdef VSH`/`#ifdef FSH`). `generateArmorcordsGlsl()` produces RGB → armorId mapping. Emissive support: if any cube in a piece has `emissive > 0`, sets `dynamicEmissive = 1` in generated FSH — skips lighting, ColorModulator, and fog for that piece |
 | `ArmorShaderPack.kt` | Assembles all shader pack entries: 16 static shader files from classpath + generated `armor.glsl` + `armorcords.glsl` + leather layer textures with marker pixels + transparent `leather_overlay.png` (suppresses vanilla overlay remnants). Returns `Map<String, ByteArray>` |
 | `CustomArmorRegistry.kt` | Registry with `ConcurrentHashMap`. `loadFromResources(resources, dir)` auto-detects `.bbmodel` files. `register()` assigns color IDs via `ModelIdRegistry`. Extension functions: `createItem(ArmorPart)`, `equipFullSet(Player)` |
 | `ArmorTestCommand.kt` | `/armor list` (show registered armors), `/armor equip <id>` (full set), `/armor give <id> <slot>` (single piece) |
@@ -919,11 +924,33 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 
 **Static shaders**: 16 files in `src/main/resources/shaders/armor/` from MC 1.21.6 overlay (compatible with 1.21.11). Key files: `entity.vsh`/`entity.fsh` (core pipeline), `frag_funcs.glsl` (CEM raycasting library), `armorparts.glsl` (STASIS constants), `setup.glsl` (UV-based part detection).
 
+### Shader-Based HUD — `utils/hud/` (7 files)
+Boss bar text with custom bitmap font sprites repositioned by modified `rendertype_text` vertex shader. Resolution/GUI scale independent via `ProjMat`-derived normalization. Coexists with map screen shaders.
+
+| File | Summary |
+|---|---|
+| `shader/HudShaderPack.kt` | Generates combined `rendertype_text.vsh`/`.fsh` handling HUD positioning + map screen decoding. Reuses `MapShaderPack` for `map_decode.glsl` |
+| `font/HudSprite.kt` | `HudSpriteDefinition` data class + `HudSpriteRegistry` singleton. Maps sprite IDs to PUA chars (U+E000+) and atlas grid positions. Pre-registers 34 sprites (bars, icons, borders, digits, glyphs). `registerFromImage()` for custom sprites |
+| `font/HudFontProvider.kt` | Generates sprite atlas PNG (8×8 cells, 16 columns) + Minecraft bitmap font JSON (`minecraft:hud`). Placeholder sprites: colored rectangles for bars/icons, 5×7 pixel bitmaps for digits/glyphs |
+| `Hud.kt` | Core types: `HudAnchor` (9 screen anchors), `Direction`, sealed `HudElement` hierarchy (`SpriteElement`, `BarElement`, `TextElement`, `GroupElement`, `AnimatedSpriteElement`), `HudLayout`. Builder DSL: `hudLayout("id") { bar(...) { }, sprite(...) { }, text(...) { }, group(...) { }, animated(...) { } }` |
+| `HudManager.kt` | `PlayerHud` per-player-per-layout state class (values, groupItems, bossBar, lastRendered, animationTick). `HudManager` singleton: `register(layout)`, `show(player, layoutId)` (multi-layout — each layout gets its own boss bar, stackable), `hide(player, layoutId)`, `hideAll(player)`, `isShowing(player, layoutId)`, `update(player, elementId, value)` (auto-scans active layouts), `update(player, layoutId, elementId, value)` (explicit targeting), `addToGroup/removeFromGroup`, `install(eventNode)` (disconnect cleanup), `tick()` (render + diff + update boss bars) |
+| `HudRenderer.kt` | Converts layout + state → Adventure `Component` for boss bar title. Position encoding: anchor + offset (0-1) → R=X×255, G=Y×255, B=254 marker. Each sprite character independently positioned via color. `Component.join()` combines all parts. Char step = 3/255 (~8 GUI pixels) |
+| `HudExtensions.kt` | Player extensions: `showHud(layoutId)`, `hideHud(layoutId)`, `hideAllHuds()`, `isHudShowing(layoutId)`, `updateHud(elementId, value)`, `updateHud(layoutId, elementId, value)`, `addHudIcon/removeHudIcon`, `hud(layoutId): PlayerHud?`, `val huds`, `val activeHudIds` |
+
+**How it works**: Server creates boss bar per layout per player (progress=0, overlay=PROGRESS — invisible bar). Title uses font `minecraft:hud` mapping PUA characters to sprite textures. Per-character vertex color encodes screen position (R=X%, G=Y%, B=254 marker). Modified vertex shader detects marker in GUI mode, repositions quad vertices to target screen coordinates derived from `ProjMat`. Fragment shader renders texture color only for HUD sprites (ignores vertex color encoding). Shadow vertices (B≈63, the 254×0.25 shadow darkening) are discarded — grayscale check (R≈G≈B) excludes white/gray text shadows to avoid false positives with real boss bars. High-blue text colors (aqua §b, blue §9, pink §d) may lose shadow due to B×0.25≈63 collision.
+
+**Position encoding**: R channel → X fraction of GUI width (0-255). G channel → Y fraction of GUI height (0-255). B=254 → HUD marker. Resolution = 256×256 grid ≈ 3.75 GUI pixels per step at 960×540.
+
+**GUI scale independence**: Shader derives GUI dimensions from orthographic `ProjMat`: `guiW = 2.0 / ProjMat[0][0]`, `guiH = -2.0 / ProjMat[1][1]`. Positions are percentage-based.
+
+**Test command**: `/hud` — toggles test HUD layout (health bar, mana bar, compass icon, score, timer).
+
 ### Modified Existing Files
 - `modelengine/generator/ModelIdRegistry.kt` — added `assignId(key: String)` single-arg overload, `getId(key: String)` overload
 - `modelengine/generator/ModelGenerator.kt` — added `generateRaw()` returning `RawGenerationResult(blueprint, boneModels, textureBytes)`, `buildBoneElements()` and `buildFlatModel()` helpers. Bone offsets are parent-relative (not absolute). `buildBoneElements(centerOffset)`: ModelEngine bones use `centerOffset=0f` so element [0,0,0] maps to entity position (correct rotation pivot for item_display transforms); custom content flat models use default `centerOffset=8f` (standard MC model centering). All pack paths and `ITEM_MODEL` values lowercased for Minecraft resource location compliance. Bone items use `DataComponents.ITEM_MODEL` (`"minecraft:me_<model>_<bone>"` flat naming — all under `minecraft` namespace with `me_` prefix) instead of `CUSTOM_MODEL_DATA`. All pack assets (textures, models, items) placed under `assets/minecraft/` for guaranteed client-side resolution
 - `modelengine/bone/BoneTransform.kt` — `toRelativePosition()` uses 3D Y-axis rotation matrix (not 2D rotation) to correctly position bones when the model has non-zero yaw
-- `Orbit.kt` — calls `CustomContentRegistry.init()` before mode install, auto-merges pack (pack distribution delegated to proxy)
+- `Orbit.kt` — calls `CustomContentRegistry.init()` before mode install, auto-merges pack (pack distribution delegated to proxy). Registers test HUD layout, `HudManager.install()`, HUD tick task (2 ticks), `/hud` test command
+- `customcontent/CustomContentRegistry.kt` — `mergePack()` uses `HudShaderPack.generate()` + `HudFontProvider.generate()` instead of `MapShaderPack.generate()` directly (HudShaderPack internally generates map_decode.glsl via MapShaderPack)
 - `customcontent/CustomContentCommand.kt` — removed `PackServer` and `/cc send` (pack sending delegated to proxy)
 
 ## Utility Framework — `utils/` (189 files)
@@ -971,7 +998,7 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 | `modelengine/lod/LODHandler.kt` | Closest-viewer distance evaluation. Applies bone visibility per LOD level. Per-player culling beyond max distance |
 | `modelengine/advanced/RootMotion.kt` | Extracts root bone animation delta, applies to entity position. Configurable X/Y/Z axes |
 | `modelengine/advanced/ModelSerializer.kt` | Save/load ModeledEntity state as ByteArray. Versioned binary format |
-| `modelengine/generator/BlockbenchModel.kt` | Data classes: `BbElement`, `BbGroup`, `BbFace`, `BbTexture`, `BbAnimation`, `BbKeyframe` |
+| `modelengine/generator/BlockbenchModel.kt` | Data classes: `BbElement` (includes `lightEmission` for PBR emissive), `BbGroup`, `BbFace`, `BbTexture`, `BbAnimation`, `BbKeyframe` |
 | `modelengine/generator/BlockbenchParser.kt` | Parses `.bbmodel` JSON → `BlockbenchModel`. Handles outliner hierarchy, textures, animations |
 | `modelengine/generator/ModelGenerator.kt` | Orchestrator: parse `.bbmodel` → register `ModelBlueprint` + generate resource pack zip. Bone items use `ITEM_MODEL` component (`"minecraft:me_<model>_<bone>"` flat naming under `minecraft` namespace) for direct model resolution. All pack assets placed under `assets/minecraft/` (textures, models, items) with `me_` prefix to avoid collisions |
 | `modelengine/generator/AtlasManager.kt` | Texture atlas stitching from base64-encoded bbmodel textures. Preserves original index order. Power-of-2 dimensions. `entryByOriginalIndex()` for UV lookup |
@@ -1047,7 +1074,7 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 | `mapgen/MapPopulator.kt` | 6 tree types (with spacing), boulders, ponds, mushrooms, biome-aware vegetation, tall plants, fallen logs, underwater vegetation (kelp/seagrass), sugar cane, cactus, lily pads, `PopulationConfig` |
 | `mapgen/SchematicPopulator.kt` | `SchematicPopulator`: terrain-adaptive `.schem` placement (SURFACE/UNDERGROUND/EMBEDDED), rotation, foundation fill, cavity carving, entrance generation, placeholder→chest replacement, lootTableId per def |
 | `mapgen/BattleRoyaleMapGenerator.kt` | `BattleRoyaleMapGenerator.generate(config)` → `GeneratedMap`, full pipeline (biomes→terrain→caves→ores→modifiers→population→cave decoration→schematics→loot) |
-| `mapgen/MapPresets.kt` | `MapPresets[name]` → `MapGenerationConfig`. Programmatic presets bypassing Gson serialization issues. `"perfect"` / `"battleroyale"` preset with tuned terrain, dense ores, caves, rivers, overhangs, all custom biomes |
+| `mapgen/MapPresets.kt` | `MapPresets[name]` → `MapGenerationConfig`. Programmatic presets bypassing Gson serialization issues. `"perfect"` / `"battleroyale"` preset with seed-based randomization: map radius (200-300), sea level (60-65), cave frequency/density (±30%), ore amounts (±20-50%), population chances (±30%), terrain parameters (±20%). Deterministic when given a seed |
 | `biome/CustomBiome.kt` | `customBiome(id) { blocks {}; terrain {}; climate {}; vegetation {}; visuals {}; modifiers {} }` DSL, scoped builders, `TerrainShape` enum (20 presets: FLAT/PLAINS/ROLLING_HILLS/ROLLING/HIGHLANDS/FOOTHILLS/PLATEAUS/MESA/MOUNTAINOUS/RIDGED/PEAKS/SPIRES/VALLEYS/BASIN/CANYON/CLIFFS/ERODED/DUNES/OCEAN_FLOOR/SHELF) via `terrain { shape(TerrainShape.X) }`, `BiomePresets` object (volcanic, mushroomFields, frozenWasteland, lushCaves, cherryGrove, deepDark), `BiomePresets.all()` |
 | `schematic/Schematic.kt` | Sponge v2 schematic loader, `schematic.paste(instance, origin)` |
 | `region/Region.kt` | Sealed `Region` (Cuboid/Sphere/Cylinder), `RegionManager`, spatial queries |
@@ -1089,7 +1116,7 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 | `entityeffect/EntityEffect.kt` | `entityEffect { entityType; durationTicks; onSpawn; onTick; onRemove }` DSL, `spawnTemporaryEntity()` |
 | `permissions/Permissions.kt` | `PermissionManager`, group hierarchy with inheritance, `Player.hasOrbitPermission()` |
 | `pathfinding/Pathfinding.kt` | A* pathfinding, `Pathfinder.findPath(instance, start, end)`, configurable max iterations |
-| `replay/Replay.kt` | 7 frame types (Position/BlockChange/Chat/ItemHeld/EntitySpawn/EntityDespawn/Death), `ReplayRecorder` with player join/leave/death tracking + skin data, `ReplayPlayer` with speed control (`setSpeed`/`pause`/`resume`/`seekTo`), perspective switching (`setPerspective`/`availablePerspectives`), progress tracking, completion callback, `ReplayManager` in-memory storage, `ReplayStorage` GZIP-compressed JSON persistence to MinIO (`replays/{name}.replay.gz`), custom Gson serializer for sealed `ReplayFrame` |
+| `replay/Replay.kt` | 7 frame types (Position/BlockChange/Chat/ItemHeld/EntitySpawn/EntityDespawn/Death), `ReplayRecorder` with player join/leave/death tracking + skin data, `ReplayPlayer` with speed control (`setSpeed`/`pause`/`resume`/`seekTo`), perspective switching (`setPerspective`/`availablePerspectives`), progress tracking, completion callback, `ReplayManager` in-memory storage, `ReplayStorage` GZIP-compressed JSON persistence via `StorageScope` (`initialize(scope)`, `save`/`load`/`delete`/`list`/`exists`), custom Gson serializer for sealed `ReplayFrame`. Wired into `GameMode` lifecycle: recording starts in `enterPlaying()`, stops and persists in `enterEnding()` |
 | `entityspawnerpool/EntitySpawnerPool.kt` | `entityPool(EntityType.ZOMBIE, poolSize) { onAcquire {}; onRelease {} }` DSL, `EntityPool.acquire()/release()`, auto-expand, recycled entities |
 | `entitycleanup/EntityCleanup.kt` | `entityCleanup(instance) { maxAge(); maxPerInstance(); excludeTypes(); warningMessage() }` DSL, `EntityCleanupManager`, timer-based cleanup, item-first priority, per-instance config |
 | `entitymount/EntityMount.kt` | `EntityMountManager.mount(rider, vehicle)`, `dismount()`, `mountStack()`, `mountConfig { speedMultiplier(); jumpBoost(); steeringOverride() }` DSL, `Player.mountEntity()`/`dismountEntity()` extensions |
@@ -1135,6 +1162,7 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 | `spectatorcam/SpectatorCam.kt` | `spectatorCam(player) { target(); mode(FIRST_PERSON/FREE_CAM/ORBIT) }` DSL, orbit camera, player cycling |
 | `cinematic/CinematicCamera.kt` | `cinematic(player) { node(time, pos); lookAt(entity); loop(); onComplete {} }` DSL, keyframe path with catmull-rom/bezier/linear position interpolation, quaternion slerp rotation, dynamic lookAt target tracking, reuses `KeyframeInterpolator` + `quatSlerp` |
 | `screen/Screen.kt` | `screen(player, eyePos) { cursor {}; background(color); onDraw { canvas -> }; button(id, x, y, w, h) { onClick {}; onHover {} }; panel(x, y, w, h, color) { label(); button(); progressBar(); image() } }` DSL, shader-decoded map-based renderer: MSB-split encoding into item frame map grid (640x384 default = 10x6 maps, 64x64 true-color pixels per map), GLSL palette reverse-lookup decode in `rendertype_text.fsh`+`entity.fsh`, `MapCanvas` pixel buffer with BitSet tile-level dirty tracking, `MapEncoder` tile encoding with magic signature + partial dirty-only encode, `MapDisplay` packet-based item frame grid with row-level partial `MapDataPacket` updates (diffs previous data, sends only changed row ranges), staggered initial load (20 tiles/tick), `ScreenConfig.kt` auto-depth projection with `require` validation, ITEM_DISPLAY cursor with interpolation, AABB hit-testing + widget tree hit-testing, camel mount input capture, `MapShaderPack.kt` generates 128-entry palette GLSL, `TextureLoader` (classpath/bytes/BufferedImage → `Texture` with scaling/sub-region), drawing primitives (`line`/`circle`/`filledCircle`/`roundedRect`/`stroke`/`linearGradient`/`radialGradient`/`blendPixel`), `BitmapFont` grid-atlas font system with built-in 6x8 default, `AnimationController` per-session tween system (`Easing.LINEAR/EASE_IN/EASE_OUT/EASE_IN_OUT`, `IntInterpolator`/`DoubleInterpolator`/`ColorInterpolator`), composable widget tree (`Panel`/`Label`/`Button`/`ProgressBar`/`ImageWidget`) with auto-draw and auto-hit-test |
+| `hud/Hud.kt` | Shader-based HUD system: boss bar text with bitmap font sprites repositioned by modified `rendertype_text` vertex shader. `hudLayout("id") { bar(); sprite(); text(); group(); animated() }` DSL, `player.showHud/hideHud/updateHud` extensions, per-player state via `HudManager`, 2-tick render loop with diff-only boss bar updates. See `utils/hud/hud.md` |
 | `chestloot/ChestLoot.kt` | `chestLoot(name) { tier("common") { item() }; fillChestsInRegion() }` DSL, weighted tiers, amount ranges via `LootItem(baseItem: ItemStack)`, items resolved via `ItemResolver` (custom content + vanilla), `maxPerChest` per item (caps duplicate appearances in one chest, filtered during roll with weight redistribution), `fillChestAt(table, x, y, z)`, `LootMode.GLOBAL` (shared) / `LootMode.PER_PLAYER` (lazy per-UUID generation), `getChestInventory(x, y, z, playerId)`, season-scoped via `Season.lootTables` (registered in `BattleRoyaleMode.init`, cleared on reset). **Loot zones**: `lootZone(name) { cylinder(center, radius); tier("common", 100) }` DSL, `ChestLootManager.registerZone(zone)` — region-based tier weight overrides, first matching zone wins (register inner→outer), applied at `fillChestAt`/`getChestInventory` time, cleared on `clear()`/`clearZones()` |
 | `npcdialog/NPCDialog.kt` | `npcDialog(npcName) { page("greeting") { text(); option("quest") {} } }` DSL, tree-structured dialog, clickable chat options |
 | `autorestart/AutoRestart.kt` | `autoRestart { after(6.hours); warnings(30.minutes, 10.minutes); warningMessage(); onRestart {} }` DSL, `AutoRestartManager.scheduleRestart/cancelRestart/getTimeRemaining`, broadcast warnings, kick on restart |

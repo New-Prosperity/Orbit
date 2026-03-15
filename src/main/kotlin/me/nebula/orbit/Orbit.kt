@@ -7,15 +7,20 @@ import me.nebula.ether.utils.hazelcast.hazelcastModule
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
+import me.nebula.gravity.achievement.AchievementStore
+import me.nebula.gravity.battlepass.BattlePassStore
+import me.nebula.gravity.battleroyale.BattleRoyaleKitStore
 import me.nebula.gravity.cosmetic.CosmeticStore
+import me.nebula.gravity.economy.EconomyStore
+import me.nebula.gravity.economy.EconomyTransactionStore
 import me.nebula.gravity.host.HostRequestLookupStore
 import me.nebula.gravity.host.HostRequestStore
 import me.nebula.gravity.host.HostTicketStore
-import me.nebula.gravity.economy.EconomyStore
-import me.nebula.gravity.economy.EconomyTransactionStore
+import me.nebula.gravity.map.MapStore
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.ServerDeregistrationMessage
 import me.nebula.gravity.messaging.ServerRegistrationMessage
+import me.nebula.gravity.mission.MissionStore
 import me.nebula.gravity.party.PartyLookupStore
 import me.nebula.gravity.party.PartyStore
 import me.nebula.gravity.player.PlayerStore
@@ -29,54 +34,31 @@ import me.nebula.gravity.ranking.RankingReportStore
 import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.gravity.sanction.SanctionStore
-import me.nebula.gravity.server.ProvisionStore
-import me.nebula.gravity.server.ServerStore
-import me.nebula.gravity.server.ConnectPlayerProcessor
-import me.nebula.gravity.server.DisconnectPlayerProcessor
-import me.nebula.gravity.server.SetMaxPlayersProcessor
-import me.nebula.gravity.server.SyncConnectedPlayersProcessor
+import me.nebula.gravity.server.*
 import me.nebula.gravity.session.SessionStore
-import me.nebula.gravity.achievement.AchievementStore
-import me.nebula.gravity.battlepass.BattlePassStore
-import me.nebula.gravity.mission.MissionStore
 import me.nebula.gravity.stats.StatsStore
-import me.nebula.orbit.utils.commandbuilder.OnlinePlayerCache
+import me.nebula.orbit.commands.installBasicCommands
+import me.nebula.orbit.commands.installGameCommands
+import me.nebula.orbit.cosmetic.*
 import me.nebula.orbit.mode.ServerMode
-import me.nebula.gravity.battleroyale.BattleRoyaleKitStore
 import me.nebula.orbit.mode.game.battleroyale.BattleRoyaleMode
 import me.nebula.orbit.mode.hub.HubMode
-import me.nebula.orbit.utils.customcontent.CustomContentRegistry
-import me.nebula.orbit.utils.customcontent.customContentCommand
-import me.nebula.orbit.utils.hud.HudAnchor
-import me.nebula.orbit.utils.hud.HudManager
-import me.nebula.orbit.utils.hud.hudLayout
-import me.nebula.orbit.utils.hud.showHud
-import me.nebula.orbit.utils.hud.hideHud
-import me.nebula.orbit.utils.hud.isHudShowing
-import me.nebula.orbit.utils.hud.updateHud
-import me.nebula.orbit.utils.modelengine.ModelEngine
-import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
-import me.nebula.orbit.utils.cinematic.cinematicTestCommand
-import me.nebula.orbit.utils.modelengine.modelEngineCommand
-import me.nebula.orbit.cosmetic.AuraManager
-import me.nebula.orbit.cosmetic.CompanionManager
-import me.nebula.orbit.cosmetic.CosmeticListener
-import me.nebula.orbit.cosmetic.CosmeticMenu
-import me.nebula.orbit.cosmetic.CosmeticMountManager
-import me.nebula.orbit.cosmetic.CosmeticRegistry
-import me.nebula.orbit.cosmetic.GadgetManager
-import me.nebula.orbit.cosmetic.GravestoneManager
-import me.nebula.orbit.cosmetic.PetManager
 import me.nebula.orbit.progression.BattlePassMenu
 import me.nebula.orbit.progression.achievement.AchievementMenu
 import me.nebula.orbit.progression.achievement.registerAchievementContent
 import me.nebula.orbit.progression.mission.MissionMenu
 import me.nebula.orbit.progression.mission.MissionRegistry
 import me.nebula.orbit.utils.achievement.AchievementRegistry
-import me.nebula.orbit.commands.installBasicCommands
-import me.nebula.orbit.commands.installGameCommands
+import me.nebula.orbit.utils.cinematic.cinematicTestCommand
+import me.nebula.orbit.utils.commandbuilder.OnlinePlayerCache
 import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.orbit.utils.customcontent.CustomContentRegistry
 import me.nebula.orbit.utils.customcontent.armor.armorTestCommand
+import me.nebula.orbit.utils.customcontent.customContentCommand
+import me.nebula.orbit.utils.hud.*
+import me.nebula.orbit.utils.modelengine.ModelEngine
+import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
+import me.nebula.orbit.utils.modelengine.modelEngineCommand
 import me.nebula.orbit.utils.screen.screenTestCommand
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
@@ -87,8 +69,6 @@ import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.timer.TaskSchedule
-import net.minestom.server.world.biome.Biome
-import net.minestom.server.world.biome.BiomeEffects
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.nio.file.Path
@@ -150,12 +130,15 @@ object Orbit {
         val env = environment {
             required("VELOCITY_SECRET")
             optional("P_SERVER_NAME")
+            optional("HAZELCAST_ADDRESSES")
+            optional("STORAGE_URL")
+            optional("STORAGE_TOKEN")
         }
 
         val port = env.optional("SERVER_PORT", 25565) { it.toInt() }
         val serverUuid = env.optional("P_SERVER_UUID", "")
         val serverHost = env.optional("SERVER_HOST", "").ifEmpty { null } ?: detectContainerAddress()
-        val hazelcastAddresses = System.getenv("HAZELCAST_ADDRESSES")
+        val hazelcastAddresses = env.all["HAZELCAST_ADDRESSES"]?.ifEmpty { null }
 
         app = appDelegate("Orbit") {
             configureResources {
@@ -193,6 +176,7 @@ object Orbit {
                         +HostRequestStore
                         +HostRequestLookupStore
                         +BattleRoyaleKitStore
+                        +MapStore
                         +AchievementStore
                         +BattlePassStore
                         +MissionStore
@@ -217,7 +201,8 @@ object Orbit {
                 val (provision, server) = cached
                 provisionUuid = provision.uuid
                 gameMode = provision.metadata?.get("game_mode")
-                hostOwner = provision.metadata?.get("host_owner")?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                hostOwner =
+                    provision.metadata?.get("host_owner")?.let { runCatching { UUID.fromString(it) }.getOrNull() }
                 mapName = provision.metadata?.get("map")
                 serverName = server?.name ?: "orbit-local"
                 logger.info { "Provision discovered: name=$serverName, gameMode=$gameMode, hostOwner=$hostOwner, map=$mapName, provisionUuid=${provision.uuid}" }
@@ -229,9 +214,36 @@ object Orbit {
             serverName = "orbit-local"
         }
 
+        var resolvedWorldPath: String? = null
+        if (gameMode != null) {
+            val storageUrl = env.all["STORAGE_URL"]?.ifEmpty { null }
+            val storageToken = env.all["STORAGE_TOKEN"]?.ifEmpty { null }
+            if (storageUrl != null && storageToken != null) {
+                val storage = me.nebula.ether.utils.storage.storageClient {
+                    url = storageUrl
+                    token = storageToken
+                }
+                me.nebula.orbit.utils.replay.ReplayStorage.initialize(storage.scope("replays"))
+                val mapScope = storage.scope("maps")
+                val targetMap = mapName
+                    ?: PoolConfigStore.load(gameMode!!)?.maps?.randomOrNull()
+                if (targetMap != null) {
+                    logger.info { "Loading map '$targetMap' for $gameMode..." }
+                    resolvedWorldPath = runCatching {
+                        me.nebula.orbit.utils.maploader.MapLoader.load(targetMap, mapScope).toString()
+                    }.onFailure { e ->
+                        logger.error(e) { "Failed to load map '$targetMap', falling back to default world" }
+                    }.getOrNull()
+                    if (resolvedWorldPath != null) {
+                        logger.info { "Map loaded: $resolvedWorldPath" }
+                    }
+                }
+            }
+        }
+
         val server = MinecraftServer.init(Auth.Velocity(env.all["VELOCITY_SECRET"]!!))
 
-        mode = resolveMode()
+        mode = resolveMode(resolvedWorldPath)
         logger.info { "Server mode: ${mode::class.simpleName}" }
 
         val handler = MinecraftServer.getGlobalEventHandler()
@@ -336,18 +348,32 @@ object Orbit {
             AchievementRegistry.loadPlayer(player.uuid)
             if (MissionStore.load(player.uuid) == null) {
                 val daily = MissionRegistry.randomDaily(3).map { t ->
-                    me.nebula.gravity.mission.ActiveMission(t.id, t.type, t.target, xpReward = t.xpReward, coinReward = t.coinReward)
+                    me.nebula.gravity.mission.ActiveMission(
+                        t.id,
+                        t.type,
+                        t.target,
+                        xpReward = t.xpReward,
+                        coinReward = t.coinReward
+                    )
                 }
                 val weekly = MissionRegistry.randomWeekly(3).map { t ->
-                    me.nebula.gravity.mission.ActiveMission(t.id, t.type, t.target, xpReward = t.xpReward, coinReward = t.coinReward)
+                    me.nebula.gravity.mission.ActiveMission(
+                        t.id,
+                        t.type,
+                        t.target,
+                        xpReward = t.xpReward,
+                        coinReward = t.coinReward
+                    )
                 }
                 val now = System.currentTimeMillis()
-                MissionStore.save(player.uuid, me.nebula.gravity.mission.MissionData(
-                    dailyMissions = daily,
-                    weeklyMissions = weekly,
-                    dailyResetAt = nextDailyReset(now),
-                    weeklyResetAt = nextWeeklyReset(now),
-                ))
+                MissionStore.save(
+                    player.uuid, me.nebula.gravity.mission.MissionData(
+                        dailyMissions = daily,
+                        weeklyMissions = weekly,
+                        dailyResetAt = nextDailyReset(now),
+                        weeklyResetAt = nextWeeklyReset(now),
+                    )
+                )
             }
         }
 
@@ -431,10 +457,10 @@ object Orbit {
         return nextMonday.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
     }
 
-    private fun resolveMode(): ServerMode =
+    private fun resolveMode(worldPath: String? = null): ServerMode =
         when (gameMode) {
             null -> HubMode()
-            "battleroyale" -> BattleRoyaleMode()
+            "battleroyale" -> BattleRoyaleMode(worldPath)
             else -> error("Unknown game mode: $gameMode")
         }
 }

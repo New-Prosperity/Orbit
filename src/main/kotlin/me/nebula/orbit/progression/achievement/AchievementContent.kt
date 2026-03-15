@@ -2,70 +2,71 @@ package me.nebula.orbit.progression.achievement
 
 import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.gravity.cosmetic.UnlockCosmeticProcessor
+import me.nebula.orbit.Orbit
 import me.nebula.orbit.utils.achievement.AchievementCategories
 import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.orbit.utils.achievement.AchievementTriggerManager
 import me.nebula.orbit.utils.achievement.achievement
-import net.kyori.adventure.text.Component
 import net.minestom.server.advancements.FrameType
 import net.minestom.server.item.Material
 
 fun registerAchievementContent() {
+    val locale = Orbit.translations.defaultLocale
     AchievementRegistry.register(achievement("first_game") {
-        name = Component.text("First Steps")
-        description = Component.text("Play your first game")
+        name = Orbit.deserialize("orbit.achievement.first_game.name", locale)
+        description = Orbit.deserialize("orbit.achievement.first_game.description", locale)
         category = AchievementCategories.GENERAL
         icon = Material.WOODEN_SWORD
         maxProgress = 1
     })
     AchievementRegistry.register(achievement("veteran") {
-        name = Component.text("Veteran")
-        description = Component.text("Play 100 games")
+        name = Orbit.deserialize("orbit.achievement.veteran.name", locale)
+        description = Orbit.deserialize("orbit.achievement.veteran.description", locale)
         category = AchievementCategories.GENERAL
         icon = Material.IRON_SWORD
         maxProgress = 100
     })
     AchievementRegistry.register(achievement("dedicated") {
-        name = Component.text("Dedicated")
-        description = Component.text("Play 500 games")
+        name = Orbit.deserialize("orbit.achievement.dedicated.name", locale)
+        description = Orbit.deserialize("orbit.achievement.dedicated.description", locale)
         category = AchievementCategories.GENERAL
         icon = Material.DIAMOND_SWORD
         maxProgress = 500
         frameType = FrameType.CHALLENGE
     })
     AchievementRegistry.register(achievement("collector") {
-        name = Component.text("Collector")
-        description = Component.text("Own 10 cosmetics")
+        name = Orbit.deserialize("orbit.achievement.collector.name", locale)
+        description = Orbit.deserialize("orbit.achievement.collector.description", locale)
         category = AchievementCategories.GENERAL
         icon = Material.CHEST
         maxProgress = 10
     })
 
     AchievementRegistry.register(achievement("first_blood") {
-        name = Component.text("First Blood")
-        description = Component.text("Get your first kill")
+        name = Orbit.deserialize("orbit.achievement.first_blood.name", locale)
+        description = Orbit.deserialize("orbit.achievement.first_blood.description", locale)
         category = AchievementCategories.COMBAT
         icon = Material.IRON_SWORD
         maxProgress = 1
     })
     AchievementRegistry.register(achievement("warrior") {
-        name = Component.text("Warrior")
-        description = Component.text("Get 100 kills")
+        name = Orbit.deserialize("orbit.achievement.warrior.name", locale)
+        description = Orbit.deserialize("orbit.achievement.warrior.description", locale)
         category = AchievementCategories.COMBAT
         icon = Material.DIAMOND_SWORD
         maxProgress = 100
     })
     AchievementRegistry.register(achievement("slayer") {
-        name = Component.text("Slayer")
-        description = Component.text("Get 500 kills")
+        name = Orbit.deserialize("orbit.achievement.slayer.name", locale)
+        description = Orbit.deserialize("orbit.achievement.slayer.description", locale)
         category = AchievementCategories.COMBAT
         icon = Material.NETHERITE_SWORD
         maxProgress = 500
         frameType = FrameType.CHALLENGE
     })
     AchievementRegistry.register(achievement("mass_murderer") {
-        name = Component.text("Mass Murderer")
-        description = Component.text("Get 1000 kills")
+        name = Orbit.deserialize("orbit.achievement.mass_murderer.name", locale)
+        description = Orbit.deserialize("orbit.achievement.mass_murderer.description", locale)
         category = AchievementCategories.COMBAT
         icon = Material.WITHER_SKELETON_SKULL
         maxProgress = 1000
@@ -73,23 +74,23 @@ fun registerAchievementContent() {
         hidden = true
     })
     AchievementRegistry.register(achievement("double_trouble") {
-        name = Component.text("Double Trouble")
-        description = Component.text("Get a 2 kill streak in a single game")
+        name = Orbit.deserialize("orbit.achievement.double_trouble.name", locale)
+        description = Orbit.deserialize("orbit.achievement.double_trouble.description", locale)
         category = AchievementCategories.COMBAT
         icon = Material.STONE_SWORD
         maxProgress = 1
     })
     AchievementRegistry.register(achievement("unstoppable") {
-        name = Component.text("Unstoppable")
-        description = Component.text("Get a 5 kill streak in a single game")
+        name = Orbit.deserialize("orbit.achievement.unstoppable.name", locale)
+        description = Orbit.deserialize("orbit.achievement.unstoppable.description", locale)
         category = AchievementCategories.COMBAT
         icon = Material.GOLDEN_SWORD
         maxProgress = 1
         frameType = FrameType.GOAL
     })
     AchievementRegistry.register(achievement("rampage") {
-        name = Component.text("Rampage")
-        description = Component.text("Get a 10 kill streak in a single game")
+        name = Orbit.deserialize("orbit.achievement.rampage.name", locale)
+        description = Orbit.deserialize("orbit.achievement.rampage.description", locale)
         category = AchievementCategories.COMBAT
         icon = Material.NETHERITE_SWORD
         maxProgress = 1
@@ -98,30 +99,30 @@ fun registerAchievementContent() {
     })
 
     AchievementRegistry.register(achievement("survivor") {
-        name = Component.text("Survivor")
-        description = Component.text("Win your first game")
+        name = Orbit.deserialize("orbit.achievement.survivor.name", locale)
+        description = Orbit.deserialize("orbit.achievement.survivor.description", locale)
         category = AchievementCategories.SURVIVAL
         icon = Material.GOLDEN_APPLE
         maxProgress = 1
     })
     AchievementRegistry.register(achievement("champion") {
-        name = Component.text("Champion")
-        description = Component.text("Win 10 games")
+        name = Orbit.deserialize("orbit.achievement.champion.name", locale)
+        description = Orbit.deserialize("orbit.achievement.champion.description", locale)
         category = AchievementCategories.SURVIVAL
         icon = Material.ENCHANTED_GOLDEN_APPLE
         maxProgress = 10
     })
     AchievementRegistry.register(achievement("legend") {
-        name = Component.text("Legend")
-        description = Component.text("Win 50 games")
+        name = Orbit.deserialize("orbit.achievement.legend.name", locale)
+        description = Orbit.deserialize("orbit.achievement.legend.description", locale)
         category = AchievementCategories.SURVIVAL
         icon = Material.NETHER_STAR
         maxProgress = 50
         frameType = FrameType.CHALLENGE
     })
     AchievementRegistry.register(achievement("invincible") {
-        name = Component.text("Invincible")
-        description = Component.text("Win a game without dying")
+        name = Orbit.deserialize("orbit.achievement.invincible.name", locale)
+        description = Orbit.deserialize("orbit.achievement.invincible.description", locale)
         category = AchievementCategories.SURVIVAL
         icon = Material.TOTEM_OF_UNDYING
         maxProgress = 1
@@ -130,46 +131,46 @@ fun registerAchievementContent() {
     })
 
     AchievementRegistry.register(achievement("party_animal") {
-        name = Component.text("Party Animal")
-        description = Component.text("Play 10 games in a party")
+        name = Orbit.deserialize("orbit.achievement.party_animal.name", locale)
+        description = Orbit.deserialize("orbit.achievement.party_animal.description", locale)
         category = AchievementCategories.SOCIAL
         icon = Material.CAKE
         maxProgress = 10
     })
     AchievementRegistry.register(achievement("host_master") {
-        name = Component.text("Host Master")
-        description = Component.text("Host 5 games")
+        name = Orbit.deserialize("orbit.achievement.host_master.name", locale)
+        description = Orbit.deserialize("orbit.achievement.host_master.description", locale)
         category = AchievementCategories.SOCIAL
         icon = Material.BEACON
         maxProgress = 5
     })
 
     AchievementRegistry.register(achievement("map_explorer") {
-        name = Component.text("Map Explorer")
-        description = Component.text("Play on 10 different maps")
+        name = Orbit.deserialize("orbit.achievement.map_explorer.name", locale)
+        description = Orbit.deserialize("orbit.achievement.map_explorer.description", locale)
         category = AchievementCategories.EXPLORATION
         icon = Material.FILLED_MAP
         maxProgress = 10
     })
 
     AchievementRegistry.register(achievement("bp_complete") {
-        name = Component.text("Season Veteran")
-        description = Component.text("Complete a battle pass")
+        name = Orbit.deserialize("orbit.achievement.bp_complete.name", locale)
+        description = Orbit.deserialize("orbit.achievement.bp_complete.description", locale)
         category = AchievementCategories.MASTERY
         icon = Material.EXPERIENCE_BOTTLE
         maxProgress = 1
         frameType = FrameType.CHALLENGE
     })
     AchievementRegistry.register(achievement("mission_master") {
-        name = Component.text("Mission Master")
-        description = Component.text("Complete 100 missions")
+        name = Orbit.deserialize("orbit.achievement.mission_master.name", locale)
+        description = Orbit.deserialize("orbit.achievement.mission_master.description", locale)
         category = AchievementCategories.MASTERY
         icon = Material.COMPASS
         maxProgress = 100
     })
     AchievementRegistry.register(achievement("wealthy") {
-        name = Component.text("Wealthy")
-        description = Component.text("Earn 10,000 coins total")
+        name = Orbit.deserialize("orbit.achievement.wealthy.name", locale)
+        description = Orbit.deserialize("orbit.achievement.wealthy.description", locale)
         category = AchievementCategories.MASTERY
         icon = Material.GOLD_INGOT
         maxProgress = 10000
@@ -188,7 +189,7 @@ fun registerAchievementContent() {
 
     AchievementRegistry.onUnlock { player, achievement ->
         val notification = net.minestom.server.advancements.Notification(
-            achievement.name,
+            Orbit.deserialize("orbit.achievement.${achievement.id}.name", Orbit.localeOf(player.uuid)),
             achievement.frameType,
             net.minestom.server.item.ItemStack.of(achievement.icon),
         )

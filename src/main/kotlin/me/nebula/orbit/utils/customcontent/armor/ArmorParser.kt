@@ -183,7 +183,15 @@ object ArmorParser {
             rotationLevels = levels,
             uvFaces = uvFaces,
             textureIndex = textureIndex,
+            emissive = element.lightEmission / 15f,
         )
+    }
+
+    private fun bbToTbnPivot(origin: Vec, boneOrigin: Vec, s: Double, part: ArmorPart): Vec {
+        val px = origin.x() - boneOrigin.x()
+        val py = origin.y() - boneOrigin.y()
+        val pz = origin.z() - boneOrigin.z()
+        return Vec(-px + s * part.cemXOffset, -pz, -py + part.cemYOffset)
     }
 
     private fun buildRotationLevels(
@@ -192,27 +200,21 @@ object ArmorParser {
         parentTransforms: List<GroupTransform>,
         part: ArmorPart,
     ): List<ArmorRotationLevel> {
-        val levels = mutableListOf<ArmorRotationLevel>()
         val s = if (part.isLeft) -1.0 else 1.0
-
-        for (transform in parentTransforms) {
-            val components = mutableListOf<ArmorRotationComponent>()
-            addEulerComponents(components, transform.rotation)
-            if (components.isNotEmpty()) {
-                val gpx = transform.origin.x() - boneOrigin.x()
-                val gpy = transform.origin.y() - boneOrigin.y()
-                val gpz = transform.origin.z() - boneOrigin.z()
-                levels.add(ArmorRotationLevel(components, Vec(-gpx + s * part.cemXOffset, -gpz, -gpy + part.cemYOffset)))
-            }
-        }
+        val levels = mutableListOf<ArmorRotationLevel>()
 
         val elemComponents = mutableListOf<ArmorRotationComponent>()
         addEulerComponents(elemComponents, element.rotation)
         if (elemComponents.isNotEmpty()) {
-            val epx = element.origin.x() - boneOrigin.x()
-            val epy = element.origin.y() - boneOrigin.y()
-            val epz = element.origin.z() - boneOrigin.z()
-            levels.add(ArmorRotationLevel(elemComponents, Vec(-epx + s * part.cemXOffset, -epz, -epy + part.cemYOffset)))
+            levels.add(ArmorRotationLevel(elemComponents, bbToTbnPivot(element.origin, boneOrigin, s, part)))
+        }
+
+        for (transform in parentTransforms.reversed()) {
+            val groupComponents = mutableListOf<ArmorRotationComponent>()
+            addEulerComponents(groupComponents, transform.rotation)
+            if (groupComponents.isNotEmpty()) {
+                levels.add(ArmorRotationLevel(groupComponents, bbToTbnPivot(transform.origin, boneOrigin, s, part)))
+            }
         }
 
         return levels
@@ -222,9 +224,9 @@ object ArmorParser {
         output: MutableList<ArmorRotationComponent>,
         bbRotation: Vec,
     ) {
-        val tbnX = bbRotation.x()
+        val tbnX = -bbRotation.x()
         val tbnZ = -bbRotation.y()
-        val tbnY = bbRotation.z()
+        val tbnY = -bbRotation.z()
 
         if (tbnX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnX), ArmorRotationComponent.AXIS_X))
         if (tbnZ != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnZ), ArmorRotationComponent.AXIS_Z))

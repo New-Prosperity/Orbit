@@ -33,6 +33,8 @@ data class BbElement(
     val inflate: Float,
     val faces: Map<String, BbFace>,
     val visibility: Boolean,
+    val mirrorUv: Boolean = false,
+    val lightEmission: Int = 0,
 )
 
 data class BbFace(
