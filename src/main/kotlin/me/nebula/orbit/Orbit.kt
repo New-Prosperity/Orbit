@@ -408,8 +408,8 @@ object Orbit {
         server.start("0.0.0.0", port)
 
         if (serverUuid.isNotEmpty()) {
-            logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid, address=$serverHost)" }
-            NetworkMessenger.publish(ServerRegistrationMessage(serverUuid, serverHost))
+            logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid, address=$serverHost, maxPlayers=${mode.maxPlayers})" }
+            NetworkMessenger.publish(ServerRegistrationMessage(serverUuid, serverHost, mode.maxPlayers))
             logger.info { "ServerRegistrationMessage published" }
         } else {
             logger.warn { "P_SERVER_UUID is empty, skipping server registration" }
@@ -417,10 +417,6 @@ object Orbit {
 
         val pUuid = provisionUuid
         if (pUuid != null) {
-            if (mode.maxPlayers > 0) {
-                ServerStore.executeOnKey(pUuid, SetMaxPlayersProcessor(mode.maxPlayers))
-                logger.info { "Reported maxPlayers=${mode.maxPlayers} for provision $pUuid" }
-            }
             MinecraftServer.getSchedulerManager()
                 .buildTask { syncConnectedPlayers() }
                 .repeat(TaskSchedule.seconds(5))
