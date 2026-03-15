@@ -243,7 +243,9 @@ object Orbit {
             }
         }
 
-        val server = MinecraftServer.init(Auth.Velocity(env.all["VELOCITY_SECRET"]!!))
+        val velocitySecret = env.all["VELOCITY_SECRET"]!!
+        logger.info { "VELOCITY_SECRET=${velocitySecret.take(8)}... (len=${velocitySecret.length})" }
+        val server = MinecraftServer.init(Auth.Velocity(velocitySecret))
 
         mode = resolveMode(resolvedWorldPath)
         logger.info { "Server mode: ${mode::class.simpleName}" }
