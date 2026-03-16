@@ -412,8 +412,8 @@ object Orbit {
         server.start("0.0.0.0", port)
 
         if (serverUuid.isNotEmpty()) {
-            logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid, address=$serverHost, maxPlayers=${mode.maxPlayers})" }
-            NetworkMessenger.publish(ServerRegistrationMessage(serverUuid, serverHost, mode.maxPlayers))
+            logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid, address=$serverHost, maxPlayers=${mode.maxPlayers}, gameMode=$gameMode)" }
+            NetworkMessenger.publish(ServerRegistrationMessage(serverUuid, serverHost, mode.maxPlayers, gameMode))
             logger.info { "ServerRegistrationMessage published" }
         } else {
             logger.warn { "P_SERVER_UUID is empty, skipping server registration" }
