@@ -81,10 +81,10 @@ Abstract lifecycle framework for minigames. Concrete modes subclass `GameMode` a
 ```
 WAITING ──(minPlayers)──> STARTING ──(countdown)──> PLAYING ──(win / timer)──> ENDING ──(end timer)──> server termination
 ```
-- **WAITING**: Lobby protection, scoreboard/tablist/hotbar. Tracks players. → STARTING when `tracker.aliveCount >= minPlayers`.
-- **STARTING**: Countdown (`timing.countdownSeconds`). Cancels → WAITING if players drop below `minPlayers`.
-- **PLAYING**: `onGameSetup(players)` for game-specific prep. Grace period + game timer if configured. `eliminate(player)` → spectator, check win condition.
-- **ENDING**: `MatchResultDisplay.broadcast()`. End countdown, then terminates the server (`Orbit.app.stop()` + `Runtime.halt(0)` on virtual thread).
+- **WAITING**: Lobby protection, scoreboard/tablist/hotbar. Tracks players. → STARTING when `tracker.aliveCount >= minPlayers`. Action bar repeating task shows `orbit.game.waiting` with current/needed player counts every 2 seconds. Host owner gets a Force Start emerald item in slot 8 when below minPlayers.
+- **STARTING**: Countdown (`timing.countdownSeconds`). Cancels → WAITING if players drop below `minPlayers`. Sound cues: `BLOCK_NOTE_BLOCK_PLING` at 3/2/1 seconds (pitch 2f at 1s), `ENTITY_PLAYER_LEVELUP` at 0 seconds. Waiting action bar task cleaned up.
+- **PLAYING**: `onGameSetup(players)` for game-specific prep. Grace period + game timer if configured. `eliminate(player)` → spectator, tracks placement, notifies player with `orbit.game.placement`. First kill broadcasts `orbit.game.first_blood`.
+- **ENDING**: Winners (alive players) assigned placement 1. `MatchResultDisplay.broadcast()`. End countdown, then terminates the server (`Orbit.app.stop()` + `Runtime.halt(0)` on virtual thread).
 
 #### `GamePhase.kt`
 `enum class GamePhase { WAITING, STARTING, PLAYING, ENDING }`
@@ -168,7 +168,13 @@ Abstract `ServerMode` implementation. Fields: `spawnPoint` (lazy), `gameInstance
 
 **Damage hook**: `onPlayerDamaged(victim, attacker?, amount, event): Boolean` — open method called for every damage event during PLAYING (after friendly fire check). Return `false` to cancel. Runs inside unified `gamemode-mechanics` event node. Subclasses use this instead of creating their own damage listeners for game-wide damage logic.
 
-**Public API**: `eliminate(player)`, `revive(player, pos)`, `handleDeath(player, killer?)`, `forceReconnect(player)`, `forceStart()`, `forceEnd(result)`, `phase: GamePhase`, `tracker: PlayerTracker`, `gameStartTime: Long`, `initialPlayerCount: Int`, `isTeamMode: Boolean`, `isFriendlyFireEnabled: Boolean`, `isOvertime: Boolean`, `isSuddenDeath: Boolean`, `areTeammates(a, b): Boolean`.
+**Public API**: `eliminate(player)`, `revive(player, pos)`, `handleDeath(player, killer?)`, `forceReconnect(player)`, `forceStart()`, `forceEnd(result)`, `phase: GamePhase`, `tracker: PlayerTracker`, `gameStartTime: Long`, `initialPlayerCount: Int`, `isTeamMode: Boolean`, `isFriendlyFireEnabled: Boolean`, `isOvertime: Boolean`, `isSuddenDeath: Boolean`, `areTeammates(a, b): Boolean`, `placementOf(uuid): Int?`.
+
+**Placement tracking**: Elimination order is tracked in `GameMode`. Each eliminated player receives a placement number (`initialPlayerCount - eliminationOrder + 1`). Stored in `placements: ConcurrentHashMap<UUID, Int>`. Winners (still alive at ENDING) get placement 1. `placementOf(uuid)` returns the placement or null if not tracked.
+
+**First blood**: First kill in a game triggers `orbit.game.first_blood` broadcast to all players.
+
+**Force start (host)**: During WAITING, the host owner (`Orbit.hostOwner`) receives an emerald item in slot 8 (translated `orbit.game.force_start`). Right-clicking it calls `forceStart()` if at least 2 players are present. Listener installed in `install()` via `PlayerUseItemEvent`.
 
 **Spectator cycling**: `nextSpectatorTarget(player): Player?`, `previousSpectatorTarget(player): Player?` — cycles through alive players. In team mode, prioritizes teammates first, falls back to all alive. Tracks current target per spectator in internal map.
 

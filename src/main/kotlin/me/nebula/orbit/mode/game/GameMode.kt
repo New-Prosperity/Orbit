@@ -44,6 +44,9 @@ import me.nebula.orbit.utils.scoreboard.liveScoreboard
 import me.nebula.orbit.utils.tablist.LiveTabList
 import me.nebula.orbit.utils.tablist.liveTabList
 import me.nebula.orbit.translation.resolveTranslated
+import me.nebula.orbit.translation.translate
+import me.nebula.orbit.utils.itembuilder.itemStack
+import me.nebula.orbit.utils.sound.playSound
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
@@ -55,7 +58,10 @@ import net.minestom.server.event.player.PlayerChatEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerMoveEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
+import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.instance.InstanceContainer
+import net.minestom.server.item.Material
+import net.minestom.server.sound.SoundEvent
 import net.minestom.server.timer.Task
 import java.nio.file.Files
 import java.util.UUID
@@ -153,6 +159,8 @@ abstract class GameMode : ServerMode {
 
     fun areTeammates(a: UUID, b: UUID): Boolean = tracker.areTeammates(a, b)
 
+    fun placementOf(uuid: UUID): Int? = placements[uuid]
+
     private val disconnectTimers = ConcurrentHashMap<UUID, Task>()
     private val respawnTimers = ConcurrentHashMap<UUID, Task>()
     private val gameEvents = ConcurrentHashMap<String, Task>()
@@ -162,6 +170,10 @@ abstract class GameMode : ServerMode {
     @Volatile private var afkCheckTask: Task? = null
     @Volatile private var overtimeTask: Task? = null
     @Volatile private var voidCheckTask: Task? = null
+    @Volatile private var waitingActionBarTask: Task? = null
+    private val placements = ConcurrentHashMap<UUID, Int>()
+    private var eliminationOrder = 0
+    private var totalKillCount = 0
     @Volatile private var freezeEventNode: EventNode<*>? = null
     @Volatile private var gameMechanicsNode: EventNode<*>? = null
     @Volatile private var reconnectWindowExpired = false
@@ -284,6 +296,14 @@ abstract class GameMode : ServerMode {
             handlePlayerDisconnect(event.player)
         }
 
+        handler.addListener(PlayerUseItemEvent::class.java) { event ->
+            if (event.player.heldSlot.toInt() != 8) return@addListener
+            if (Orbit.hostOwner != event.player.uuid) return@addListener
+            if (phase != GamePhase.WAITING && phase != GamePhase.STARTING) return@addListener
+            if (tracker.aliveCount < 2) return@addListener
+            forceStart()
+        }
+
         stateMachine.forceTransition(GamePhase.WAITING)
         logger.info { "Game mode installed: ${this::class.simpleName}" }
     }
@@ -308,6 +328,8 @@ abstract class GameMode : ServerMode {
         cleanupFreezeNode()
         cleanupGameMechanicsNode()
         cleanupVoidCheck()
+        waitingActionBarTask?.cancel()
+        waitingActionBarTask = null
         stateMachine.destroy()
     }
 
@@ -319,6 +341,13 @@ abstract class GameMode : ServerMode {
         tracker.eliminate(player.uuid)
         player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
         player.teleport(spawnPoint)
+
+        eliminationOrder++
+        val placement = initialPlayerCount - eliminationOrder + 1
+        placements[player.uuid] = placement
+        player.sendMessage(player.translate("orbit.game.placement",
+            "place" to placement.toString(),
+            "total" to initialPlayerCount.toString()))
 
         autoSpectateOnEliminate(player)
         spectatorToolkit?.apply(player)
@@ -346,6 +375,12 @@ abstract class GameMode : ServerMode {
 
         if (killer != null && killer.uuid != player.uuid) {
             tracker.recordKill(killer.uuid)
+            totalKillCount++
+            if (totalKillCount == 1) {
+                broadcastAll { p ->
+                    p.sendMessage(p.translate("orbit.game.first_blood", "player" to killer.username))
+                }
+            }
             val streak = tracker.streakOf(killer.uuid)
             if (streak > 1) onKillStreak(killer, streak)
         }
@@ -517,6 +552,11 @@ abstract class GameMode : ServerMode {
                 tracker.join(player.uuid)
                 currentHotbar?.apply(player)
                 onPlayerJoinWaiting(player)
+                if (Orbit.hostOwner == player.uuid && tracker.aliveCount < settings.timing.minPlayers) {
+                    player.inventory.setItemStack(8, itemStack(Material.EMERALD) {
+                        name(player.translate("orbit.game.force_start"))
+                    })
+                }
                 checkMinPlayersThreshold()
             }
             GamePhase.STARTING -> {
@@ -951,6 +991,9 @@ abstract class GameMode : ServerMode {
         lastEndResult = null
         gameStartTime = 0L
         initialPlayerCount = 0
+        placements.clear()
+        eliminationOrder = 0
+        totalKillCount = 0
 
         currentLobby = lobby {
             instance = lobbyInstance
@@ -987,14 +1030,38 @@ abstract class GameMode : ServerMode {
         onWaitingStart()
         onGameReset()
         checkMinPlayersThreshold()
+
+        waitingActionBarTask = repeat(40) {
+            if (phase != GamePhase.WAITING) return@repeat
+            val current = tracker.aliveCount
+            val needed = settings.timing.minPlayers
+            for (player in lobbyInstance.players) {
+                player.sendActionBar(player.translate("orbit.game.waiting",
+                    "current" to current.toString(),
+                    "needed" to needed.toString()))
+            }
+        }
     }
 
     private fun enterStarting() {
+        waitingActionBarTask?.cancel()
+        waitingActionBarTask = null
+
         installFreezeNode()
 
         startingCountdown = countdown(settings.timing.countdownSeconds.seconds) {
             onTick { remaining ->
                 onCountdownTick(remaining)
+                val seconds = remaining.inWholeSeconds.toInt()
+                if (seconds in 1..3) {
+                    lobbyInstance.players.forEach { p ->
+                        p.playSound(SoundEvent.BLOCK_NOTE_BLOCK_PLING, 1f, if (seconds == 1) 2f else 1f)
+                    }
+                } else if (seconds == 0) {
+                    lobbyInstance.players.forEach { p ->
+                        p.playSound(SoundEvent.ENTITY_PLAYER_LEVELUP, 1f, 1f)
+                    }
+                }
             }
             onComplete {
                 startingCountdown = null
@@ -1151,6 +1218,10 @@ abstract class GameMode : ServerMode {
         cleanupOvertime()
         cleanupGameMechanicsNode()
         cleanupVoidCheck()
+
+        for (uuid in tracker.alive) {
+            placements[uuid] = 1
+        }
 
         val result = lastEndResult ?: matchResult { draw() }
 
