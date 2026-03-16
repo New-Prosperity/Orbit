@@ -1,8 +1,11 @@
 package me.nebula.orbit.mode.game
 
 import me.nebula.ether.utils.logging.logger
+import me.nebula.ether.utils.hazelcast.Store
 import me.nebula.gravity.host.ConsumeTicketProcessor
 import me.nebula.gravity.host.HostTicketStore
+import me.nebula.gravity.messaging.GameEndMessage
+import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.rank.RankManager
 import me.nebula.gravity.reconnection.ReconnectionData
 import me.nebula.gravity.reconnection.ReconnectionStore
@@ -1258,10 +1261,16 @@ abstract class GameMode : ServerMode {
             onComplete {
                 endingCountdown = null
                 onEndingComplete()
+                if (!Orbit.shuttingDown.compareAndSet(false, true)) return@onComplete
                 logger.info { "Game ended, terminating server..." }
+                val gameMode = Orbit.gameMode
+                val playerIds = gameInstance.players.map { it.uuid }
+                if (gameMode != null && playerIds.isNotEmpty()) {
+                    runCatching { NetworkMessenger.publish(GameEndMessage(playerIds, gameMode)) }
+                }
                 Thread.startVirtualThread {
+                    runCatching { Store.flushAll() }
                     Orbit.app.stop().join()
-                    Runtime.getRuntime().halt(0)
                 }
             }
         }

@@ -7,8 +7,7 @@ import me.nebula.gravity.host.HostTicketData
 import me.nebula.gravity.host.HostTicketStore
 import me.nebula.gravity.messaging.HostProvisionRequestMessage
 import me.nebula.gravity.messaging.NetworkMessenger
-import me.nebula.gravity.party.PartyLookupStore
-import me.nebula.gravity.party.PartyStore
+import me.nebula.gravity.party.PartyManager
 import me.nebula.gravity.queue.PoolConfig
 import me.nebula.gravity.queue.PoolConfigStore
 import me.nebula.gravity.rank.RankManager
@@ -128,7 +127,7 @@ object HostMenu {
             return
         }
 
-        val members = collectMembers(player.uuid)
+        val members = PartyManager.collectMembers(player.uuid)
         val requestId = idGenerator.newId()
 
         NetworkMessenger.publish(HostProvisionRequestMessage(
@@ -143,9 +142,4 @@ object HostMenu {
         logger.info { "Host request published: id=$requestId, host=${player.uuid}, gameMode=${config.gameMode}, map=$map, members=${members.size}" }
     }
 
-    private fun collectMembers(hostOwner: UUID): List<UUID> {
-        val partyId = PartyLookupStore.load(hostOwner) ?: return listOf(hostOwner)
-        val party = PartyStore.load(partyId) ?: return listOf(hostOwner)
-        return party.members.toList()
-    }
 }

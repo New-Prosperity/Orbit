@@ -1,10 +1,13 @@
 package me.nebula.orbit.mode.hub
 
 import me.nebula.ether.utils.logging.logger
+import me.nebula.gravity.messaging.GameEndMessage
 import me.nebula.gravity.messaging.HostProvisionStatusMessage
 import me.nebula.gravity.messaging.NetworkMessenger
+import me.nebula.gravity.messaging.PartyQueueNotificationMessage
 import me.nebula.gravity.messaging.QueueAssignmentMessage
 import me.nebula.gravity.messaging.QueuePositionMessage
+import me.nebula.gravity.messaging.QueueProvisioningMessage
 import me.nebula.gravity.messaging.QueueRemovedMessage
 import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankStore
@@ -25,10 +28,6 @@ import me.nebula.orbit.utils.hotbar.hotbar
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.lobby.Lobby
 import me.nebula.orbit.utils.lobby.lobby
-import me.nebula.orbit.utils.modelengine.ModelEngine
-import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
-import me.nebula.orbit.utils.modelengine.model.standAloneModel
-import me.nebula.orbit.utils.modelengine.modeledEntity
 import me.nebula.orbit.utils.scoreboard.LiveScoreboard
 import me.nebula.orbit.utils.scoreboard.liveScoreboard
 import me.nebula.orbit.utils.tablist.LiveTabList
@@ -40,10 +39,10 @@ import net.minestom.server.event.GlobalEventHandler
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.instance.InstanceContainer
-import net.minestom.server.instance.block.Block
 import net.minestom.server.item.Material
-import java.nio.file.Files
-import java.nio.file.Path
+import net.minestom.server.sound.SoundEvent
+import net.minestom.server.timer.TaskSchedule
+import me.nebula.orbit.utils.sound.playSound
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
@@ -75,6 +74,39 @@ class HubMode : ServerMode {
     private var queueRemovedSubscription: UUID? = null
     private var queueAssignmentSubscription: UUID? = null
     private var queuePositionSubscription: UUID? = null
+    private var queueProvisioningSubscription: UUID? = null
+    private var partyQueueSubscription: UUID? = null
+    private var gameEndSubscription: UUID? = null
+
+    private fun scheduleSync(block: () -> Unit) {
+        MinecraftServer.getSchedulerManager().buildTask(block).schedule()
+    }
+
+    private inline fun <reified T : me.nebula.gravity.messaging.NetworkMessage> subscribeSync(
+        noinline handler: (T) -> Unit
+    ): UUID = NetworkMessenger.subscribe<T> { msg -> scheduleSync { handler(msg) } }
+
+    private inline fun <reified T : me.nebula.gravity.messaging.NetworkMessage> subscribeSyncForPlayer(
+        crossinline extractId: (T) -> UUID,
+        crossinline handler: (T, net.minestom.server.entity.Player) -> Unit
+    ): UUID = NetworkMessenger.subscribe<T> { msg ->
+        scheduleSync {
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(extractId(msg)) ?: return@scheduleSync
+            handler(msg, player)
+        }
+    }
+
+    private inline fun <reified T : me.nebula.gravity.messaging.NetworkMessage> subscribeSyncForPlayers(
+        crossinline extractIds: (T) -> List<UUID>,
+        crossinline handler: (T, net.minestom.server.entity.Player) -> Unit
+    ): UUID = NetworkMessenger.subscribe<T> { msg ->
+        scheduleSync {
+            for (playerId in extractIds(msg)) {
+                val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(playerId) ?: continue
+                handler(msg, player)
+            }
+        }
+    }
 
     private fun createInstance(): InstanceContainer {
         val worldPath = MapLoader.resolve("hub", "hub")
@@ -155,42 +187,65 @@ class HubMode : ServerMode {
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             hotbar.remove(event.player)
             HostMenu.removePending(event.player.uuid)
-            SelectorMenu.removeQueued(event.player.uuid)
+            SelectorMenu.removeAllQueued(event.player.uuid)
         }
 
-        hostStatusSubscription = NetworkMessenger.subscribe<HostProvisionStatusMessage> { msg ->
-            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(msg.hostOwner)
+        hostStatusSubscription = subscribeSyncForPlayer<HostProvisionStatusMessage>({ it.hostOwner }) { msg, player ->
             when (msg.status) {
-                "PROVISIONING" -> player?.let { it.sendMessage(it.translate("orbit.host.status.provisioning")) }
+                "PROVISIONING" -> player.sendMessage(player.translate("orbit.host.status.provisioning"))
                 "READY" -> {
                     HostMenu.removePending(msg.hostOwner)
-                    player?.let { it.sendMessage(it.translate("orbit.host.status.ready")) }
+                    player.sendMessage(player.translate("orbit.host.status.ready"))
                 }
                 "FAILED" -> {
                     HostMenu.removePending(msg.hostOwner)
-                    player?.let { it.sendMessage(it.translate("orbit.host.status.failed",
-                        "reason" to (msg.failureReason ?: "unknown"))) }
+                    player.sendMessage(player.translate("orbit.host.status.failed",
+                        "reason" to (msg.failureReason ?: "unknown")))
                 }
             }
         }
 
         queueRemovedSubscription = NetworkMessenger.subscribe<QueueRemovedMessage> { msg ->
-            SelectorMenu.removeQueued(msg.playerId)
-            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(msg.playerId)
-            player?.sendMessage(player.translate("orbit.queue.removed"))
-        }
-
-        queueAssignmentSubscription = NetworkMessenger.subscribe<QueueAssignmentMessage> { msg ->
-            for (playerId in msg.playerIds) {
-                SelectorMenu.removeQueued(playerId)
+            SelectorMenu.removeQueued(msg.playerId, msg.gameMode)
+            scheduleSync {
+                val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(msg.playerId) ?: return@scheduleSync
+                player.sendMessage(player.translate("orbit.queue.removed", "gamemode" to msg.gameMode))
+                player.playSound(SoundEvent.BLOCK_NOTE_BLOCK_BASS, 1f, 1f)
             }
         }
 
-        queuePositionSubscription = NetworkMessenger.subscribe<QueuePositionMessage> { msg ->
-            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(msg.playerId)
-            player?.sendActionBar(player.translate("orbit.queue.position",
+        queueAssignmentSubscription = NetworkMessenger.subscribe<QueueAssignmentMessage> { msg ->
+            for (playerId in msg.playerIds) { SelectorMenu.removeAllQueued(playerId) }
+            scheduleSync {
+                for (playerId in msg.playerIds) {
+                    val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(playerId) ?: continue
+                    player.playSound(SoundEvent.ENTITY_PLAYER_LEVELUP, 1f, 1f)
+                }
+            }
+        }
+
+        queuePositionSubscription = subscribeSyncForPlayer<QueuePositionMessage>({ it.playerId }) { msg, player ->
+            val estSeconds = if (msg.estimatedWaitMs > 0) (msg.estimatedWaitMs / 1000).toString() else "?"
+            player.sendActionBar(player.translate("orbit.queue.position",
                 "position" to msg.position.toString(),
-                "total" to msg.totalInQueue.toString()))
+                "total" to msg.totalInQueue.toString(),
+                "estimate" to estSeconds))
+            player.playSound(SoundEvent.BLOCK_NOTE_BLOCK_PLING, 0.5f, 1f)
+        }
+
+        queueProvisioningSubscription = subscribeSyncForPlayers<QueueProvisioningMessage>({ it.playerIds }) { _, player ->
+            player.sendActionBar(player.translate("orbit.queue.provisioning"))
+        }
+
+        partyQueueSubscription = subscribeSyncForPlayers<PartyQueueNotificationMessage>({ it.partyMemberIds }) { msg, player ->
+            player.sendActionBar(player.translate("orbit.queue.party_queued",
+                "leader" to msg.leaderName,
+                "gamemode" to msg.gameMode))
+            player.playSound(SoundEvent.UI_BUTTON_CLICK, 1f, 1f)
+        }
+
+        gameEndSubscription = subscribeSyncForPlayers<GameEndMessage>({ it.playerIds }) { msg, player ->
+            player.sendMessage(player.translate("orbit.queue.requeue_prompt", "gamemode" to msg.gameMode))
         }
 
         logger.info { "Hub mode installed" }
@@ -201,6 +256,9 @@ class HubMode : ServerMode {
         queueRemovedSubscription?.let { NetworkMessenger.unsubscribe<QueueRemovedMessage>(it) }
         queueAssignmentSubscription?.let { NetworkMessenger.unsubscribe<QueueAssignmentMessage>(it) }
         queuePositionSubscription?.let { NetworkMessenger.unsubscribe<QueuePositionMessage>(it) }
+        queueProvisioningSubscription?.let { NetworkMessenger.unsubscribe<QueueProvisioningMessage>(it) }
+        partyQueueSubscription?.let { NetworkMessenger.unsubscribe<PartyQueueNotificationMessage>(it) }
+        gameEndSubscription?.let { NetworkMessenger.unsubscribe<GameEndMessage>(it) }
         scoreboard.uninstall()
         tabList.uninstall()
         lobby.uninstall()

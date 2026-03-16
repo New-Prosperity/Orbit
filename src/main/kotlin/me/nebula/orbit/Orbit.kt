@@ -3,7 +3,9 @@ package me.nebula.orbit
 import me.nebula.ether.utils.app.App
 import me.nebula.ether.utils.app.appDelegate
 import me.nebula.ether.utils.environment.environment
+import me.nebula.ether.utils.hazelcast.Store
 import me.nebula.ether.utils.hazelcast.hazelcastModule
+import java.util.concurrent.atomic.AtomicBoolean
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.storage.StorageClient
 import me.nebula.ether.utils.storage.storageClient
@@ -80,6 +82,8 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 object Orbit {
+
+    val shuttingDown = AtomicBoolean(false)
 
     lateinit var app: App
     lateinit var translations: TranslationRegistry
@@ -424,12 +428,13 @@ object Orbit {
         }
 
         Runtime.getRuntime().addShutdownHook(Thread {
-            for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
-                player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid)))
+            if (!shuttingDown.compareAndSet(false, true)) return@Thread
+            for (player in MinecraftServer.getConnectionManager().onlinePlayers.toList()) {
+                runCatching { player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid))) }
             }
             if (serverUuid.isNotEmpty()) {
                 logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
-                NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid))
+                runCatching { NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid)) }
             }
             CosmeticListener.uninstall()
             AuraManager.uninstall()
@@ -439,6 +444,7 @@ object Orbit {
             CosmeticMountManager.uninstall()
             ModelEngine.uninstall()
             mode.shutdown()
+            runCatching { Store.flushAll() }
             app.stop().join()
         })
     }

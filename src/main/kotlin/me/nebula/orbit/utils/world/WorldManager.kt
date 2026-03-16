@@ -19,7 +19,7 @@ object WorldManager {
         val builder = WorldBuilder().apply(block)
         val instance = instanceManager.createInstanceContainer()
         builder.generator?.let { instance.setGenerator(it) }
-        builder.spawnPoint?.let { /* stored for reference */ }
+        builder.spawnPoint?.let { }
         worlds[name] = instance
         return instance
     }
