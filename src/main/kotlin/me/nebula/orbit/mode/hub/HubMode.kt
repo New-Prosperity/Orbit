@@ -9,6 +9,8 @@ import me.nebula.gravity.messaging.QueueAssignmentMessage
 import me.nebula.gravity.messaging.QueuePositionMessage
 import me.nebula.gravity.messaging.QueueProvisioningMessage
 import me.nebula.gravity.messaging.QueueRemovedMessage
+import me.nebula.gravity.property.NetworkProperties
+import me.nebula.gravity.property.PropertyStore
 import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.session.SessionStore
@@ -59,6 +61,8 @@ class HubMode : ServerMode {
             rankData?.let { RankStore.load(it.rank)?.name } ?: "Member"
         }
     }
+
+    override val maxPlayers: Int get() = PropertyStore[NetworkProperties.HUB_SLOTS]
 
     override val cosmeticConfig: CosmeticConfig = config.cosmetics ?: CosmeticConfig()
 
