@@ -136,17 +136,17 @@ object ArmorGlslGenerator {
         return when (axis) {
             ArmorRotationComponent.AXIS_X -> arrayOf(
                 doubleArrayOf(1.0, 0.0, 0.0),
-                doubleArrayOf(0.0, c, -s),
-                doubleArrayOf(0.0, s, c),
+                doubleArrayOf(0.0, c, s),
+                doubleArrayOf(0.0, -s, c),
             )
             ArmorRotationComponent.AXIS_Y -> arrayOf(
-                doubleArrayOf(c, 0.0, s),
+                doubleArrayOf(c, 0.0, -s),
                 doubleArrayOf(0.0, 1.0, 0.0),
-                doubleArrayOf(-s, 0.0, c),
+                doubleArrayOf(s, 0.0, c),
             )
             ArmorRotationComponent.AXIS_Z -> arrayOf(
-                doubleArrayOf(c, -s, 0.0),
-                doubleArrayOf(s, c, 0.0),
+                doubleArrayOf(c, s, 0.0),
+                doubleArrayOf(-s, c, 0.0),
                 doubleArrayOf(0.0, 0.0, 1.0),
             )
             else -> IDENTITY
@@ -228,7 +228,7 @@ object ArmorGlslGenerator {
 
     private val PIX_MATRIX = arrayOf(
         doubleArrayOf(1.0, 0.0, 0.0),
-        doubleArrayOf(0.0, 0.0, -1.0),
-        doubleArrayOf(0.0, 1.0, 0.0),
+        doubleArrayOf(0.0, 0.0, 1.0),
+        doubleArrayOf(0.0, -1.0, 0.0),
     )
 }
