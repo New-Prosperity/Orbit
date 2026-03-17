@@ -153,7 +153,7 @@ object ArmorParser {
         val cy = centerBb.y() - boneOrigin.y()
         val cz = centerBb.z() - boneOrigin.z()
         val s = if (part.isLeft) -1.0 else 1.0
-        val center = Vec(s * cx + s * part.cemXOffset, -cz, -cy + part.cemYOffset)
+        val center = Vec(s * cx - part.cemXOffset, -cz, -cy + part.cemYOffset)
 
         val inflate = element.inflate.toDouble()
         val halfSize = Vec(
@@ -191,7 +191,7 @@ object ArmorParser {
         val px = origin.x() - boneOrigin.x()
         val py = origin.y() - boneOrigin.y()
         val pz = origin.z() - boneOrigin.z()
-        return Vec(s * px + s * part.cemXOffset, -pz, -py + part.cemYOffset)
+        return Vec(s * px - part.cemXOffset, -pz, -py + part.cemYOffset)
     }
 
     private fun buildRotationLevels(
@@ -224,13 +224,13 @@ object ArmorParser {
         output: MutableList<ArmorRotationComponent>,
         bbRotation: Vec,
     ) {
-        val tbnX = -bbRotation.x()
-        val tbnZ = -bbRotation.y()
-        val tbnY = -bbRotation.z()
+        val boxX = -bbRotation.x()
+        val boxY = -bbRotation.y()
+        val boxZ = -bbRotation.z()
 
-        if (tbnX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnX), ArmorRotationComponent.AXIS_X))
-        if (tbnZ != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnZ), ArmorRotationComponent.AXIS_Z))
-        if (tbnY != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnY), ArmorRotationComponent.AXIS_Y))
+        if (boxX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxX), ArmorRotationComponent.AXIS_X))
+        if (boxY != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxY), ArmorRotationComponent.AXIS_Y))
+        if (boxZ != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxZ), ArmorRotationComponent.AXIS_Z))
     }
 
 }
