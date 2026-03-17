@@ -67,18 +67,16 @@ object ArmorGlslGenerator {
 
                 val rotations = mutableMapOf<String, String>()
                 for (cube in piece.cubes) {
-                    if (cube.hasRotation) {
-                        val key = rotationKey(cube.rotationLevels)
-                        if (key !in rotations) {
-                            val name = "rot${rotations.size}"
-                            rotations[key] = name
-                            sb.appendLine("        mat3 $name = ${precomputeRotation(cube.rotationLevels)};")
-                        }
+                    val key = rotationKey(cube.rotationLevels)
+                    if (key !in rotations) {
+                        val name = "rot${rotations.size}"
+                        rotations[key] = name
+                        sb.appendLine("        mat3 $name = ${precomputeRotation(cube.rotationLevels)};")
                     }
                 }
 
                 for (cube in piece.cubes) {
-                    val rotName = if (cube.hasRotation) rotations[rotationKey(cube.rotationLevels)]!! else "mat3(1.0)"
+                    val rotName = rotations[rotationKey(cube.rotationLevels)]!!
                     sb.appendLine("        ${generateCemBox(cube, tex.width, tex.height, armor.colorId, rotName)}")
                 }
 
