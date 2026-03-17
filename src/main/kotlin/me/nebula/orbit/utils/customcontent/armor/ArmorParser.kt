@@ -153,7 +153,7 @@ object ArmorParser {
         val cy = centerBb.y() - boneOrigin.y()
         val cz = centerBb.z() - boneOrigin.z()
         val s = if (part.isLeft) -1.0 else 1.0
-        val center = Vec(s * cx + s * part.cemXOffset, -cz, -cy + part.cemYOffset)
+        val center = Vec(cx + s * part.cemXOffset, -cz, -cy + part.cemYOffset)
 
         val inflate = element.inflate.toDouble()
         val halfSize = Vec(
@@ -191,7 +191,7 @@ object ArmorParser {
         val px = origin.x() - boneOrigin.x()
         val py = origin.y() - boneOrigin.y()
         val pz = origin.z() - boneOrigin.z()
-        return Vec(s * px + s * part.cemXOffset, -pz, -py + part.cemYOffset)
+        return Vec(px + s * part.cemXOffset, -pz, -py + part.cemYOffset)
     }
 
     private fun buildRotationLevels(
