@@ -65,8 +65,21 @@ object ArmorGlslGenerator {
                 val texIndex = if (piece.part.layer == 2) 1 else 0
                 val tex = armor.parsed.textures.getOrElse(texIndex) { armor.parsed.textures.first() }
 
+                val rotations = mutableMapOf<String, String>()
                 for (cube in piece.cubes) {
-                    sb.appendLine("        ${generateAddBox(cube, tex.width, tex.height, armor.colorId)}")
+                    if (cube.hasRotation) {
+                        val key = rotationKey(cube.rotationLevels)
+                        if (key !in rotations) {
+                            val name = "rot${rotations.size}"
+                            rotations[key] = name
+                            sb.appendLine("        mat3 $name = ${precomputeRotation(cube.rotationLevels)};")
+                        }
+                    }
+                }
+
+                for (cube in piece.cubes) {
+                    val rotName = if (cube.hasRotation) rotations[rotationKey(cube.rotationLevels)]!! else "mat3(1.0)"
+                    sb.appendLine("        ${generateCemBox(cube, tex.width, tex.height, armor.colorId, rotName)}")
                 }
 
                 val hasEmissive = piece.cubes.any { it.emissive > 0f }
@@ -84,29 +97,75 @@ object ArmorGlslGenerator {
         }
     }
 
-    private fun generateAddBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int): String {
+    private fun generateCemBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, rotName: String): String {
         val cellOffsetU = colorId * CELL_WIDTH
 
-        val dSide = formatUv(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val uSide = formatUv(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val nSide = formatUv(cube.uvFaces["north"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val eSide = formatUv(cube.uvFaces["east"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val sSide = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val wSide = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        val up = formatUv(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        val down = formatUv(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        val north = formatUv(cube.uvFaces["north"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        val east = formatUv(cube.uvFaces["east"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        val south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        val west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
 
         val center = if (cube.hasRotation) bakeRotatedCenter(cube.center, cube.rotationLevels) else cube.center
         val pos = formatVec3(center)
         val size = formatVec3Pix(cube.halfSize)
+        val emissive = if (cube.emissive > 0f) "true" else "false"
 
-        val rotation = if (cube.hasRotation) {
-            val matrices = cube.rotationLevels.reversed().map { buildRotationMatrix(it.components) }
-            "PIX * ${matrices.joinToString(" * ")}"
-        } else {
-            "PIX"
+        return "CEM_BOX($pos, $size, $rotName, vec3(0), $up, $down, $north, $east, $south, $west, $emissive);"
+    }
+
+    private fun precomputeRotation(levels: List<ArmorRotationLevel>): String {
+        var m = PIX_MATRIX
+        for (level in levels.reversed()) {
+            for (comp in level.components) {
+                m = multiply(m, rotationMatrix(comp.radians, comp.axis))
+            }
+        }
+        return formatMat3(m)
+    }
+
+    private fun rotationKey(levels: List<ArmorRotationLevel>): String =
+        levels.joinToString("|") { level ->
+            level.components.joinToString(",") { "${it.radians}:${it.axis}" }
         }
 
-        return "ADD_BOX_EXT_WITH_ROTATION_ROTATE($pos, $size, $rotation, vec3(0, 0, 0), $dSide, $uSide, $nSide, $eSide, $sSide, $wSide, 0, 0, 0, 0, 0, 0);"
+    private fun rotationMatrix(radians: Double, axis: Int): Array<DoubleArray> {
+        val c = cos(radians)
+        val s = sin(radians)
+        return when (axis) {
+            ArmorRotationComponent.AXIS_X -> arrayOf(
+                doubleArrayOf(1.0, 0.0, 0.0),
+                doubleArrayOf(0.0, c, -s),
+                doubleArrayOf(0.0, s, c),
+            )
+            ArmorRotationComponent.AXIS_Y -> arrayOf(
+                doubleArrayOf(c, 0.0, s),
+                doubleArrayOf(0.0, 1.0, 0.0),
+                doubleArrayOf(-s, 0.0, c),
+            )
+            ArmorRotationComponent.AXIS_Z -> arrayOf(
+                doubleArrayOf(c, -s, 0.0),
+                doubleArrayOf(s, c, 0.0),
+                doubleArrayOf(0.0, 0.0, 1.0),
+            )
+            else -> IDENTITY
+        }
     }
+
+    private fun multiply(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> {
+        val r = Array(3) { DoubleArray(3) }
+        for (i in 0..2) for (j in 0..2) for (k in 0..2)
+            r[i][j] += a[i][k] * b[k][j]
+        return r
+    }
+
+    private fun formatMat3(m: Array<DoubleArray>): String =
+        "mat3(%.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f)".format(
+            m[0][0], m[1][0], m[2][0],
+            m[0][1], m[1][1], m[2][1],
+            m[0][2], m[1][2], m[2][2],
+        )
 
     private fun bakeRotatedCenter(center: Vec, levels: List<ArmorRotationLevel>): Vec {
         var pos = center
@@ -136,19 +195,6 @@ object ArmorGlslGenerator {
         }
     }
 
-    private fun buildRotationMatrix(components: List<ArmorRotationComponent>): String {
-        if (components.isEmpty()) return "Rotate3(0, X)"
-
-        val parts = components.map { comp ->
-            "Rotate3(%.6f, ${AXIS_NAMES[comp.axis]})".format(comp.radians)
-        }
-
-        return when {
-            parts.size == 1 -> parts[0]
-            else -> parts.joinToString(" * ")
-        }
-    }
-
     private fun formatVec3(v: Vec): String =
         "vec3(%.4f, %.4f, %.4f)".format(v.x(), v.y(), v.z())
 
@@ -172,6 +218,17 @@ object ArmorGlslGenerator {
 
     private const val CELL_WIDTH = 64f
     private const val CELL_HEIGHT = 32f
-    private val AXIS_NAMES = arrayOf("X", "Y", "Z")
     private val EMPTY_UV = ArmorCubeUv(0f, 0f, 0f, 0f)
+
+    private val IDENTITY = arrayOf(
+        doubleArrayOf(1.0, 0.0, 0.0),
+        doubleArrayOf(0.0, 1.0, 0.0),
+        doubleArrayOf(0.0, 0.0, 1.0),
+    )
+
+    private val PIX_MATRIX = arrayOf(
+        doubleArrayOf(1.0, 0.0, 0.0),
+        doubleArrayOf(0.0, 0.0, -1.0),
+        doubleArrayOf(0.0, 1.0, 0.0),
+    )
 }
