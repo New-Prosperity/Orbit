@@ -111,10 +111,13 @@ void writeDepth(vec3 Pos) {
     }
 }
 
-#define CEM_BOX(pos, size, rot, pivot, up, down, north, east, south, west, emissive) \
-    color = renderBox( \
-        rot * (-center + (matf_verifyPos(pos) + pivot) * modelSize) - pivot * modelSize, \
-        rot * dirTBN, \
-        matf_verifySize(size) * modelSize, \
-        TBN * transpose(rot), \
-        color, minT, up, down, north, east, south, west, emissive);
+#define CEM_BOX(pos, size, elemRot, pivot, up, down, north, east, south, west, emissive) \
+    { \
+        vec3 _p = PIX * (matf_verifyPos(pos) * modelSize); \
+        vec3 _piv = PIX * (pivot * modelSize); \
+        vec3 _ro = elemRot * (PIX * (-center) + _p - _piv) + _piv; \
+        vec3 _rd = elemRot * (PIX * dirTBN); \
+        color = renderBox(_ro, _rd, matf_verifySize(size) * modelSize, \
+            TBN * transpose(PIX) * transpose(elemRot), \
+            color, minT, up, down, north, east, south, west, emissive); \
+    }

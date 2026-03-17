@@ -105,16 +105,28 @@ object ArmorGlslGenerator {
         val south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         val west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
 
-        val center = if (cube.hasRotation) bakeRotatedCenter(cube.center, cube.rotationLevels) else cube.center
-        val pos = formatVec3(center)
+        val pos = formatVec3(cube.center)
         val size = formatVec3Pix(cube.halfSize)
         val emissive = if (cube.emissive > 0f) "true" else "false"
 
-        return "CEM_BOX($pos, $size, $rotName, vec3(0), $up, $down, $north, $east, $south, $west, $emissive);"
+        val pivot = if (cube.hasRotation) {
+            computeEffectivePivot(cube.rotationLevels)
+        } else {
+            "vec3(0)"
+        }
+
+        return "CEM_BOX($pos, $size, $rotName, $pivot, $up, $down, $north, $east, $south, $west, $emissive);"
+    }
+
+    private fun computeEffectivePivot(levels: List<ArmorRotationLevel>): String {
+        if (levels.isEmpty()) return "vec3(0)"
+        if (levels.size == 1) return formatVec3(levels[0].pivot)
+        val outerPivot = levels.last().pivot
+        return formatVec3(outerPivot)
     }
 
     private fun precomputeRotation(levels: List<ArmorRotationLevel>): String {
-        var m = PIX_MATRIX
+        var m = IDENTITY
         for (level in levels.reversed()) {
             for (comp in level.components) {
                 m = multiply(m, rotationMatrix(comp.radians, comp.axis))
