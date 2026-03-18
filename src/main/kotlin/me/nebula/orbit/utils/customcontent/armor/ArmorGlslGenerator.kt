@@ -110,17 +110,13 @@ object ArmorGlslGenerator {
         val size = formatVec3Pix(cube.halfSize)
         val emissive = if (cube.emissive > 0f) "true" else "false"
 
-        val adjPiv: String
-        val stdPiv: String
-        if (cube.hasRotation && cube.rotationLevels.size == 1) {
-            adjPiv = formatVec3(cube.rotationLevels[0].pivot)
-            stdPiv = formatVec3(cube.rotationLevels[0].stdPivot)
+        val pivot = if (cube.hasRotation && cube.rotationLevels.size == 1) {
+            formatVec3(cube.rotationLevels[0].pivot)
         } else {
-            adjPiv = "vec3(0)"
-            stdPiv = "vec3(0)"
+            "vec3(0)"
         }
 
-        return "CEM_BOX($pos, $size, $rotName, $adjPiv, $stdPiv, $up, $down, $north, $east, $south, $west, $emissive);"
+        return "CEM_BOX($pos, $size, $rotName, $pivot, $up, $down, $north, $east, $south, $west, $emissive);"
     }
 
     private fun precomputeRotation(levels: List<ArmorRotationLevel>): String {

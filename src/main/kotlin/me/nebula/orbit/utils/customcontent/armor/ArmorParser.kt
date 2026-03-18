@@ -190,19 +190,11 @@ object ArmorParser {
         )
     }
 
-    private data class PivotPair(val adjusted: Vec, val standard: Vec)
-
-    private fun bbToTbnPivots(elemCenter: Vec, origin: Vec, boneOrigin: Vec, part: ArmorPart): PivotPair {
-        val cx = elemCenter.x() - boneOrigin.x()
-        val cy = elemCenter.y() - boneOrigin.y()
-        val cz = elemCenter.z() - boneOrigin.z()
+    private fun bbToTbnPivot(origin: Vec, boneOrigin: Vec, part: ArmorPart): Vec {
         val px = origin.x() - boneOrigin.x()
         val py = origin.y() - boneOrigin.y()
         val pz = origin.z() - boneOrigin.z()
-        return PivotPair(
-            adjusted = part.convertPivot(cx, cy, cz, px, py, pz),
-            standard = part.convertCenter(px, py, pz),
-        )
+        return part.convertPivot(px, py, pz)
     }
 
     private fun computeBbPivotOffset(
@@ -233,16 +225,14 @@ object ArmorParser {
         val elemComponents = mutableListOf<ArmorRotationComponent>()
         addEulerComponents(elemComponents, element.rotation)
         if (elemComponents.isNotEmpty()) {
-            val pivots = bbToTbnPivots(centerBb, element.origin, boneOrigin, part)
-            levels.add(ArmorRotationLevel(elemComponents, pivots.adjusted, pivots.standard))
+            levels.add(ArmorRotationLevel(elemComponents, bbToTbnPivot(element.origin, boneOrigin, part)))
         }
 
         for (transform in parentTransforms.reversed()) {
             val groupComponents = mutableListOf<ArmorRotationComponent>()
             addEulerComponents(groupComponents, transform.rotation)
             if (groupComponents.isNotEmpty()) {
-                val pivots = bbToTbnPivots(centerBb, transform.origin, boneOrigin, part)
-                levels.add(ArmorRotationLevel(groupComponents, pivots.adjusted, pivots.standard))
+                levels.add(ArmorRotationLevel(groupComponents, bbToTbnPivot(transform.origin, boneOrigin, part)))
             }
         }
 
@@ -253,9 +243,9 @@ object ArmorParser {
         output: MutableList<ArmorRotationComponent>,
         bbRotation: Vec,
     ) {
-        val boxX = bbRotation.x()
-        val boxY = bbRotation.y()
-        val boxZ = bbRotation.z()
+        val boxX = -bbRotation.x()
+        val boxY = -bbRotation.y()
+        val boxZ = -bbRotation.z()
 
         if (boxX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxX), ArmorRotationComponent.AXIS_X))
         if (boxY != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxY), ArmorRotationComponent.AXIS_Y))
