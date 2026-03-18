@@ -105,10 +105,6 @@ object ArmorGlslGenerator {
         var south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         var west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
 
-        if (isLeft) {
-            val tmpEW = east; east = west; west = tmpEW
-            val tmpNS = north; north = south; south = tmpNS
-        }
 
         val pos = formatVec3(cube.center)
         val size = formatVec3Pix(cube.halfSize)
