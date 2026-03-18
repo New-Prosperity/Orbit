@@ -31,7 +31,7 @@ sealed class ArmorPart(
         Vec(signX * cx + tbnOffsetX, signZ * cz + tbnOffsetY, signY * cy + tbnOffsetZ)
 
     fun convertPivot(px: Double, py: Double, pz: Double): Vec =
-        Vec(px, -pz, py)
+        Vec(signX * px + tbnOffsetX, signZ * pz + tbnOffsetY, signY * py + tbnOffsetZ)
 
     fun alternateLayerPart(): ArmorPart? = when (this) {
         Chestplate -> InnerArmor
