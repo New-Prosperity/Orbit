@@ -105,28 +105,26 @@ object ArmorGlslGenerator {
         val south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         val west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
 
-        val pos = formatVec3(cube.center)
+        val center = if (cube.hasRotation) bakeRotatedCenter(cube.center, cube.rotationLevels) else cube.center
+        val pos = formatVec3(center)
         val size = formatVec3Pix(cube.halfSize)
         val emissive = if (cube.emissive > 0f) "true" else "false"
 
-        val pivot = if (cube.hasRotation) {
-            computeEffectivePivot(cube.rotationLevels)
-        } else {
-            "vec3(0)"
-        }
-
-        return "CEM_BOX($pos, $size, $rotName, $pivot, $up, $down, $north, $east, $south, $west, $emissive);"
+        return "CEM_BOX($pos, $size, $rotName, vec3(0), $up, $down, $north, $east, $south, $west, $emissive);"
     }
 
-    private fun computeEffectivePivot(levels: List<ArmorRotationLevel>): String {
-        if (levels.isEmpty()) return "vec3(0)"
-        if (levels.size == 1) return formatVec3(levels[0].pivot)
-        val outerPivot = levels.last().pivot
-        return formatVec3(outerPivot)
+    private fun bakeRotatedCenter(center: Vec, levels: List<ArmorRotationLevel>): Vec {
+        var pos = center
+        for (level in levels) {
+            for (comp in level.components) {
+                pos = rotateAroundAxis(pos, comp.radians, comp.axis)
+            }
+        }
+        return pos
     }
 
     private fun precomputeRotation(levels: List<ArmorRotationLevel>): String {
-        var m = IDENTITY
+        var m = PIX_MATRIX
         for (level in levels.reversed()) {
             for (comp in level.components) {
                 m = multiply(m, rotationMatrix(comp.radians, comp.axis))
@@ -163,6 +161,17 @@ object ArmorGlslGenerator {
         }
     }
 
+    private fun rotateAroundAxis(p: Vec, angle: Double, axis: Int): Vec {
+        val c = cos(angle)
+        val s = sin(angle)
+        return when (axis) {
+            ArmorRotationComponent.AXIS_X -> Vec(p.x(), p.y() * c - p.z() * s, p.y() * s + p.z() * c)
+            ArmorRotationComponent.AXIS_Y -> Vec(p.x() * c + p.z() * s, p.y(), -p.x() * s + p.z() * c)
+            ArmorRotationComponent.AXIS_Z -> Vec(p.x() * c - p.y() * s, p.x() * s + p.y() * c, p.z())
+            else -> p
+        }
+    }
+
     private fun multiply(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> {
         val r = Array(3) { DoubleArray(3) }
         for (i in 0..2) for (j in 0..2) for (k in 0..2)
@@ -176,34 +185,6 @@ object ArmorGlslGenerator {
             m[0][1], m[1][1], m[2][1],
             m[0][2], m[1][2], m[2][2],
         )
-
-    private fun bakeRotatedCenter(center: Vec, levels: List<ArmorRotationLevel>): Vec {
-        var pos = center
-        for (level in levels) {
-            val offset = pos.sub(level.pivot)
-            pos = level.pivot.add(applyForwardRotation(offset, level.components))
-        }
-        return pos
-    }
-
-    private fun applyForwardRotation(point: Vec, components: List<ArmorRotationComponent>): Vec {
-        var p = point
-        for (comp in components) {
-            p = rotateAroundAxis(p, -comp.radians, comp.axis)
-        }
-        return p
-    }
-
-    private fun rotateAroundAxis(p: Vec, angle: Double, axis: Int): Vec {
-        val c = cos(angle)
-        val s = sin(angle)
-        return when (axis) {
-            ArmorRotationComponent.AXIS_X -> Vec(p.x(), p.y() * c - p.z() * s, p.y() * s + p.z() * c)
-            ArmorRotationComponent.AXIS_Y -> Vec(p.x() * c + p.z() * s, p.y(), -p.x() * s + p.z() * c)
-            ArmorRotationComponent.AXIS_Z -> Vec(p.x() * c - p.y() * s, p.x() * s + p.y() * c, p.z())
-            else -> p
-        }
-    }
 
     private fun formatVec3(v: Vec): String =
         "vec3(%.4f, %.4f, %.4f)".format(v.x(), v.y(), v.z())

@@ -224,13 +224,13 @@ object ArmorParser {
         output: MutableList<ArmorRotationComponent>,
         bbRotation: Vec,
     ) {
-        val boxX = -bbRotation.x()
-        val boxY = -bbRotation.y()
-        val boxZ = bbRotation.z()
+        val tbnX = -bbRotation.x()
+        val tbnZ = -bbRotation.y()
+        val tbnY = -bbRotation.z()
 
-        if (boxX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxX), ArmorRotationComponent.AXIS_X))
-        if (boxY != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxY), ArmorRotationComponent.AXIS_Y))
-        if (boxZ != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxZ), ArmorRotationComponent.AXIS_Z))
+        if (tbnX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnX), ArmorRotationComponent.AXIS_X))
+        if (tbnZ != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnZ), ArmorRotationComponent.AXIS_Z))
+        if (tbnY != 0.0) output.add(ArmorRotationComponent(Math.toRadians(tbnY), ArmorRotationComponent.AXIS_Y))
     }
 
 }
