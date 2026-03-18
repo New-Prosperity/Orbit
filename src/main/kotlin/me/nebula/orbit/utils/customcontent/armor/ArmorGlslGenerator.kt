@@ -105,26 +105,21 @@ object ArmorGlslGenerator {
         val south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         val west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
 
-        val center = if (cube.hasRotation) bakeRotatedCenter(cube.center, cube.rotationLevels) else cube.center
-        val pos = formatVec3(center)
+        val pos = formatVec3(cube.center)
         val size = formatVec3Pix(cube.halfSize)
         val emissive = if (cube.emissive > 0f) "true" else "false"
-
-        return "CEM_BOX($pos, $size, $rotName, vec3(0), $up, $down, $north, $east, $south, $west, $emissive);"
-    }
-
-    private fun bakeRotatedCenter(center: Vec, levels: List<ArmorRotationLevel>): Vec {
-        var pos = center
-        for (level in levels) {
-            for (comp in level.components) {
-                pos = rotateAroundAxis(pos, comp.radians, comp.axis)
-            }
+        val pivot = if (cube.hasRotation && cube.rotationLevels.size == 1) {
+            formatVec3(cube.rotationLevels[0].pivot)
+        } else {
+            "vec3(0)"
         }
-        return pos
+
+        return "CEM_BOX($pos, $size, $rotName, $pivot, $up, $down, $north, $east, $south, $west, $emissive);"
     }
 
     private fun precomputeRotation(levels: List<ArmorRotationLevel>): String {
-        var m = PIX_MATRIX
+        if (levels.isEmpty()) return "mat3(1.0)"
+        var m = IDENTITY
         for (level in levels.reversed()) {
             for (comp in level.components) {
                 m = multiply(m, rotationMatrix(comp.radians, comp.axis))
@@ -158,17 +153,6 @@ object ArmorGlslGenerator {
                 doubleArrayOf(0.0, 0.0, 1.0),
             )
             else -> IDENTITY
-        }
-    }
-
-    private fun rotateAroundAxis(p: Vec, angle: Double, axis: Int): Vec {
-        val c = cos(angle)
-        val s = sin(angle)
-        return when (axis) {
-            ArmorRotationComponent.AXIS_X -> Vec(p.x(), p.y() * c - p.z() * s, p.y() * s + p.z() * c)
-            ArmorRotationComponent.AXIS_Y -> Vec(p.x() * c + p.z() * s, p.y(), -p.x() * s + p.z() * c)
-            ArmorRotationComponent.AXIS_Z -> Vec(p.x() * c - p.y() * s, p.x() * s + p.y() * c, p.z())
-            else -> p
         }
     }
 
@@ -215,11 +199,5 @@ object ArmorGlslGenerator {
         doubleArrayOf(1.0, 0.0, 0.0),
         doubleArrayOf(0.0, 1.0, 0.0),
         doubleArrayOf(0.0, 0.0, 1.0),
-    )
-
-    private val PIX_MATRIX = arrayOf(
-        doubleArrayOf(1.0, 0.0, 0.0),
-        doubleArrayOf(0.0, 0.0, 1.0),
-        doubleArrayOf(0.0, -1.0, 0.0),
     )
 }
