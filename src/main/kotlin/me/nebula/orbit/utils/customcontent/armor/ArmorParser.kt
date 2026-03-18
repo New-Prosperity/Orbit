@@ -32,6 +32,7 @@ object ArmorParser {
     ) {
         val part = ArmorPart.fromBoneName(group.name)
         if (part != null) {
+            if (!part.enabled) return
             val cubes = collectCubes(group, elementsByUuid, group.origin, emptyList(), part, output)
             splitByTextureLayer(part, cubes, output)
             return
@@ -74,14 +75,15 @@ object ArmorParser {
         from: ArmorPart,
         to: ArmorPart,
     ): List<ArmorCube> {
-        val dz = to.cemYOffset - from.cemYOffset
-        val dx = from.cemXOffset - to.cemXOffset
-        if (dz == 0.0 && dx == 0.0) return cubes
+        val dx = to.tbnOffsetX - from.tbnOffsetX
+        val dy = to.tbnOffsetY - from.tbnOffsetY
+        val dz = to.tbnOffsetZ - from.tbnOffsetZ
+        if (dx == 0.0 && dy == 0.0 && dz == 0.0) return cubes
         return cubes.map { cube ->
             cube.copy(
-                center = Vec(cube.center.x() + dx, cube.center.y(), cube.center.z() + dz),
+                center = Vec(cube.center.x() + dx, cube.center.y() + dy, cube.center.z() + dz),
                 rotationLevels = cube.rotationLevels.map { level ->
-                    level.copy(pivot = Vec(level.pivot.x() + dx, level.pivot.y(), level.pivot.z() + dz))
+                    level.copy(pivot = Vec(level.pivot.x() + dx, level.pivot.y() + dy, level.pivot.z() + dz))
                 },
             )
         }
@@ -152,8 +154,7 @@ object ArmorParser {
         val cx = centerBb.x() - boneOrigin.x()
         val cy = centerBb.y() - boneOrigin.y()
         val cz = centerBb.z() - boneOrigin.z()
-        val s = if (part.isLeft) -1.0 else 1.0
-        val center = Vec(s * cx - part.cemXOffset, -cz, -cy + part.cemYOffset)
+        val center = part.convertCenter(cx, cy, cz)
 
         val inflate = element.inflate.toDouble()
         val halfSize = Vec(
@@ -187,11 +188,11 @@ object ArmorParser {
         )
     }
 
-    private fun bbToTbnPivot(origin: Vec, boneOrigin: Vec, s: Double, part: ArmorPart): Vec {
+    private fun bbToTbnPivot(origin: Vec, boneOrigin: Vec, part: ArmorPart): Vec {
         val px = origin.x() - boneOrigin.x()
         val py = origin.y() - boneOrigin.y()
         val pz = origin.z() - boneOrigin.z()
-        return Vec(s * px - part.cemXOffset, -pz, -py + part.cemYOffset)
+        return part.convertPivot(px, py, pz)
     }
 
     private fun buildRotationLevels(
@@ -200,20 +201,19 @@ object ArmorParser {
         parentTransforms: List<GroupTransform>,
         part: ArmorPart,
     ): List<ArmorRotationLevel> {
-        val s = if (part.isLeft) -1.0 else 1.0
         val levels = mutableListOf<ArmorRotationLevel>()
 
         val elemComponents = mutableListOf<ArmorRotationComponent>()
         addEulerComponents(elemComponents, element.rotation)
         if (elemComponents.isNotEmpty()) {
-            levels.add(ArmorRotationLevel(elemComponents, bbToTbnPivot(element.origin, boneOrigin, s, part)))
+            levels.add(ArmorRotationLevel(elemComponents, bbToTbnPivot(element.origin, boneOrigin, part)))
         }
 
         for (transform in parentTransforms.reversed()) {
             val groupComponents = mutableListOf<ArmorRotationComponent>()
             addEulerComponents(groupComponents, transform.rotation)
             if (groupComponents.isNotEmpty()) {
-                levels.add(ArmorRotationLevel(groupComponents, bbToTbnPivot(transform.origin, boneOrigin, s, part)))
+                levels.add(ArmorRotationLevel(groupComponents, bbToTbnPivot(transform.origin, boneOrigin, part)))
             }
         }
 
