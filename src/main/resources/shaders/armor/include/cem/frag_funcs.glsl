@@ -117,7 +117,7 @@ void writeDepth(vec3 Pos) {
         vec3 _piv = PIX * (pivot * modelSize); \
         vec3 _v = PIX * (-center) + _p - _piv; \
         vec3 _ro = 2.0 * _v - elemRot * _v + _piv; \
-        vec3 _rd = elemRot * (PIX * dirTBN); \
+        vec3 _rd = 2.0 * (PIX * dirTBN) - elemRot * (PIX * dirTBN); \
         color = renderBox(_ro, _rd, matf_verifySize(size) * modelSize, \
             TBN * transpose(PIX) * transpose(elemRot), \
             color, minT, up, down, north, east, south, west, emissive); \
