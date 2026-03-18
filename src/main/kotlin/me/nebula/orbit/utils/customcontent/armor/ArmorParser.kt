@@ -226,7 +226,7 @@ object ArmorParser {
     ) {
         val boxX = -bbRotation.x()
         val boxY = -bbRotation.y()
-        val boxZ = -bbRotation.z()
+        val boxZ = bbRotation.z()
 
         if (boxX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxX), ArmorRotationComponent.AXIS_X))
         if (boxY != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxY), ArmorRotationComponent.AXIS_Y))
