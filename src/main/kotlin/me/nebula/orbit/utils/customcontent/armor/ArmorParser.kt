@@ -162,7 +162,7 @@ object ArmorParser {
             (to.y() - from.y()) / 2.0 + inflate,
         )
 
-        val levels = buildRotationLevels(element, boneOrigin, parentTransforms, part)
+        val levels = buildRotationLevels(centerBb, element, boneOrigin, parentTransforms, part)
 
         val bbPivotOffset = computeBbPivotOffset(centerBb, element, parentTransforms)
 
@@ -190,11 +190,14 @@ object ArmorParser {
         )
     }
 
-    private fun bbToTbnPivot(origin: Vec, boneOrigin: Vec, part: ArmorPart): Vec {
+    private fun bbToTbnPivot(elemCenter: Vec, origin: Vec, boneOrigin: Vec, part: ArmorPart): Vec {
+        val cx = elemCenter.x() - boneOrigin.x()
+        val cy = elemCenter.y() - boneOrigin.y()
+        val cz = elemCenter.z() - boneOrigin.z()
         val px = origin.x() - boneOrigin.x()
         val py = origin.y() - boneOrigin.y()
         val pz = origin.z() - boneOrigin.z()
-        return part.convertPivot(px, py, pz)
+        return part.convertPivot(cx, cy, cz, px, py, pz)
     }
 
     private fun computeBbPivotOffset(
@@ -214,6 +217,7 @@ object ArmorParser {
     }
 
     private fun buildRotationLevels(
+        centerBb: Vec,
         element: BbElement,
         boneOrigin: Vec,
         parentTransforms: List<GroupTransform>,
@@ -224,14 +228,14 @@ object ArmorParser {
         val elemComponents = mutableListOf<ArmorRotationComponent>()
         addEulerComponents(elemComponents, element.rotation)
         if (elemComponents.isNotEmpty()) {
-            levels.add(ArmorRotationLevel(elemComponents, bbToTbnPivot(element.origin, boneOrigin, part)))
+            levels.add(ArmorRotationLevel(elemComponents, bbToTbnPivot(centerBb, element.origin, boneOrigin, part)))
         }
 
         for (transform in parentTransforms.reversed()) {
             val groupComponents = mutableListOf<ArmorRotationComponent>()
             addEulerComponents(groupComponents, transform.rotation)
             if (groupComponents.isNotEmpty()) {
-                levels.add(ArmorRotationLevel(groupComponents, bbToTbnPivot(transform.origin, boneOrigin, part)))
+                levels.add(ArmorRotationLevel(groupComponents, bbToTbnPivot(centerBb, transform.origin, boneOrigin, part)))
             }
         }
 
