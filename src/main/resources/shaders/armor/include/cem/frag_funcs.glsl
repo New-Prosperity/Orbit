@@ -56,8 +56,8 @@ vec4 sampleFace(vec3 normal, vec2 uv, vec2 texSize,
     vec4 side;
     vec2 tc = uv;
 
-    if      (normal.y >  0.9) { side = up;    }
-    else if (normal.y < -0.9) { side = down;  }
+    if      (normal.y >  0.9) { side = down;  }
+    else if (normal.y < -0.9) { side = up;    }
     else if (normal.x >  0.9) { side = west;  }
     else if (normal.x < -0.9) { side = east;  tc.x = 1.0 - uv.x; }
     else if (normal.z < -0.9) { side = north; }
@@ -111,12 +111,11 @@ void writeDepth(vec3 Pos) {
     }
 }
 
-#define CEM_BOX(pos, size, elemRot, bbOff, up, down, north, east, south, west, emissive) \
+#define CEM_BOX(pos, size, elemRot, pivot, up, down, north, east, south, west, emissive) \
     { \
-        vec3 _base = PIX * (-center + matf_verifyPos(pos) * modelSize); \
-        vec3 _off = bbOff * modelSize; \
-        vec3 _rotOff = elemRot * _off; \
-        vec3 _ro = _base + _rotOff - _off; \
+        vec3 _p = PIX * (matf_verifyPos(pos) * modelSize); \
+        vec3 _piv = PIX * (pivot * modelSize); \
+        vec3 _ro = elemRot * (PIX * (-center) + _p - _piv) + _piv; \
         vec3 _rd = elemRot * (PIX * dirTBN); \
         color = renderBox(_ro, _rd, matf_verifySize(size) * modelSize, \
             TBN * transpose(PIX) * transpose(elemRot), \
