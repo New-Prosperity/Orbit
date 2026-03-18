@@ -31,8 +31,7 @@ object ArmorParser {
         output: MutableList<ParsedArmorPiece>,
     ) {
         val part = ArmorPart.fromBoneName(group.name)
-        if (part != null) {
-            if (!part.enabled) return
+        if (part != null && part.enabled) {
             val cubes = collectCubes(group, elementsByUuid, group.origin, emptyList(), part, output)
             splitByTextureLayer(part, cubes, output)
             return
