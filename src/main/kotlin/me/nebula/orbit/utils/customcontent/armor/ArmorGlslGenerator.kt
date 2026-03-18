@@ -77,7 +77,7 @@ object ArmorGlslGenerator {
 
                 for (cube in piece.cubes) {
                     val rotName = rotations[rotationKey(cube.rotationLevels)]!!
-                    sb.appendLine("        ${generateCemBox(cube, tex.width, tex.height, armor.colorId, rotName)}")
+                    sb.appendLine("        ${generateCemBox(cube, tex.width, tex.height, armor.colorId, rotName, piece.part.isLeft)}")
                 }
 
                 val hasEmissive = piece.cubes.any { it.emissive > 0f }
@@ -95,15 +95,20 @@ object ArmorGlslGenerator {
         }
     }
 
-    private fun generateCemBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, rotName: String): String {
+    private fun generateCemBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, rotName: String, isLeft: Boolean): String {
         val cellOffsetU = colorId * CELL_WIDTH
 
         val up = formatUv(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         val down = formatUv(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val north = formatUv(cube.uvFaces["north"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val east = formatUv(cube.uvFaces["east"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var north = formatUv(cube.uvFaces["north"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var east = formatUv(cube.uvFaces["east"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+
+        if (isLeft) {
+            val tmpEW = east; east = west; west = tmpEW
+            val tmpNS = north; north = south; south = tmpNS
+        }
 
         val pos = formatVec3(cube.center)
         val size = formatVec3Pix(cube.halfSize)
