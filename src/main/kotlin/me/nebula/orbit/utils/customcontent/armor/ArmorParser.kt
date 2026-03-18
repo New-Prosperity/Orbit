@@ -164,6 +164,8 @@ object ArmorParser {
 
         val levels = buildRotationLevels(element, boneOrigin, parentTransforms, part)
 
+        val bbPivotOffset = computeBbPivotOffset(centerBb, element, parentTransforms)
+
         val uvFaces = element.faces.mapValues { (_, face) ->
             ArmorCubeUv(
                 u = face.uv[0],
@@ -184,6 +186,7 @@ object ArmorParser {
             uvFaces = uvFaces,
             textureIndex = textureIndex,
             emissive = element.lightEmission / 15f,
+            bbPivotOffset = bbPivotOffset,
         )
     }
 
@@ -192,6 +195,22 @@ object ArmorParser {
         val py = origin.y() - boneOrigin.y()
         val pz = origin.z() - boneOrigin.z()
         return part.convertPivot(px, py, pz)
+    }
+
+    private fun computeBbPivotOffset(
+        centerBb: Vec,
+        element: BbElement,
+        parentTransforms: List<GroupTransform>,
+    ): Vec {
+        val elRot = element.rotation
+        if (elRot.x() != 0.0 || elRot.y() != 0.0 || elRot.z() != 0.0) {
+            return centerBb.sub(element.origin)
+        }
+        if (parentTransforms.isNotEmpty()) {
+            val lastTransform = parentTransforms.last()
+            return centerBb.sub(lastTransform.origin)
+        }
+        return Vec.ZERO
     }
 
     private fun buildRotationLevels(

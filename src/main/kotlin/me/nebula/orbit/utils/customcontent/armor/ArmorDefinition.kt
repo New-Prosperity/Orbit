@@ -25,6 +25,7 @@ data class ArmorCube(
     val uvFaces: Map<String, ArmorCubeUv>,
     val textureIndex: Int = 0,
     val emissive: Float = 0f,
+    val bbPivotOffset: Vec = Vec.ZERO,
 ) {
     val hasRotation: Boolean get() = rotationLevels.isNotEmpty()
 }
