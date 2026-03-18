@@ -190,14 +190,19 @@ object ArmorParser {
         )
     }
 
-    private fun bbToTbnPivot(elemCenter: Vec, origin: Vec, boneOrigin: Vec, part: ArmorPart): Vec {
+    private data class PivotPair(val adjusted: Vec, val standard: Vec)
+
+    private fun bbToTbnPivots(elemCenter: Vec, origin: Vec, boneOrigin: Vec, part: ArmorPart): PivotPair {
         val cx = elemCenter.x() - boneOrigin.x()
         val cy = elemCenter.y() - boneOrigin.y()
         val cz = elemCenter.z() - boneOrigin.z()
         val px = origin.x() - boneOrigin.x()
         val py = origin.y() - boneOrigin.y()
         val pz = origin.z() - boneOrigin.z()
-        return part.convertPivot(cx, cy, cz, px, py, pz)
+        return PivotPair(
+            adjusted = part.convertPivot(cx, cy, cz, px, py, pz),
+            standard = part.convertCenter(px, py, pz),
+        )
     }
 
     private fun computeBbPivotOffset(
@@ -228,14 +233,16 @@ object ArmorParser {
         val elemComponents = mutableListOf<ArmorRotationComponent>()
         addEulerComponents(elemComponents, element.rotation)
         if (elemComponents.isNotEmpty()) {
-            levels.add(ArmorRotationLevel(elemComponents, bbToTbnPivot(centerBb, element.origin, boneOrigin, part)))
+            val pivots = bbToTbnPivots(centerBb, element.origin, boneOrigin, part)
+            levels.add(ArmorRotationLevel(elemComponents, pivots.adjusted, pivots.standard))
         }
 
         for (transform in parentTransforms.reversed()) {
             val groupComponents = mutableListOf<ArmorRotationComponent>()
             addEulerComponents(groupComponents, transform.rotation)
             if (groupComponents.isNotEmpty()) {
-                levels.add(ArmorRotationLevel(groupComponents, bbToTbnPivot(centerBb, transform.origin, boneOrigin, part)))
+                val pivots = bbToTbnPivots(centerBb, transform.origin, boneOrigin, part)
+                levels.add(ArmorRotationLevel(groupComponents, pivots.adjusted, pivots.standard))
             }
         }
 

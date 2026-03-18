@@ -16,6 +16,7 @@ data class ArmorRotationComponent(
 data class ArmorRotationLevel(
     val components: List<ArmorRotationComponent>,
     val pivot: Vec,
+    val stdPivot: Vec = Vec.ZERO,
 )
 
 data class ArmorCube(
