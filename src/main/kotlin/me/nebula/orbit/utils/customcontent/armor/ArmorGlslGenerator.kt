@@ -77,7 +77,7 @@ object ArmorGlslGenerator {
 
                 for (cube in piece.cubes) {
                     val rotName = rotations[rotationKey(cube.rotationLevels)]!!
-                    sb.appendLine("        ${generateCemBox(cube, tex.width, tex.height, armor.colorId, rotName, piece.part.isLeft)}")
+                    sb.appendLine("        ${generateCemBox(cube, tex.width, tex.height, armor.colorId, rotName, piece.part, piece.part.isLeft)}")
                 }
 
                 val hasEmissive = piece.cubes.any { it.emissive > 0f }
@@ -95,7 +95,7 @@ object ArmorGlslGenerator {
         }
     }
 
-    private fun generateCemBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, rotName: String, isLeft: Boolean): String {
+    private fun generateCemBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, rotName: String, part: ArmorPart, isLeft: Boolean): String {
         val cellOffsetU = colorId * CELL_WIDTH
 
         val up = formatUv(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
@@ -106,16 +106,24 @@ object ArmorGlslGenerator {
         var west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
 
 
-        val pos = formatVec3(cube.center)
-        val size = formatVec3Pix(cube.halfSize)
-        val emissive = if (cube.emissive > 0f) "true" else "false"
-        val pivot = if (cube.hasRotation && cube.rotationLevels.size == 1) {
-            formatVec3(cube.rotationLevels[0].pivot)
+        val bakedCenter = if (cube.hasRotation && cube.rotationLevels.size == 1) {
+            val level = cube.rotationLevels[0]
+            val bbOffset = cube.bbPivotOffset
+            val rotatedOffset = applyBbRotation(bbOffset, level.components)
+            val bbPivRel = level.bbPivotRel
+            val newCx = bbPivRel.x() + rotatedOffset.x()
+            val newCy = bbPivRel.y() + rotatedOffset.y()
+            val newCz = bbPivRel.z() + rotatedOffset.z()
+            part.convertCenter(newCx, newCy, newCz)
         } else {
-            "vec3(0)"
+            cube.center
         }
 
-        return "CEM_BOX($pos, $size, $rotName, $pivot, $up, $down, $north, $east, $south, $west, $emissive);"
+        val pos = formatVec3(bakedCenter)
+        val size = formatVec3Pix(cube.halfSize)
+        val emissive = if (cube.emissive > 0f) "true" else "false"
+
+        return "CEM_BOX($pos, $size, $rotName, vec3(0), $up, $down, $north, $east, $south, $west, $emissive);"
     }
 
     private fun precomputeRotation(levels: List<ArmorRotationLevel>): String {
@@ -127,6 +135,25 @@ object ArmorGlslGenerator {
             }
         }
         return formatMat3(m)
+    }
+
+    private fun applyBbRotation(offset: Vec, components: List<ArmorRotationComponent>): Vec {
+        var p = offset
+        for (comp in components) {
+            p = rotateStandard(p, comp.radians, comp.axis)
+        }
+        return p
+    }
+
+    private fun rotateStandard(p: Vec, angle: Double, axis: Int): Vec {
+        val c = cos(angle)
+        val s = sin(angle)
+        return when (axis) {
+            ArmorRotationComponent.AXIS_X -> Vec(p.x(), p.y() * c - p.z() * s, p.y() * s + p.z() * c)
+            ArmorRotationComponent.AXIS_Y -> Vec(p.x() * c + p.z() * s, p.y(), -p.x() * s + p.z() * c)
+            ArmorRotationComponent.AXIS_Z -> Vec(p.x() * c - p.y() * s, p.x() * s + p.y() * c, p.z())
+            else -> p
+        }
     }
 
     private fun rotationKey(levels: List<ArmorRotationLevel>): String =
