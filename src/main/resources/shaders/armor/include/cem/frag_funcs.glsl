@@ -20,7 +20,7 @@ vec3 boxIntersect(vec3 ro, vec3 rd, vec3 size, out vec3 outNormal) {
     if (tN > tF || tF < 0.0) return vec3(0, 0, MAX_DEPTH);
 
     outNormal = -sign(rd) * step(t1.yzx, t1.xyz) * step(t1.zxy, t1.xyz);
-    float t = tN;
+    float t = tN > 0.0 ? tN : tF;
 
     vec3 pos = (ro + rd * t) / size;
     vec2 tex;
