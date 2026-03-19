@@ -111,9 +111,12 @@ object ArmorGlslGenerator {
             val bbOffset = cube.bbPivotOffset
             val rotatedOffset = applyBbRotation(bbOffset, level.components)
             val bbPivRel = level.bbPivotRel
+            val cx = cube.center.let { (it.x() - part.tbnOffsetX) / part.signX }
+            val cy = cube.center.let { (it.z() - part.tbnOffsetZ) / part.signY }
+            val cz = cube.center.let { (it.y() - part.tbnOffsetY) / part.signZ }
             val newCx = bbPivRel.x() + rotatedOffset.x()
             val newCy = bbPivRel.y() + rotatedOffset.y()
-            val newCz = bbPivRel.z() + rotatedOffset.z()
+            val newCz = cz
             part.convertCenter(newCx, newCy, newCz)
         } else {
             cube.center
