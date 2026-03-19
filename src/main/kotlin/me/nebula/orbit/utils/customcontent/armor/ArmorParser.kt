@@ -162,9 +162,7 @@ object ArmorParser {
             (to.y() - from.y()) / 2.0 + inflate,
         )
 
-        val levels = buildRotationLevels(centerBb, element, boneOrigin, parentTransforms, part)
-
-        val bbPivotOffset = computeBbPivotOffset(centerBb, element, parentTransforms)
+        val levels = buildRotationLevels(element, boneOrigin, parentTransforms, part)
 
         val uvFaces = element.faces.mapValues { (_, face) ->
             ArmorCubeUv(
@@ -186,7 +184,6 @@ object ArmorParser {
             uvFaces = uvFaces,
             textureIndex = textureIndex,
             emissive = element.lightEmission / 15f,
-            bbPivotOffset = bbPivotOffset,
         )
     }
 
@@ -197,24 +194,7 @@ object ArmorParser {
         return part.convertPivot(px, py, pz)
     }
 
-    private fun computeBbPivotOffset(
-        centerBb: Vec,
-        element: BbElement,
-        parentTransforms: List<GroupTransform>,
-    ): Vec {
-        val elRot = element.rotation
-        if (elRot.x() != 0.0 || elRot.y() != 0.0 || elRot.z() != 0.0) {
-            return centerBb.sub(element.origin)
-        }
-        if (parentTransforms.isNotEmpty()) {
-            val lastTransform = parentTransforms.last()
-            return centerBb.sub(lastTransform.origin)
-        }
-        return Vec.ZERO
-    }
-
     private fun buildRotationLevels(
-        centerBb: Vec,
         element: BbElement,
         boneOrigin: Vec,
         parentTransforms: List<GroupTransform>,
@@ -243,9 +223,9 @@ object ArmorParser {
         output: MutableList<ArmorRotationComponent>,
         bbRotation: Vec,
     ) {
-        val boxX = -bbRotation.x()
-        val boxY = -bbRotation.y()
-        val boxZ = -bbRotation.z()
+        val boxX = bbRotation.x()
+        val boxY = bbRotation.y()
+        val boxZ = bbRotation.z()
 
         if (boxX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxX), ArmorRotationComponent.AXIS_X))
         if (boxY != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxY), ArmorRotationComponent.AXIS_Y))

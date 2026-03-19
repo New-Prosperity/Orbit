@@ -109,7 +109,6 @@ object ArmorGlslGenerator {
         val pos = formatVec3(cube.center)
         val size = formatVec3Pix(cube.halfSize)
         val emissive = if (cube.emissive > 0f) "true" else "false"
-
         val pivot = if (cube.hasRotation && cube.rotationLevels.size == 1) {
             formatVec3(cube.rotationLevels[0].pivot)
         } else {

@@ -16,7 +16,6 @@ data class ArmorRotationComponent(
 data class ArmorRotationLevel(
     val components: List<ArmorRotationComponent>,
     val pivot: Vec,
-    val stdPivot: Vec = Vec.ZERO,
 )
 
 data class ArmorCube(
@@ -26,7 +25,6 @@ data class ArmorCube(
     val uvFaces: Map<String, ArmorCubeUv>,
     val textureIndex: Int = 0,
     val emissive: Float = 0f,
-    val bbPivotOffset: Vec = Vec.ZERO,
 ) {
     val hasRotation: Boolean get() = rotationLevels.isNotEmpty()
 }
