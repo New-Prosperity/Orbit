@@ -111,11 +111,9 @@ object ArmorGlslGenerator {
             val bbOffset = cube.bbPivotOffset
             val rotatedOffset = applyBbRotation(bbOffset, level.components)
             val bbPivRel = level.bbPivotRel
-            val hasYRotation = level.components.any { it.axis == ArmorRotationComponent.AXIS_Y }
-            val bbHalfZ = cube.halfSize.y()
             val newCx = bbPivRel.x() + rotatedOffset.x()
             val newCy = bbPivRel.y() + rotatedOffset.y()
-            val newCz = bbPivRel.z() + rotatedOffset.z() + if (hasYRotation) -bbHalfZ else 0.0
+            val newCz = bbPivRel.z() + rotatedOffset.z()
             part.convertCenter(newCx, newCy, newCz)
         } else {
             cube.center
