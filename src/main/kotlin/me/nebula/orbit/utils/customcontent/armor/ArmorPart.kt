@@ -15,15 +15,15 @@ sealed class ArmorPart(
     val signZ: Double,
     val enabled: Boolean = false,
 ) {
-    data object Helmet : ArmorPart("helmet", "h_", 199, 1, 0.0, 0.0, -0.5, -1.0, -1.0, -1.0)
-    data object Chestplate : ArmorPart("chestplate", "c_", 299, 1, 0.0, 0.0, -13.0, -1.0, -1.0, -1.0)
+    data object Helmet : ArmorPart("helmet", "h_", 199, 1, 0.0, 0.0, -0.5, -1.0, -1.0, -1.0, enabled = true)
+    data object Chestplate : ArmorPart("chestplate", "c_", 299, 1, 0.0, 0.0, -13.0, -1.0, -1.0, -1.0, enabled = true)
     data object RightArm : ArmorPart("right_arm", "ra_", 399, 1, 1.0, 0.0, -11.0, -1.0, -1.0, -1.0, enabled = true)
     data object LeftArm : ArmorPart("left_arm", "la_", 499, 1, -1.0, 0.0, -11.0, -1.0, -1.0, -1.0, enabled = true)
-    data object InnerArmor : ArmorPart("inner_armor", "ia_", 999, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0)
-    data object RightLeg : ArmorPart("right_leg", "rl_", 599, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0)
-    data object LeftLeg : ArmorPart("left_leg", "ll_", 699, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0)
-    data object RightBoot : ArmorPart("right_boot", "rb_", 799, 1, 0.0, 0.0, -13.0, -1.0, -1.0, -1.0)
-    data object LeftBoot : ArmorPart("left_boot", "lb_", 899, 1, 0.0, 0.0, -13.0, -1.0, -1.0, -1.0)
+    data object InnerArmor : ArmorPart("inner_armor", "ia_", 999, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0, enabled = true)
+    data object RightLeg : ArmorPart("right_leg", "rl_", 599, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0, enabled = true)
+    data object LeftLeg : ArmorPart("left_leg", "ll_", 699, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0, enabled = true)
+    data object RightBoot : ArmorPart("right_boot", "rb_", 799, 1, 0.0, 0.0, -13.0, -1.0, -1.0, -1.0, enabled = true)
+    data object LeftBoot : ArmorPart("left_boot", "lb_", 899, 1, 0.0, 0.0, -13.0, -1.0, -1.0, -1.0, enabled = true)
 
     val isLeft: Boolean get() = this is LeftArm || this is LeftLeg || this is LeftBoot
 
