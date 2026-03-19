@@ -245,7 +245,7 @@ object ArmorParser {
         bbRotation: Vec,
     ) {
         val boxX = bbRotation.x()
-        val boxY = bbRotation.y()
+        val boxY = -bbRotation.y()
         val boxZ = bbRotation.z()
 
         if (boxX != 0.0) output.add(ArmorRotationComponent(Math.toRadians(boxX), ArmorRotationComponent.AXIS_X))
