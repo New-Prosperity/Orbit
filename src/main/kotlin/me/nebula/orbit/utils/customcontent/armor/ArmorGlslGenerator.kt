@@ -66,23 +66,18 @@ object ArmorGlslGenerator {
                 val tex = armor.parsed.textures.getOrElse(texIndex) { armor.parsed.textures.first() }
 
                 val rotations = mutableMapOf<String, String>()
-                val rotMatrices = mutableMapOf<String, Array<DoubleArray>>()
                 for (cube in piece.cubes) {
                     val key = rotationKey(cube.rotationLevels)
                     if (key !in rotations) {
                         val name = "rot${rotations.size}"
                         rotations[key] = name
-                        val matrix = computeRotationMatrix(cube.rotationLevels)
-                        rotMatrices[key] = matrix
-                        sb.appendLine("        mat3 $name = ${formatMat3(matrix)};")
+                        sb.appendLine("        mat3 $name = ${precomputeRotation(cube.rotationLevels)};")
                     }
                 }
 
                 for (cube in piece.cubes) {
-                    val key = rotationKey(cube.rotationLevels)
-                    val rotName = rotations[key]!!
-                    val rotMatrix = if (cube.hasRotation) rotMatrices[key] else null
-                    sb.appendLine("        ${generateCemBox(cube, tex.width, tex.height, armor.colorId, rotName, rotMatrix, piece.part, piece.part.isLeft)}")
+                    val rotName = rotations[rotationKey(cube.rotationLevels)]!!
+                    sb.appendLine("        ${generateCemBox(cube, tex.width, tex.height, armor.colorId, rotName, piece.part.isLeft)}")
                 }
 
                 val hasEmissive = piece.cubes.any { it.emissive > 0f }
@@ -100,32 +95,18 @@ object ArmorGlslGenerator {
         }
     }
 
-    private fun generateCemBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, rotName: String, rotMatrix: Array<DoubleArray>?, part: ArmorPart, isLeft: Boolean): String {
+    private fun generateCemBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, rotName: String, isLeft: Boolean): String {
         val cellOffsetU = colorId * CELL_WIDTH
 
         val up = formatUv(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         val down = formatUv(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val north = formatUv(cube.uvFaces["north"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val east = formatUv(cube.uvFaces["east"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var north = formatUv(cube.uvFaces["north"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var east = formatUv(cube.uvFaces["east"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
 
-        val correctedCenter = if (cube.hasRotation && rotMatrix != null) {
-            val dirtyTbn = Vec(part.tbnOffsetX, part.tbnOffsetY, part.tbnOffsetZ)
-            val dirtyBox = doubleArrayOf(dirtyTbn.x(), dirtyTbn.z(), -dirtyTbn.y())
-            val rDirty = doubleArrayOf(
-                rotMatrix[0][0] * dirtyBox[0] + rotMatrix[0][1] * dirtyBox[1] + rotMatrix[0][2] * dirtyBox[2],
-                rotMatrix[1][0] * dirtyBox[0] + rotMatrix[1][1] * dirtyBox[1] + rotMatrix[1][2] * dirtyBox[2],
-                rotMatrix[2][0] * dirtyBox[0] + rotMatrix[2][1] * dirtyBox[1] + rotMatrix[2][2] * dirtyBox[2],
-            )
-            val leakageBox = doubleArrayOf(rDirty[0] - dirtyBox[0], rDirty[1] - dirtyBox[1], rDirty[2] - dirtyBox[2])
-            val correctionTbn = Vec(leakageBox[0], -leakageBox[2], leakageBox[1])
-            cube.center.sub(correctionTbn)
-        } else {
-            cube.center
-        }
 
-        val pos = formatVec3(correctedCenter)
+        val pos = formatVec3(cube.center)
         val size = formatVec3Pix(cube.halfSize)
         val emissive = if (cube.emissive > 0f) "true" else "false"
         val pivot = if (cube.hasRotation && cube.rotationLevels.size == 1) {
@@ -137,15 +118,15 @@ object ArmorGlslGenerator {
         return "CEM_BOX($pos, $size, $rotName, $pivot, $up, $down, $north, $east, $south, $west, $emissive);"
     }
 
-    private fun computeRotationMatrix(levels: List<ArmorRotationLevel>): Array<DoubleArray> {
-        if (levels.isEmpty()) return IDENTITY
+    private fun precomputeRotation(levels: List<ArmorRotationLevel>): String {
+        if (levels.isEmpty()) return "mat3(1.0)"
         var m = IDENTITY
         for (level in levels.reversed()) {
             for (comp in level.components) {
                 m = multiply(m, rotationMatrix(comp.radians, comp.axis))
             }
         }
-        return m
+        return formatMat3(m)
     }
 
     private fun rotationKey(levels: List<ArmorRotationLevel>): String =
