@@ -17,7 +17,7 @@ sealed class ArmorPart(
 ) {
     data object Helmet : ArmorPart("helmet", "h_", 199, 1, 0.0, 0.0, -0.5, -1.0, -1.0, -1.0)
     data object Chestplate : ArmorPart("chestplate", "c_", 299, 1, 0.0, 0.0, -13.0, -1.0, -1.0, -1.0)
-    data object RightArm : ArmorPart("right_arm", "ra_", 399, 1, 1.0, 0.0, -11.0, -1.0, -1.0, -1.0)
+    data object RightArm : ArmorPart("right_arm", "ra_", 399, 1, 1.0, 0.0, -11.0, -1.0, -1.0, -1.0, enabled = true)
     data object LeftArm : ArmorPart("left_arm", "la_", 499, 1, -1.0, 0.0, -11.0, -1.0, -1.0, -1.0, enabled = true)
     data object InnerArmor : ArmorPart("inner_armor", "ia_", 999, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0)
     data object RightLeg : ArmorPart("right_leg", "rl_", 599, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0)
