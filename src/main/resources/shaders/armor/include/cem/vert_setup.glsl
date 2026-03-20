@@ -43,7 +43,9 @@ switch (gl_VertexID % 4)
 cem_Pos.z = min(cem_Pos.z, -1);
 cem_glPos = cem_Pos.xyz;
 mat4 proj = ProjMat;
-proj[3].xy = vec2(0, 0);
+if (ProjMat[3][0] != -1) {
+    proj[3].xy = vec2(0, 0);
+}
 gl_Position = proj * cem_Pos;
 
 vertexColor = minecraft_mix_light(Light0_Direction, Light1_Direction, Normal, vec4(1));
