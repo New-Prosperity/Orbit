@@ -98,8 +98,13 @@ object ArmorGlslGenerator {
     private fun generateCemBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, rotName: String, part: ArmorPart, isLeft: Boolean): String {
         val cellOffsetU = colorId * CELL_WIDTH
 
-        val up = formatUv(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
-        val down = formatUv(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var up = formatUv(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        var down = formatUv(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+
+        if (part.signZ > 0) {
+            up = formatUvFlipV(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+            down = formatUvFlipV(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        }
         var north = formatUv(cube.uvFaces["north"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         var east = formatUv(cube.uvFaces["east"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         var south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
@@ -210,6 +215,21 @@ object ArmorGlslGenerator {
 
     private fun formatVec3Pix(v: Vec): String =
         "vec3(%.4f, %.4f, %.4f)".format(v.x(), v.z(), v.y())
+
+    private fun formatUvFlipV(
+        uv: ArmorCubeUv,
+        texW: Int,
+        texH: Int,
+        cellOffsetU: Float,
+    ): String {
+        val scaleU = CELL_WIDTH / texW.toFloat()
+        val scaleV = CELL_HEIGHT / texH.toFloat()
+        val u = uv.u * scaleU + cellOffsetU
+        val v = (uv.v + uv.height) * scaleV
+        val w = uv.width * scaleU
+        val h = -uv.height * scaleV
+        return "vec4(%.6f, %.6f, %.6f, %.6f)".format(u, v, w, h)
+    }
 
     private fun formatUv(
         uv: ArmorCubeUv,
