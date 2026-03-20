@@ -244,7 +244,7 @@ object ArmorParser {
         output: MutableList<ArmorRotationComponent>,
         bbRotation: Vec,
     ) {
-        val boxX = bbRotation.x()
+        val boxX = -bbRotation.x()
         val boxY = bbRotation.y()
         val boxZ = bbRotation.z()
 
