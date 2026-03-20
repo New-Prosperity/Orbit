@@ -5,7 +5,11 @@ vec2 cornerT = corner * 2 - 1;
 if (ProjMat[3][0] == -1)
     cornerT = cornerT.yx * 32;
 
-vec4 cem_Pos = ModelViewMat * modelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
+float _cemExpand = 2.5 * cem_size;
+vec4 cem_Pos = ModelViewMat * modelPos + vec4(cornerT * _cemExpand, 0, 0);
+if (ProjMat[3][0] == -1) {
+    cem_Pos.z += cornerT.x * _cemExpand;
+}
 
 modelPos.w = 1;
 
