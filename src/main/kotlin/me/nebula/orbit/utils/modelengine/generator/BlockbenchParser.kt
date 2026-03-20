@@ -25,7 +25,10 @@ object BlockbenchParser {
         } ?: BbResolution(16, 16)
 
         val elements = root.getAsJsonArray("elements")?.map { parseElement(it.asJsonObject) } ?: emptyList()
-        val groups = root.getAsJsonArray("outliner")?.mapNotNull { parseOutlinerEntry(it) }
+        val groupsByUuid = root.getAsJsonArray("groups")
+            ?.associate { it.asJsonObject.let { g -> (g["uuid"]?.asString ?: "") to g } }
+            ?: emptyMap()
+        val groups = root.getAsJsonArray("outliner")?.mapNotNull { parseOutlinerEntry(it, groupsByUuid) }
             ?.filterIsInstance<BbGroupChild.SubGroup>()
             ?.map { it.group }
             ?: emptyList()
@@ -57,24 +60,35 @@ object BlockbenchParser {
         rotation = obj["rotation"]?.asInt ?: 0,
     )
 
-    private fun parseOutlinerEntry(element: JsonElement): BbGroupChild? {
+    private fun parseOutlinerEntry(element: JsonElement, groupsByUuid: Map<String, JsonObject>): BbGroupChild? {
         if (element.isJsonPrimitive) {
             return BbGroupChild.ElementRef(element.asString)
         }
         if (element.isJsonObject) {
             val obj = element.asJsonObject
-            val children = obj.getAsJsonArray("children")?.mapNotNull { parseOutlinerEntry(it) } ?: emptyList()
+            val uuid = obj["uuid"]?.asString ?: ""
+            val groupData = groupsByUuid[uuid]
+            val children = obj.getAsJsonArray("children")?.mapNotNull { parseOutlinerEntry(it, groupsByUuid) } ?: emptyList()
             val group = BbGroup(
-                uuid = obj["uuid"]?.asString ?: "",
-                name = obj["name"]?.asString ?: "",
-                origin = obj.readVec("origin"),
-                rotation = obj.readVec("rotation"),
+                uuid = uuid,
+                name = groupData?.get("name")?.asString ?: obj["name"]?.asString ?: "",
+                origin = groupData?.let { readVecFromObj(it, "origin") } ?: obj.readVec("origin"),
+                rotation = groupData?.let { readVecFromObj(it, "rotation") } ?: obj.readVec("rotation"),
                 children = children,
-                visibility = obj["visibility"]?.asBoolean ?: true,
+                visibility = groupData?.get("visibility")?.asBoolean ?: obj["visibility"]?.asBoolean ?: true,
             )
             return BbGroupChild.SubGroup(group)
         }
         return null
+    }
+
+    private fun readVecFromObj(obj: JsonObject, key: String): Vec {
+        val arr = obj.getAsJsonArray(key) ?: return Vec.ZERO
+        return Vec(
+            arr.getOrZero(0),
+            arr.getOrZero(1),
+            arr.getOrZero(2),
+        )
     }
 
     private fun parseTexture(index: Int, obj: JsonObject): BbTexture = BbTexture(
