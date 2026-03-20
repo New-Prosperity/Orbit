@@ -195,7 +195,7 @@ void main() {
         
         #moj_import <mods/armor/armor.glsl>
         
-        if(face==TOP_FACE){
+        if(face==TOP_FACE || (isGui == 1 && removeAll == 1)){
             cem_reverse = (bodypart == ARMOR_LEFT_ARM || bodypart == ARMOR_LEFT_FEET) ? 1 : 0;
             corner = corner.yx;
             if (isPartOne) {
@@ -206,7 +206,7 @@ void main() {
                 cem_size = 1.0;
             }
         }else{
-            if(removeAll==1 && isGui == 0){
+            if(removeAll==1){
                 markforremove = 1;
                 gl_Position = vec4(0,0,0,1);
                 overlayColor = vec4(0,0,0,0);
