@@ -60,8 +60,8 @@ vec4 sampleFace(vec3 normal, vec2 uv, vec2 texSize,
     else if (normal.y < -0.9) { side = down;  }
     else if (normal.x >  0.9) { side = west;  }
     else if (normal.x < -0.9) { side = east;  tc.x = 1.0 - uv.x; }
-    else if (normal.z < -0.9) { side = south; tc.x = 1.0 - uv.x; }
-    else                      { side = north; }
+    else if (normal.z < -0.9) { side = north; }
+    else                      { side = south; tc.x = 1.0 - uv.x; }
 
     if (side == vec4(0)) return vec4(0);
     return texture(Sampler0, (side.xy + side.zw * tc) / texSize);
