@@ -140,7 +140,7 @@ object ArmorGlslGenerator {
     private fun applyBbRotation(offset: Vec, components: List<ArmorRotationComponent>): Vec {
         var p = offset
         for (comp in components) {
-            p = rotateStandard(p, comp.radians, comp.axis)
+            p = rotateStandard(p, -comp.radians, comp.axis)
         }
         return p
     }
