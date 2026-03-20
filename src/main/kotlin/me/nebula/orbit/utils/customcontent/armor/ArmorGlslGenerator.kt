@@ -109,7 +109,7 @@ object ArmorGlslGenerator {
         val bakedCenter = if (cube.hasRotation && cube.rotationLevels.size == 1) {
             val level = cube.rotationLevels[0]
             val bbOffset = cube.bbPivotOffset
-            val bakeSign = part.signX
+            val bakeSign = -part.signX
             val rotatedOffset = applyBbRotation(bbOffset, level.components, bakeSign)
             val bbPivRel = level.bbPivotRel
             val newCx = bbPivRel.x() + rotatedOffset.x()
