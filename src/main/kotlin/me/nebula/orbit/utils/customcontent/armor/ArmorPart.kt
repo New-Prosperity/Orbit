@@ -20,8 +20,8 @@ sealed class ArmorPart(
     data object RightArm : ArmorPart("right_arm", "ra_", 399, 1, 1.0, 0.0, -11.0, -1.0, -1.0, -1.0, enabled = true)
     data object LeftArm : ArmorPart("left_arm", "la_", 499, 1, -1.0, 0.0, -11.0, -1.0, -1.0, -1.0, enabled = true)
     data object InnerArmor : ArmorPart("inner_armor", "ia_", 999, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0, enabled = true)
-    data object RightLeg : ArmorPart("right_leg", "rl_", 599, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0, enabled = true)
-    data object LeftLeg : ArmorPart("left_leg", "ll_", 699, 2, 0.0, 0.0, -12.5, -1.0, -1.0, -1.0, enabled = true)
+    data object RightLeg : ArmorPart("right_leg", "rl_", 599, 2, 0.0, 0.0, -12.5, 1.0, -1.0, -1.0, enabled = true)
+    data object LeftLeg : ArmorPart("left_leg", "ll_", 699, 2, 0.0, 0.0, -12.5, 1.0, -1.0, -1.0, enabled = true)
     data object RightBoot : ArmorPart("right_boot", "rb_", 799, 1, 0.0, 0.0, -13.0, -1.0, -1.0, -1.0, enabled = true)
     data object LeftBoot : ArmorPart("left_boot", "lb_", 899, 1, 0.0, 0.0, -13.0, -1.0, -1.0, -1.0, enabled = true)
 
