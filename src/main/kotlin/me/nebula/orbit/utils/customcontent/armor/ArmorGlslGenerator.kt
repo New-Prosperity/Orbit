@@ -108,9 +108,6 @@ object ArmorGlslGenerator {
         if (part.signX < 0) {
             val tmp = east; east = west; west = tmp
         }
-        if (part.signZ > 0) {
-            val tmp = north; north = south; south = tmp
-        }
 
 
         val bakedCenter = if (cube.hasRotation && cube.rotationLevels.size == 1) {
