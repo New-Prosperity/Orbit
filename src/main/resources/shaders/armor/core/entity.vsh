@@ -167,7 +167,7 @@ void main() {
     bool isPartOne = (ch0 == 0 && ch1 == 0 && ch2 == 0 && ch3 == 255);
     bool isPartTwo = (ch0 == 255 && ch1 == 255 && ch2 == 255 && ch3 == 255);
 
-    if (isLeather && (isPartOne || isPartTwo)) {
+    if (isLeather && isGui == 0 && (isPartOne || isPartTwo)) {
         float RVC_0 = getChannel(RelativeCords,ivec2(63,31), 0);
         float RVC_1 = getChannel(RelativeCords,ivec2(63,31), 1);
         float RVC_2 = getChannel(RelativeCords,ivec2(63,31), 2);
