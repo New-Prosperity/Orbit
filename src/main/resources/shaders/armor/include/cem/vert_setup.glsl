@@ -8,6 +8,7 @@ if (ProjMat[3][0] == -1)
 vec4 guiModelPos = modelPos;
 if (ProjMat[3][0] == -1) {
     guiModelPos.y += (corner.x - 0.5) * 16.0;
+    guiModelPos.z += (corner.y - 0.5) * 16.0;
 }
 vec4 cem_Pos = ModelViewMat * guiModelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
 

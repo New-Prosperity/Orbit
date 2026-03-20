@@ -41,7 +41,7 @@ vec3 dirTBN = normalize(cem_glPos * mat3(ModelViewMat) * TBN);
 if (ProjMat[3][0] == -1)
 {
     center = vec3(-cem_glPos.xy + rawCenter.xy, rawCenter.z) * TBN;
-    dir = vec3(0, 0, -1);
+    dir = vec3(0, 0, 1);
     dirTBN = normalize(dir * TBN);
 }
 
