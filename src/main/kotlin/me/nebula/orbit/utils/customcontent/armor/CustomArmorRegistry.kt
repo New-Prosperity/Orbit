@@ -86,13 +86,20 @@ fun RegisteredArmor.createItem(part: ArmorPart): ItemStack {
     }
 }
 
+fun RegisteredArmor.hasPart(part: ArmorPart): Boolean =
+    parsed.pieces.any { it.part == part }
+
+fun RegisteredArmor.hasSlot(slot: EquipmentSlot): Boolean = when (slot) {
+    EquipmentSlot.HELMET -> hasPart(ArmorPart.Helmet)
+    EquipmentSlot.CHESTPLATE -> hasPart(ArmorPart.Chestplate) || hasPart(ArmorPart.RightArm) || hasPart(ArmorPart.LeftArm)
+    EquipmentSlot.LEGGINGS -> hasPart(ArmorPart.InnerArmor) || hasPart(ArmorPart.RightLeg) || hasPart(ArmorPart.LeftLeg)
+    EquipmentSlot.BOOTS -> hasPart(ArmorPart.RightBoot) || hasPart(ArmorPart.LeftBoot)
+    else -> false
+}
+
 fun RegisteredArmor.equipFullSet(player: Player) {
-    val helmet = createItem(ArmorPart.Helmet)
-    val chestplate = createItem(ArmorPart.Chestplate)
-    val leggings = createItem(ArmorPart.InnerArmor)
-    val boots = createItem(ArmorPart.RightBoot)
-    player.setEquipment(EquipmentSlot.HELMET, helmet)
-    player.setEquipment(EquipmentSlot.CHESTPLATE, chestplate)
-    player.setEquipment(EquipmentSlot.LEGGINGS, leggings)
-    player.setEquipment(EquipmentSlot.BOOTS, boots)
+    if (hasSlot(EquipmentSlot.HELMET)) player.setEquipment(EquipmentSlot.HELMET, createItem(ArmorPart.Helmet))
+    if (hasSlot(EquipmentSlot.CHESTPLATE)) player.setEquipment(EquipmentSlot.CHESTPLATE, createItem(ArmorPart.Chestplate))
+    if (hasSlot(EquipmentSlot.LEGGINGS)) player.setEquipment(EquipmentSlot.LEGGINGS, createItem(ArmorPart.InnerArmor))
+    if (hasSlot(EquipmentSlot.BOOTS)) player.setEquipment(EquipmentSlot.BOOTS, createItem(ArmorPart.RightBoot))
 }
