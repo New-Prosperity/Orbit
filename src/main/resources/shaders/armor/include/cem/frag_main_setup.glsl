@@ -38,12 +38,7 @@ vec3 center = rawCenter * TBN;
 vec3 dir = normalize(cem_glPos) * mat3(ModelViewMat);
 vec3 dirTBN = normalize(cem_glPos * mat3(ModelViewMat) * TBN);
 
-if (ProjMat[3][0] == -1)
-{
-    center = vec3(-cem_glPos.xy + rawCenter.xy, rawCenter.z) * TBN;
-    dir = vec3(0, 0, -1);
-    dirTBN = normalize(dir * TBN);
-}
+// GUI uses the same ray computation as perspective
 
 float modelSize = length((gl_PrimitiveID % 2 == 1 ? Pos1 : Pos2) - Pos3);
 vec2 sizes = vec2(length((gl_PrimitiveID % 2 == 0 ? Pos1 : Pos2) - Pos3), modelSize);
