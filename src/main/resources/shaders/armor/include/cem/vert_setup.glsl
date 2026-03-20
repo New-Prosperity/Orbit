@@ -2,16 +2,10 @@ vec4 modelPos = vec4(pos, 1.0);
 modelPos.xyz += vec3(ProjMat[3].xy / vec2(ProjMat[0][0], ProjMat[1][1]), 0) * mat3(ModelViewMat);
 
 vec2 cornerT = corner * 2 - 1;
-vec4 cem_Pos;
-if (ProjMat[3][0] == -1) {
-    float guiExpand = 32.0 * cem_size;
-    vec4 expanded = vec4(modelPos.xyz, 1.0);
-    expanded.x += cornerT.x * guiExpand;
-    expanded.z += cornerT.y * guiExpand;
-    cem_Pos = ModelViewMat * expanded;
-} else {
-    cem_Pos = ModelViewMat * modelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
-}
+if (ProjMat[3][0] == -1)
+    cornerT = cornerT.yx * 32;
+
+vec4 cem_Pos = ModelViewMat * modelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
 
 modelPos.w = 1;
 
@@ -43,9 +37,7 @@ switch (gl_VertexID % 4)
 cem_Pos.z = min(cem_Pos.z, -1);
 cem_glPos = cem_Pos.xyz;
 mat4 proj = ProjMat;
-if (ProjMat[3][0] != -1) {
-    proj[3].xy = vec2(0, 0);
-}
+proj[3].xy = vec2(0, 0);
 gl_Position = proj * cem_Pos;
 
 vertexColor = minecraft_mix_light(Light0_Direction, Light1_Direction, Normal, vec4(1));
