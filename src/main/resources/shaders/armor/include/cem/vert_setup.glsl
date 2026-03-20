@@ -2,10 +2,14 @@ vec4 modelPos = vec4(pos, 1.0);
 modelPos.xyz += vec3(ProjMat[3].xy / vec2(ProjMat[0][0], ProjMat[1][1]), 0) * mat3(ModelViewMat);
 
 vec2 cornerT = corner * 2 - 1;
-if (ProjMat[3][0] == -1)
-    cornerT = cornerT.yx * 32;
-
-vec4 cem_Pos = ModelViewMat * modelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
+vec4 cem_Pos;
+if (ProjMat[3][0] == -1) {
+    cornerT = cornerT.yx * 8;
+    vec4 viewCenter = ModelViewMat * modelPos;
+    cem_Pos = vec4(viewCenter.x + cornerT.x * cem_size, viewCenter.y + cornerT.y * cem_size, -2.0, viewCenter.w);
+} else {
+    cem_Pos = ModelViewMat * modelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
+}
 
 modelPos.w = 1;
 
