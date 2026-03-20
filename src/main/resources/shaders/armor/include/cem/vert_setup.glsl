@@ -5,7 +5,17 @@ vec2 cornerT = corner * 2 - 1;
 if (ProjMat[3][0] == -1)
     cornerT = cornerT.yx * 32;
 
-vec4 cem_Pos = ModelViewMat * modelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
+vec4 cem_Pos;
+if (ProjMat[3][0] == -1) {
+    vec4 expandedPos = modelPos;
+    float guiExp = 2.5 * cem_size;
+    expandedPos.x += cornerT.x * guiExp;
+    expandedPos.y += cornerT.y * guiExp;
+    expandedPos.z += cornerT.x * guiExp;
+    cem_Pos = ModelViewMat * expandedPos;
+} else {
+    cem_Pos = ModelViewMat * modelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
+}
 
 modelPos.w = 1;
 
