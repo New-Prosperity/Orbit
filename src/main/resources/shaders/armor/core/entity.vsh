@@ -206,7 +206,7 @@ void main() {
                 cem_size = 1.0;
             }
         }else{
-            if(removeAll==1){
+            if(removeAll==1 && isGui == 0){
                 markforremove = 1;
                 gl_Position = vec4(0,0,0,1);
                 overlayColor = vec4(0,0,0,0);

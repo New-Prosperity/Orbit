@@ -5,12 +5,7 @@ vec2 cornerT = corner * 2 - 1;
 if (ProjMat[3][0] == -1)
     cornerT = cornerT.yx * 32;
 
-vec4 guiModelPos = modelPos;
-if (ProjMat[3][0] == -1) {
-    guiModelPos.y += (corner.x - 0.5) * 16.0;
-    guiModelPos.z += (corner.y - 0.5) * 16.0;
-}
-vec4 cem_Pos = ModelViewMat * guiModelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
+vec4 cem_Pos = ModelViewMat * modelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
 
 modelPos.w = 1;
 
