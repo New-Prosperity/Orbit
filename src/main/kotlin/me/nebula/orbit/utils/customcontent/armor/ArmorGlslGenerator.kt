@@ -71,7 +71,7 @@ object ArmorGlslGenerator {
                     if (key !in rotations) {
                         val name = "rot${rotations.size}"
                         rotations[key] = name
-                        sb.appendLine("        mat3 $name = ${precomputeRotation(cube.rotationLevels)};")
+                        sb.appendLine("        mat3 $name = ${precomputeRotation(cube.rotationLevels, piece.part.signX)};")
                     }
                 }
 
@@ -127,12 +127,14 @@ object ArmorGlslGenerator {
         return "CEM_BOX($pos, $size, $rotName, vec3(0), $up, $down, $north, $east, $south, $west, $emissive);"
     }
 
-    private fun precomputeRotation(levels: List<ArmorRotationLevel>): String {
+    private fun precomputeRotation(levels: List<ArmorRotationLevel>, signX: Double = -1.0): String {
         if (levels.isEmpty()) return "mat3(1.0)"
         var m = IDENTITY
+        val zSign = if (signX > 0) -1.0 else 1.0
         for (level in levels.reversed()) {
             for (comp in level.components) {
-                m = multiply(m, rotationMatrix(comp.radians, comp.axis))
+                val angle = if (comp.axis == ArmorRotationComponent.AXIS_Z) zSign * comp.radians else comp.radians
+                m = multiply(m, rotationMatrix(angle, comp.axis))
             }
         }
         return formatMat3(m)
