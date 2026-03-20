@@ -6,6 +6,9 @@ if (ProjMat[3][0] == -1)
     cornerT = cornerT.yx * 32;
 
 vec4 cem_Pos = ModelViewMat * modelPos + vec4(cornerT * 2.5 * cem_size, 0, 0);
+if (ProjMat[3][0] == -1) {
+    cem_Pos.z += (cornerT.x + cornerT.y) * cem_size * 16.0;
+}
 
 modelPos.w = 1;
 
