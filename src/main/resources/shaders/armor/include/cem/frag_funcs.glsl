@@ -56,8 +56,8 @@ vec4 sampleFace(vec3 normal, vec2 uv, vec2 texSize,
     vec4 side;
     vec2 tc = uv;
 
-    if      (normal.y >  0.9) { side = up;    tc.x = 1.0 - uv.x; }
-    else if (normal.y < -0.9) { side = down;  tc.x = 1.0 - uv.x; }
+    if      (normal.y >  0.9) { side = up;    tc.y = 1.0 - uv.y; }
+    else if (normal.y < -0.9) { side = down;  tc.y = 1.0 - uv.y; }
     else if (normal.x >  0.9) { side = west;  tc.x = 1.0 - uv.x; tc.y = 1.0 - uv.y; }
     else if (normal.x < -0.9) { side = east;  tc.y = 1.0 - uv.y; }
     else if (normal.z < -0.9) { side = north; tc.x = 1.0 - uv.x; tc.y = 1.0 - uv.y; }
