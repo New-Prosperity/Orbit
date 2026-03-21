@@ -8,6 +8,7 @@ import net.minestom.server.command.builder.arguments.ArgumentType
 
 private val ARMOR_ID_ARG = ArgumentType.String("armor_id")
 private val SLOT_ARG = ArgumentType.String("slot")
+private val ENCHANTED_ARG = ArgumentType.Boolean("enchanted")
 
 fun armorTestCommand(): Command = command("armor") {
     subCommand("list") {
@@ -26,24 +27,28 @@ fun armorTestCommand(): Command = command("armor") {
 
     subCommand("equip") {
         stringArgument("armor_id")
+        booleanArgument("enchanted")
         onPlayerExecute {
             val armorId = args.get(ARMOR_ID_ARG)
+            val enchanted = args.get(ENCHANTED_ARG)
             val armor = CustomArmorRegistry[armorId]
             if (armor == null) {
                 player.sendMessage(Component.text("Unknown armor: $armorId"))
                 return@onPlayerExecute
             }
-            armor.equipFullSet(player)
-            player.sendMessage(Component.text("Equipped armor: ${armor.id}"))
+            armor.equipFullSet(player, enchanted)
+            player.sendMessage(Component.text("Equipped armor: ${armor.id}${if (enchanted) " (enchanted)" else ""}"))
         }
     }
 
     subCommand("give") {
         stringArgument("armor_id")
         stringArgument("slot")
+        booleanArgument("enchanted")
         onPlayerExecute {
             val armorId = args.get(ARMOR_ID_ARG)
             val slotName = args.get(SLOT_ARG)
+            val enchanted = args.get(ENCHANTED_ARG)
             val armor = CustomArmorRegistry[armorId]
             if (armor == null) {
                 player.sendMessage(Component.text("Unknown armor: $armorId"))
@@ -55,9 +60,9 @@ fun armorTestCommand(): Command = command("armor") {
                 player.sendMessage(Component.text("Unknown slot: $slotName. Valid: $validParts"))
                 return@onPlayerExecute
             }
-            val item = armor.createItem(part)
+            val item = armor.createItem(part, enchanted)
             player.inventory.addItemStack(item)
-            player.sendMessage(Component.text("Gave ${armor.id} ${part.id}"))
+            player.sendMessage(Component.text("Gave ${armor.id} ${part.id}${if (enchanted) " (enchanted)" else ""}"))
         }
     }
 }

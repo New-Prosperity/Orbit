@@ -102,7 +102,6 @@ object PackMerger {
             entries[path] = bytes
         }
 
-        entries["assets/minecraft/atlases/blocks.json"] = buildAtlasDefinition(entries)
 
         val textures = entries.keys.count { it.endsWith(".png") }
         val models = entries.keys.count { it.contains("/models/") }

@@ -52,6 +52,7 @@ flat out int markforremove;
 flat out int isTrim;
 flat out float emissive;
 flat out int isLeatherLayer;
+flat out int isEnchantedArmor;
 out vec4 cem_color;
 
 float getChannel(ivec2 cords, int channel) {
@@ -104,6 +105,7 @@ void main() {
     cem_color = vec4(0,1,0,1);
     isTrim = 0;
     isGui = (ProjMat[2][3] == 0.0) ? 1 : 0;
+    isEnchantedArmor = int(Color.r * 255.0 + 0.5) & 1;
     vec3 pos = Position;
 
     gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
@@ -192,10 +194,10 @@ void main() {
         bodypart = cube;
         
         #moj_import <mods/armor/setup.glsl>
-        
+
         #moj_import <mods/armor/armor.glsl>
-        
-        if(face==TOP_FACE || (isGui == 1 && removeAll == 1)){
+
+        if(face==TOP_FACE){
             cem_reverse = (bodypart == ARMOR_LEFT_ARM || bodypart == ARMOR_LEFT_FEET) ? 1 : 0;
             corner = corner.yx;
             if (isPartOne) {

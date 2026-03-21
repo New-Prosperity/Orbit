@@ -28,6 +28,8 @@ object ArmorGlslGenerator {
         for (armor in armors) {
             appendLine("COLOR_ARMOR(${armor.colorR},${armor.colorG},${armor.colorB})")
             appendLine("cords = vec2(${armor.colorId}, 0);")
+            appendLine("COLOR_ARMOR(${armor.colorR or 1},${armor.colorG},${armor.colorB})")
+            appendLine("cords = vec2(${armor.colorId}, 0);")
         }
     }
 

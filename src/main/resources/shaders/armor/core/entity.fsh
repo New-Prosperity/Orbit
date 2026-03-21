@@ -37,6 +37,7 @@ flat in ivec2 RelativeCords;
 flat in int markforremove;
 flat in int isTrim;
 flat in int armorType;
+flat in int isEnchantedArmor;
 in vec4 overlayColor;
 
 out vec4 fragColor;
@@ -72,6 +73,7 @@ void main() {
     float dynamicEmissive = emissive;
 
     if (cem > 1) {
+        if (isGui == 1) discard;
         #define MINUS_Z
         #moj_import <cem/frag_main_setup.glsl>
         modelSize /= res.y;
@@ -97,6 +99,21 @@ void main() {
         writeDepth(dir * minT);
         float opacity = ceil(color.a * 255);
         if (dynamicEmissive == 0 && opacity != 128) color *= cem_light;
+
+        #ifndef NO_OVERLAY
+            color.rgb = mix(overlayColor.rgb, color.rgb, overlayColor.a);
+        #endif
+
+        if (isEnchantedArmor == 1) {
+            float t = GameTime * 1000.0;
+            vec2 glintUV = gl_FragCoord.xy * 0.015;
+
+            float g1 = sin((glintUV.x + glintUV.y) * 1.5 + t) * 0.5 + 0.5;
+            float g2 = sin((glintUV.x - glintUV.y) * 2.0 - t * 0.6) * 0.5 + 0.5;
+            float glint = pow(g1, 2.0) * 0.3 + pow(g2, 2.5) * 0.2;
+
+            color.rgb += glint * vec3(0.45, 0.25, 0.8);
+        }
     }
     
     float opacity = ceil(color.a * 255);

@@ -4,6 +4,7 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.customcontent.armor.ArmorShaderPack
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
+import me.nebula.orbit.utils.customcontent.effects.EffectsShaderPack
 import me.nebula.orbit.utils.hud.font.HudFontProvider
 import me.nebula.orbit.utils.hud.shader.HudShaderPack
 import me.nebula.orbit.utils.customcontent.block.*

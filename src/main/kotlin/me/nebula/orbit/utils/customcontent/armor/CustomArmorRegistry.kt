@@ -66,24 +66,31 @@ object CustomArmorRegistry {
     }
 
     private fun colorIdToRgb(colorId: Int): Triple<Int, Int, Int> {
-        require(colorId in 1..16_777_215) { "Color ID out of range: $colorId" }
-        val r = colorId and 0xFF
-        val g = (colorId shr 8) and 0xFF
-        val b = (colorId shr 16) and 0xFF
+        require(colorId in 1..8_388_607) { "Color ID out of range: $colorId" }
+        val spaced = colorId * 2
+        val r = spaced and 0xFF
+        val g = (spaced shr 8) and 0xFF
+        val b = (spaced shr 16) and 0xFF
         return Triple(r, g, b)
     }
 }
 
-fun RegisteredArmor.createItem(part: ArmorPart): ItemStack {
+fun RegisteredArmor.createItem(part: ArmorPart, enchanted: Boolean = false): ItemStack {
     val material = when (part) {
         ArmorPart.Helmet -> Material.LEATHER_HELMET
         ArmorPart.Chestplate, ArmorPart.RightArm, ArmorPart.LeftArm -> Material.LEATHER_CHESTPLATE
         ArmorPart.InnerArmor, ArmorPart.RightLeg, ArmorPart.LeftLeg -> Material.LEATHER_LEGGINGS
         ArmorPart.RightBoot, ArmorPart.LeftBoot -> Material.LEATHER_BOOTS
     }
+    val r = if (enchanted) colorR or 1 else colorR
     return ItemStack.of(material).with { builder ->
-        builder.set(DataComponents.DYED_COLOR, Color(colorR, colorG, colorB))
+        builder.set(DataComponents.DYED_COLOR, Color(r, colorG, colorB))
     }
+}
+
+fun RegisteredArmor.applyEnchantGlint(item: ItemStack): ItemStack {
+    val r = colorR or 1
+    return item.with { it.set(DataComponents.DYED_COLOR, Color(r, colorG, colorB)) }
 }
 
 fun RegisteredArmor.hasPart(part: ArmorPart): Boolean =
@@ -97,9 +104,9 @@ fun RegisteredArmor.hasSlot(slot: EquipmentSlot): Boolean = when (slot) {
     else -> false
 }
 
-fun RegisteredArmor.equipFullSet(player: Player) {
-    if (hasSlot(EquipmentSlot.HELMET)) player.setEquipment(EquipmentSlot.HELMET, createItem(ArmorPart.Helmet))
-    if (hasSlot(EquipmentSlot.CHESTPLATE)) player.setEquipment(EquipmentSlot.CHESTPLATE, createItem(ArmorPart.Chestplate))
-    if (hasSlot(EquipmentSlot.LEGGINGS)) player.setEquipment(EquipmentSlot.LEGGINGS, createItem(ArmorPart.InnerArmor))
-    if (hasSlot(EquipmentSlot.BOOTS)) player.setEquipment(EquipmentSlot.BOOTS, createItem(ArmorPart.RightBoot))
+fun RegisteredArmor.equipFullSet(player: Player, enchanted: Boolean = false) {
+    if (hasSlot(EquipmentSlot.HELMET)) player.setEquipment(EquipmentSlot.HELMET, createItem(ArmorPart.Helmet, enchanted))
+    if (hasSlot(EquipmentSlot.CHESTPLATE)) player.setEquipment(EquipmentSlot.CHESTPLATE, createItem(ArmorPart.Chestplate, enchanted))
+    if (hasSlot(EquipmentSlot.LEGGINGS)) player.setEquipment(EquipmentSlot.LEGGINGS, createItem(ArmorPart.InnerArmor, enchanted))
+    if (hasSlot(EquipmentSlot.BOOTS)) player.setEquipment(EquipmentSlot.BOOTS, createItem(ArmorPart.RightBoot, enchanted))
 }

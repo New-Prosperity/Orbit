@@ -65,6 +65,8 @@ object ArmorParser {
             if (altPart != null) {
                 val adjusted = adjustCubesForPart(mismatched, part, altPart)
                 output.add(ParsedArmorPiece(altPart, adjusted))
+            } else {
+                output.add(ParsedArmorPiece(part, mismatched))
             }
         }
     }
