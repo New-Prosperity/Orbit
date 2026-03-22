@@ -15,6 +15,7 @@ import me.nebula.gravity.rank.RankManager
 import me.nebula.orbit.rankName
 import me.nebula.orbit.rankColor
 import me.nebula.orbit.rankPrefix
+import me.nebula.orbit.level
 import me.nebula.orbit.rankWeight
 import me.nebula.gravity.session.SessionStore
 import me.nebula.orbit.Orbit
@@ -54,7 +55,10 @@ import me.nebula.gravity.leveling.LevelFormula
 import me.nebula.orbit.cached
 import me.nebula.orbit.utils.counter.AnimatedCounterManager
 import me.nebula.orbit.utils.counter.Easing
+import me.nebula.orbit.utils.nameplate.NameplateManager
+import me.nebula.orbit.utils.nameplate.nameplateLayout
 import me.nebula.orbit.utils.sound.playSound
+import me.nebula.orbit.utils.world.configure
 import net.minestom.server.entity.Player
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
@@ -173,6 +177,7 @@ class HubMode : ServerMode {
                 slot(item.slot, itemStack(material) {
                     name(item.name)
                     if (item.glowing) glowing()
+                    clean()
                 }) { player ->
                     actions[item.action]?.invoke(player)
                         ?: logger.warn { "Unknown hotbar action: ${item.action}" }
@@ -192,6 +197,30 @@ class HubMode : ServerMode {
             voidTeleportY = config.lobby.voidTeleportY
         }
         lobby.install()
+
+        defaultInstance.configure {
+            doDaylightCycle(false)
+            doWeatherCycle(false)
+            doMobSpawning(false)
+            pvp(false)
+            fallDamage(false)
+            fireDamage(false)
+            drowningDamage(false)
+            freezeDamage(false)
+            freezeTime()
+            noon()
+            clear()
+        }
+
+        NameplateManager.setLayout(nameplateLayout("hub") {
+            yOffset(0.3f)
+            transparentBackground()
+            line { player -> "<${player.rankColor}>${player.rankPrefix}<white>${player.username}" }
+            translatedLine("orbit.nameplate.level") { player ->
+                arrayOf("level" to player.level.toString())
+            }
+        })
+        NameplateManager.install(handler)
 
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
             if (!event.isFirstSpawn) return@addListener

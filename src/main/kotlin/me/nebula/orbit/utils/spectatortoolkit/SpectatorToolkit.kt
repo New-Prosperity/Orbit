@@ -27,6 +27,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
 
             slot(0, itemStack(Material.COMPASS) {
                 name("<green>Next Player <gray>(Right Click)")
+                clean()
             }) { player ->
                 val target = nextTarget(player)
                 if (target != null) {
@@ -38,6 +39,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
 
             slot(1, itemStack(Material.CLOCK) {
                 name("<red>Previous Player <gray>(Right Click)")
+                clean()
             }) { player ->
                 val target = previousTarget(player)
                 if (target != null) {
@@ -49,12 +51,14 @@ class SpectatorToolkit @PublishedApi internal constructor(
 
             slot(4, itemStack(Material.PAPER) {
                 name("<yellow>Player List <gray>(Right Click)")
+                clean()
             }) { player ->
                 openPlayerSelector(player)
             }
 
             slot(7, itemStack(Material.FEATHER) {
                 name("<aqua>Speed Toggle <gray>(Right Click)")
+                clean()
             }) { player ->
                 cycleSpeed(player)
             }
@@ -62,6 +66,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
             if (onLeave != null) {
                 slot(8, itemStack(Material.BARRIER) {
                     name("<red>Leave <gray>(Right Click)")
+                    clean()
                 }) { player ->
                     onLeave.invoke(player)
                 }

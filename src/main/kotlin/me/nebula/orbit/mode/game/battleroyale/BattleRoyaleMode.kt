@@ -120,11 +120,13 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     override fun buildLobbyHotbar(): Hotbar = hotbar("br-lobby") {
         slot(3, itemStack(Material.BOOK) {
             name("<green><bold>Kit Selector")
+            clean()
         }) { player ->
             BattleRoyaleKitManager.openKitMenu(player)
         }
         slot(5, itemStack(Material.PAPER) {
             name("<yellow>Vote on Settings <gray>(Right Click)")
+            clean()
         }) { player ->
             BattleRoyaleVoteManager.openCategoryMenu(player)
         }
