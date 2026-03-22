@@ -1,63 +1,142 @@
 # Hotbar
 
-Named hotbar layout with per-slot click handlers. Tracks active players and manages item lifecycle. Supports per-player conditional visibility via `Condition<Player>`.
+Named hotbar layout with per-slot click handlers, cooldowns, dynamic items, per-player overrides, and full inventory protection. Supports conditional visibility, click type detection, and auto-refresh.
 
-## DSL
+## Quick Start
 
 ```kotlin
 val lobbyBar = hotbar("lobby") {
-    clearOtherSlots = true
-    slot(0, compassItem) { player -> player.sendMM("<yellow>Navigator") }
+    slot(0, compassItem) { player -> SelectorMenu.open(player) }
     slot(4, profileItem) { player -> openProfile(player) }
-    slot(8, hostItem, visibleWhen = condition { hasTickets(it) }) { player -> openHost(player) }
+    slot(8, hostItem) { player -> openHost(player) }
+}
+lobbyBar.install()
+lobbyBar.apply(player)
+```
+
+## Full-Featured Slot
+
+```kotlin
+val gameBar = hotbar("game") {
+    lockInventory(true)
+    preventDrop(true)
+    preventSwap(true)
+    preventPlace(true)
+    refreshEvery(20)
+
+    configuredSlot(0, swordItem) {
+        cooldown(10)
+        sound(SoundEvent.UI_BUTTON_CLICK, pitch = 1.2f)
+        onClick { player, clickType ->
+            when (clickType) {
+                ClickType.RIGHT -> useAbility(player)
+                ClickType.LEFT -> {} // normal attack
+                else -> {}
+            }
+        }
+    }
+
+    configuredSlot(4, compassItem) {
+        dynamicItem { player ->
+            val target = getTrackedTarget(player)
+            if (target != null) activeCompassItem else inactiveCompassItem
+        }
+        visibleWhen { it.gameMode != GameMode.SPECTATOR }
+        onClick { player -> openTracker(player) }
+    }
+
+    configuredSlot(8, leaveItem) {
+        sound(SoundEvent.UI_BUTTON_CLICK)
+        cooldown(20)
+        visibleWhen(hasPermission("game.leave"))
+        onClick { player -> confirmLeave(player) }
+    }
 }
 ```
 
-## Conditional Slots
+## Protection (all enabled by default)
 
-Slots accept an optional `visibleWhen: Condition<Player>` parameter. When set:
-- `apply(player)` only places the item if the condition passes
-- Click handler ignores interactions if the condition fails
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `lockInventory(bool)` | `true` | Block all inventory click interactions |
+| `preventDrop(bool)` | `true` | Block item dropping (Q key) |
+| `preventSwap(bool)` | `true` | Block offhand swap (F key) |
+| `preventPlace(bool)` | `true` | Block placing hotbar items as blocks |
+| `clearOtherSlots(bool)` | `true` | Clear slots 0-8 before applying |
 
-Composes with the existing `Condition` DSL (`and`, `or`, `not`):
+## Cooldowns
+
+Default 4 ticks (200ms) per slot. Prevents spam-clicking.
 
 ```kotlin
-val vipOrAdmin = condition { isVip(it) } or condition { isAdmin(it) }
-slot(8, specialItem, visibleWhen = vipOrAdmin) { player -> doStuff(player) }
+configuredSlot(0, item) {
+    cooldown(20) // 1 second cooldown
+    onClick { player -> doExpensiveAction(player) }
+}
+```
+
+## Dynamic Items
+
+Items that change based on player state. Re-evaluated on `apply()`, `refresh()`, and auto-refresh.
+
+```kotlin
+configuredSlot(4, defaultItem) {
+    dynamicItem { player ->
+        if (isQueuedForGame(player)) queuedItem else defaultItem
+    }
+}
+```
+
+## Auto-Refresh
+
+Periodically re-evaluates dynamic items and visibility conditions.
+
+```kotlin
+hotbar("lobby") {
+    refreshEvery(20) // every second
+    configuredSlot(4, item) {
+        dynamicItem { player -> buildDynamicItem(player) }
+        visibleWhen { someCondition(it) }
+    }
+}
+```
+
+## Per-Player Overrides
+
+Override a slot's item for a specific player without changing the hotbar definition.
+
+```kotlin
+bar.overrideSlot(player, 4, specialItem)
+bar.clearOverride(player, 4)
+bar.clearOverrides(player)
+```
+
+## Click Types
+
+```kotlin
+configuredSlot(0, item) {
+    onClick { player, clickType ->
+        when (clickType) {
+            ClickType.RIGHT -> openMenu(player)
+            ClickType.LEFT -> quickAction(player)
+            else -> {}
+        }
+    }
+}
 ```
 
 ## API
 
 | Method | Description |
-|---|---|
-| `apply(player)` | Set visible hotbar items and track the player |
-| `remove(player)` | Clear hotbar items and untrack the player |
+|--------|-------------|
+| `apply(player)` | Set items, track player, respect conditions/overrides |
+| `remove(player)` | Clear items, untrack, clear overrides |
+| `refresh(player)` | Re-evaluate dynamic items and conditions for one player |
+| `refreshAll()` | Re-evaluate for all active players |
+| `refreshSlot(player, slot)` | Re-evaluate one slot for one player |
+| `overrideSlot(player, slot, item)` | Set per-player item override |
+| `clearOverride(player, slot)` | Remove one override |
+| `clearOverrides(player)` | Remove all overrides for player |
 | `isActive(player)` | Check if player has this hotbar |
-| `install()` | Register click event listener globally |
-| `uninstall()` | Remove event listener and clear tracked players |
-
-## Properties
-
-| Property | Default | Description |
-|---|---|---|
-| `name` | required | Unique identifier |
-| `clearOtherSlots` | `true` | Clear slots 0-8 before applying |
-
-## Example
-
-```kotlin
-val bar = hotbar("game") {
-    slot(0, ItemStack.of(Material.STONE_SWORD)) { player ->
-        player.sendMM("<red>Fight!")
-    }
-    slot(8, ItemStack.of(Material.BED)) { player ->
-        player.sendMM("<gray>Leave?")
-    }
-}
-
-bar.install()
-bar.apply(player)
-
-bar.remove(player)
-bar.uninstall()
-```
+| `install()` | Register event listeners + start auto-refresh |
+| `uninstall()` | Remove listeners, cancel refresh, clear state |
