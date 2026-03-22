@@ -279,6 +279,11 @@ class HubMode : ServerMode {
     private val tabFakeUuids = Array(TAB_TOTAL) { UUID.nameUUIDFromBytes("hubtab:$it".toByteArray()) }
     private val tabMm = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage()
     private val tabSentTo = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
+    private val blankSkin = listOf(PlayerInfoUpdatePacket.Property(
+        "textures",
+        "ewogICJ0aW1lc3RhbXAiIDogMTcxMTM5NjcwMjc0NCwKICAicHJvZmlsZUlkIiA6ICIxMjNlNDU2Ny1lODliLTEyZDMtYTQ1Ni00MjY2MTQxNzQwMDAiLAogICJwcm9maWxlTmFtZSIgOiAiYmxhbmsiLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjFhZGUxOTUwYTliNjExOTFjNWM4ZDU1NDFkZmI4ZWMwMTQyOGIxMGY1NThhOGRhMmQ1YzliMWMyNWFiOCIKICAgIH0KICB9Cn0=",
+        null,
+    ))
 
     private fun setupHubTabEntries(handler: GlobalEventHandler) {
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
@@ -373,9 +378,14 @@ class HubMode : ServerMode {
         return entries
     }
 
-    private fun fakeEntry(uuid: UUID, slot: Int, displayName: net.kyori.adventure.text.Component): PlayerInfoUpdatePacket.Entry =
+    private fun fakeEntry(
+        uuid: UUID,
+        slot: Int,
+        displayName: net.kyori.adventure.text.Component,
+        properties: List<PlayerInfoUpdatePacket.Property> = blankSkin,
+    ): PlayerInfoUpdatePacket.Entry =
         PlayerInfoUpdatePacket.Entry(
-            uuid, "!tab_%03d".format(slot), emptyList(),
+            uuid, "!tab_%03d".format(slot), properties,
             true, -1, GameMode.SURVIVAL,
             displayName, null, TAB_TOTAL - 1 - slot, false,
         )
