@@ -56,6 +56,8 @@ import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.item.Material
 import net.minestom.server.tag.Tag
+import java.time.Duration
+import java.util.UUID
 import net.minestom.server.timer.Task
 
 class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
@@ -452,7 +454,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
         spectateWinner()
     }
 
-    private fun resolveKiller(target: Player): java.util.UUID? {
+    private fun resolveKiller(target: Player): UUID? {
         val attackerUuid = target.getTag(lastAttackerTag) ?: return null
         val attackTime = target.getTag(lastAttackerTimeTag) ?: return null
         return if (System.currentTimeMillis() - attackTime < 10_000L) attackerUuid else null
@@ -528,7 +530,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     }
 
     private fun buildResult(winner: Player?): MatchResult {
-        val gameDuration = java.time.Duration.ofMillis(System.currentTimeMillis() - gameStartTime)
+        val gameDuration = Duration.ofMillis(System.currentTimeMillis() - gameStartTime)
 
         return matchResult {
             if (winner != null) {

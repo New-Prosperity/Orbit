@@ -65,6 +65,7 @@ object BattleRoyaleVoteManager {
                         }
                     }
                     lore(player.translateRaw("orbit.game.br.vote.click_to_vote"))
+                    clean()
                 }) { p ->
                     openOptionMenu(p, cat.id)
                 }
@@ -91,6 +92,7 @@ object BattleRoyaleVoteManager {
                     } else {
                         lore(player.translateRaw("orbit.game.br.vote.click_to_select"))
                     }
+                    clean()
                 }) { p ->
                     vote(p.uuid, cat.id, i)
                     p.sendMessage(p.translate("orbit.game.br.vote.voted",
@@ -102,6 +104,7 @@ object BattleRoyaleVoteManager {
             }
             slot(22, itemStack(Material.ARROW) {
                 name(player.translateRaw("orbit.host.back"))
+                clean()
             }) { p ->
                 openCategoryMenu(p)
             }

@@ -52,17 +52,17 @@ object BattleRoyaleKitManager {
             name(player.translateRaw(def.nameKey))
             lore(player.translateRaw(def.descriptionKey))
             if (!isUnlocked) {
-                lore("")
+                emptyLoreLine()
                 lore(player.translateRaw("orbit.game.br.kit.locked"))
             } else {
-                lore("")
+                emptyLoreLine()
                 if (maxLevel > 1) {
                     lore(player.translateRaw("orbit.game.br.kit.level", "level" to level.toString(), "max" to maxLevel.toString()))
                     if (level < maxLevel && xpNeeded > 0) {
                         lore(player.translateRaw("orbit.game.br.kit.xp_progress", "xp" to xp.toString(), "needed" to xpNeeded.toString()))
                     }
                 }
-                lore("")
+                emptyLoreLine()
                 if (isSelected) {
                     lore(player.translateRaw("orbit.game.br.kit.selected"))
                     glowing()
@@ -70,6 +70,7 @@ object BattleRoyaleKitManager {
                     lore(player.translateRaw("orbit.game.br.kit.click_select"))
                 }
             }
+            clean()
         }
     }
 
