@@ -367,7 +367,7 @@ class HubMode : ServerMode {
 
     private fun fakeEntry(uuid: UUID, listOrder: Int, displayName: net.kyori.adventure.text.Component): PlayerInfoUpdatePacket.Entry =
         PlayerInfoUpdatePacket.Entry(
-            uuid, "!tab_$listOrder", emptyList(),
+            uuid, "!tab_%03d".format(listOrder), emptyList(),
             true, -1, GameMode.SURVIVAL,
             displayName, null, listOrder, false,
         )
