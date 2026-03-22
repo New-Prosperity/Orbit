@@ -47,7 +47,13 @@ import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
 import net.minestom.server.timer.TaskSchedule
+import me.nebula.gravity.cache.PlayerCache
+import me.nebula.gravity.leveling.LevelFormula
+import me.nebula.orbit.cached
+import me.nebula.orbit.utils.counter.AnimatedCounterManager
+import me.nebula.orbit.utils.counter.Easing
 import me.nebula.orbit.utils.sound.playSound
+import net.minestom.server.entity.Player
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
@@ -191,6 +197,7 @@ class HubMode : ServerMode {
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
             if (!event.isFirstSpawn) return@addListener
             hotbar.apply(event.player)
+            syncExperienceBar(event.player)
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
@@ -368,6 +375,45 @@ class HubMode : ServerMode {
             true, -1, GameMode.SURVIVAL,
             displayName, null, listOrder, false,
         )
+
+    private fun syncExperienceBar(player: Player) {
+        val data = player.cached.level
+        player.level = data.level
+        player.exp = LevelFormula.progressPercent(data.xp).toFloat()
+    }
+
+    fun animateXpGain(player: Player, oldXp: Long, newXp: Long) {
+        val oldLevel = LevelFormula.levelFromXp(oldXp)
+        val newLevel = LevelFormula.levelFromXp(newXp)
+
+        AnimatedCounterManager.start(
+            player = player,
+            id = "hub_xp_bar",
+            from = oldXp,
+            to = newXp,
+            durationTicks = 50,
+            easing = Easing.EASE_OUT_CUBIC,
+            onTick = { currentXp ->
+                val currentLevel = LevelFormula.levelFromXp(currentXp)
+                player.level = currentLevel
+                player.exp = LevelFormula.progressPercent(currentXp).toFloat()
+            },
+            onComplete = {
+                if (newLevel > oldLevel) {
+                    player.playSound(SoundEvent.ENTITY_PLAYER_LEVELUP, 1f, 1f)
+                }
+            },
+        )
+
+        val ticksBetweenSounds = 6
+        val totalSoundTicks = 40
+        var soundTick = 0
+        MinecraftServer.getSchedulerManager().buildTask {
+            if (soundTick >= totalSoundTicks) return@buildTask
+            soundTick += ticksBetweenSounds
+            player.playSound(SoundEvent.ENTITY_EXPERIENCE_ORB_PICKUP, 0.3f, 0.8f + (soundTick.toFloat() / totalSoundTicks) * 0.8f)
+        }.repeat(TaskSchedule.tick(ticksBetweenSounds)).schedule()
+    }
 
     override fun shutdown() {
         hostStatusSubscription?.let { NetworkMessenger.unsubscribe<HostProvisionStatusMessage>(it) }
