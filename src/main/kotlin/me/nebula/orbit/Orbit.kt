@@ -377,12 +377,17 @@ object Orbit {
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
             event.spawningInstance = mode.activeInstance
             event.player.respawnPoint = mode.activeSpawnPoint
-            PlayerCache.preload(event.player.uuid)
+            if (event.isFirstConfig) {
+                PlayerCache.preload(event.player.uuid)
+            } else {
+                event.setSendRegistryData(false)
+                event.setClearChat(false)
+            }
         }
 
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
             val player = event.player
-            val cached = PlayerCache.getOrLoad(player.uuid)
+            val cached = PlayerCache.get(player.uuid) ?: PlayerCache.getOrLoad(player.uuid)
             val locale = cached.player?.language ?: translations.defaultLocale
             cacheLocale(player.uuid, locale)
             AchievementRegistry.loadPlayer(player.uuid)
