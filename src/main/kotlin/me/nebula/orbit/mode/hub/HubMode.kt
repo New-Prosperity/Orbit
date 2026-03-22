@@ -295,6 +295,11 @@ class HubMode : ServerMode {
                 broadcastTabUpdate()
             }.delay(TaskSchedule.tick(2)).schedule()
         }
+
+        MinecraftServer.getSchedulerManager()
+            .buildTask { broadcastTabUpdate() }
+            .repeat(TaskSchedule.seconds(5))
+            .schedule()
     }
 
     private fun sendFullTabList(viewer: net.minestom.server.entity.Player) {
