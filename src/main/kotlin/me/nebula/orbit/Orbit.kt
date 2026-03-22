@@ -64,6 +64,7 @@ import me.nebula.orbit.utils.commandbuilder.OnlinePlayerCache
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.customcontent.CustomContentRegistry
 import me.nebula.gravity.cache.PlayerCache
+import me.nebula.gravity.leveling.LevelStore
 import me.nebula.orbit.utils.actionbar.ActionBarManager
 import me.nebula.orbit.utils.bossbar.AnimatedBossBarManager
 import me.nebula.orbit.utils.counter.AnimatedCounterManager
@@ -201,6 +202,7 @@ object Orbit {
                         +AchievementStore
                         +BattlePassStore
                         +MissionStore
+                        +LevelStore
                     }
                 }
             }
