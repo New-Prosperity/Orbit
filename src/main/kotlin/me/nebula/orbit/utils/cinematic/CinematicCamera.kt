@@ -7,7 +7,10 @@ import me.nebula.orbit.utils.modelengine.math.Quat
 import me.nebula.orbit.utils.modelengine.math.eulerToQuat
 import me.nebula.orbit.utils.modelengine.math.quatSlerp
 import me.nebula.orbit.utils.modelengine.math.quatToEuler
-import me.nebula.orbit.utils.scheduler.repeat
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.title.Title
+import net.kyori.adventure.title.TitlePart
+import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
@@ -16,14 +19,17 @@ import net.minestom.server.entity.GameMode
 import net.minestom.server.entity.Player
 import net.minestom.server.network.packet.server.play.CameraPacket
 import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
+import net.minestom.server.network.packet.server.play.EntityPositionAndRotationPacket
 import net.minestom.server.network.packet.server.play.EntityPositionSyncPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import net.minestom.server.timer.Task
+import net.minestom.server.timer.TaskSchedule
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.atan2
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 private val nextCameraEntityId = AtomicInteger(-4_000_000)
@@ -41,11 +47,16 @@ data class CinematicSequence(
     val loop: Boolean,
     val lookAt: (() -> Vec)?,
     val onComplete: (() -> Unit)?,
+    val onTick: ((Player, Float) -> Unit)?,
+    val speed: Float,
+    val hideHud: Boolean,
+    val fadeIn: Int,
+    val fadeOut: Int,
 ) {
     val duration: Float get() = nodes.lastOrNull()?.time ?: 0f
 }
 
-data class CinematicSession(
+class CinematicSession(
     val playerUuid: UUID,
     val sequence: CinematicSequence,
     val previousGameMode: GameMode,
@@ -54,13 +65,20 @@ data class CinematicSession(
     val rotationQuats: List<Pair<Float, Quat>>,
     val cameraEntityId: Int,
     val cameraEntityUuid: UUID,
-    @Volatile var time: Float = 0f,
-    @Volatile var task: Task? = null,
-)
+) {
+    @Volatile var time: Float = 0f
+    @Volatile var task: Task? = null
+    @Volatile var lastPos: Vec = Vec.ZERO
+    @Volatile var lastYaw: Float = 0f
+    @Volatile var lastPitch: Float = 0f
+    @Volatile var syncCounter: Int = 0
+}
 
 object CinematicCamera {
 
     private val sessions = ConcurrentHashMap<UUID, CinematicSession>()
+    private const val TICK_SECONDS = 1f / 20f
+    private const val SYNC_INTERVAL = 40
 
     fun play(player: Player, sequence: CinematicSequence) {
         require(sequence.nodes.size >= 2) { "Cinematic requires at least 2 nodes" }
@@ -68,11 +86,7 @@ object CinematicCamera {
         stop(player)
 
         val posKeyframes = sequence.nodes.map { node ->
-            Keyframe(
-                time = node.time,
-                value = node.position,
-                interpolation = node.interpolation,
-            )
+            Keyframe(time = node.time, value = node.position, interpolation = node.interpolation)
         }
 
         val rotQuats = sequence.nodes.map { node ->
@@ -98,6 +112,9 @@ object CinematicCamera {
             cameraEntityId = entityId,
             cameraEntityUuid = entityUuid,
         )
+        session.lastPos = startNode.position
+        session.lastYaw = startNode.yaw
+        session.lastPitch = startNode.pitch
 
         sessions[player.uuid] = session
 
@@ -107,37 +124,74 @@ object CinematicCamera {
         ))
 
         player.gameMode = GameMode.SPECTATOR
+
+        if (sequence.hideHud) {
+            player.setReducedDebugScreenInformation(true)
+        }
+
+        if (sequence.fadeIn > 0) {
+            player.sendTitlePart(TitlePart.TIMES, Title.Times.times(
+                Duration.ofMillis(sequence.fadeIn.toLong() * 50),
+                Duration.ZERO,
+                Duration.ZERO,
+            ))
+            player.sendTitlePart(TitlePart.TITLE, Component.empty())
+        }
+
         player.sendPacket(CameraPacket(entityId))
 
-        session.task = repeat(TICK_DURATION) {
-            val current = sessions[player.uuid] ?: return@repeat
-            tick(current, player)
-        }
+        session.task = MinecraftServer.getSchedulerManager()
+            .buildTask {
+                val current = sessions[player.uuid] ?: return@buildTask
+                tick(current, player)
+            }
+            .repeat(TaskSchedule.tick(1))
+            .schedule()
     }
 
     fun stop(player: Player) {
         val session = sessions.remove(player.uuid) ?: return
         session.task?.cancel()
+
+        if (session.sequence.fadeOut > 0) {
+            player.sendTitlePart(TitlePart.TIMES, Title.Times.times(
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ofMillis(session.sequence.fadeOut.toLong() * 50),
+            ))
+            player.sendTitlePart(TitlePart.TITLE, Component.empty())
+        }
+
         player.sendPacket(CameraPacket(player.entityId))
         player.sendPacket(DestroyEntitiesPacket(listOf(session.cameraEntityId)))
         player.gameMode = session.previousGameMode
         player.teleport(session.startPosition)
+
+        if (session.sequence.hideHud) {
+            player.setReducedDebugScreenInformation(false)
+        }
+
         session.sequence.onComplete?.invoke()
     }
 
     fun isPlaying(player: Player): Boolean = sessions.containsKey(player.uuid)
 
     fun stopAll() {
-        val iterator = sessions.entries.iterator()
-        while (iterator.hasNext()) {
-            val (_, session) = iterator.next()
+        for ((uuid, session) in sessions) {
             session.task?.cancel()
-            iterator.remove()
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+            if (player != null) {
+                player.sendPacket(CameraPacket(player.entityId))
+                player.sendPacket(DestroyEntitiesPacket(listOf(session.cameraEntityId)))
+                player.gameMode = session.previousGameMode
+                player.teleport(session.startPosition)
+            }
         }
+        sessions.clear()
     }
 
     private fun tick(session: CinematicSession, player: Player) {
-        session.time += TICK_SECONDS
+        session.time += TICK_SECONDS * session.sequence.speed
 
         val pos = session.positionInterpolator.evaluate(session.time) ?: return
 
@@ -158,15 +212,42 @@ object CinematicCamera {
             pitch = p
         }
 
-        player.sendPacket(EntityPositionSyncPacket(
-            session.cameraEntityId,
-            Vec(pos.x(), pos.y(), pos.z()),
-            Vec.ZERO, yaw, pitch, false,
-        ))
+        session.syncCounter++
+        if (session.syncCounter >= SYNC_INTERVAL) {
+            session.syncCounter = 0
+            player.sendPacket(EntityPositionSyncPacket(
+                session.cameraEntityId,
+                Vec(pos.x(), pos.y(), pos.z()),
+                Vec.ZERO, yaw, pitch, false,
+            ))
+        } else {
+            val dx = ((pos.x() - session.lastPos.x()) * 4096).roundToInt().toShort()
+            val dy = ((pos.y() - session.lastPos.y()) * 4096).roundToInt().toShort()
+            val dz = ((pos.z() - session.lastPos.z()) * 4096).roundToInt().toShort()
+
+            player.sendPacket(EntityPositionAndRotationPacket(
+                session.cameraEntityId,
+                dx, dy, dz,
+                yaw, pitch, false,
+            ))
+        }
+
+        session.lastPos = pos
+        session.lastYaw = yaw
+        session.lastPitch = pitch
+
+        session.sequence.onTick?.invoke(player, session.time / session.sequence.duration)
 
         if (session.time >= session.sequence.duration) {
             if (session.sequence.loop) {
                 session.time = 0f
+                val first = session.sequence.nodes.first()
+                player.sendPacket(EntityPositionSyncPacket(
+                    session.cameraEntityId,
+                    Vec(first.position.x(), first.position.y(), first.position.z()),
+                    Vec.ZERO, first.yaw, first.pitch, false,
+                ))
+                session.lastPos = first.position
             } else {
                 stop(player)
             }
@@ -196,9 +277,6 @@ object CinematicCamera {
         }
         return low
     }
-
-    private val TICK_DURATION = Duration.ofMillis(25)
-    private const val TICK_SECONDS = 25f / 1000f
 }
 
 class CinematicBuilder @PublishedApi internal constructor() {
@@ -207,6 +285,11 @@ class CinematicBuilder @PublishedApi internal constructor() {
     @PublishedApi internal var loop = false
     @PublishedApi internal var lookAt: (() -> Vec)? = null
     @PublishedApi internal var onComplete: (() -> Unit)? = null
+    @PublishedApi internal var onTick: ((Player, Float) -> Unit)? = null
+    @PublishedApi internal var speed: Float = 1f
+    @PublishedApi internal var hideHud: Boolean = false
+    @PublishedApi internal var fadeIn: Int = 0
+    @PublishedApi internal var fadeOut: Int = 0
 
     fun node(time: Float, position: Pos, interpolation: InterpolationType = InterpolationType.CATMULLROM) {
         nodes += CinematicNode(time, position.asVec(), position.yaw(), position.pitch(), interpolation)
@@ -222,14 +305,18 @@ class CinematicBuilder @PublishedApi internal constructor() {
     }
 
     fun loop() { loop = true }
+    fun speed(value: Float) { speed = value }
+    fun hideHud() { hideHud = true }
+    fun fadeIn(ticks: Int) { fadeIn = ticks }
+    fun fadeOut(ticks: Int) { fadeOut = ticks }
+    fun fade(inTicks: Int, outTicks: Int) { fadeIn = inTicks; fadeOut = outTicks }
 
     fun lookAt(position: Vec) { lookAt = { position } }
-
     fun lookAt(entity: Entity) { lookAt = { entity.position.asVec() } }
-
     fun lookAt(supplier: () -> Vec) { lookAt = supplier }
 
     fun onComplete(action: () -> Unit) { onComplete = action }
+    fun onTick(action: (Player, Float) -> Unit) { onTick = action }
 
     @PublishedApi internal fun build(): CinematicSequence {
         require(nodes.size >= 2) { "Cinematic requires at least 2 nodes" }
@@ -238,6 +325,11 @@ class CinematicBuilder @PublishedApi internal constructor() {
             loop = loop,
             lookAt = lookAt,
             onComplete = onComplete,
+            onTick = onTick,
+            speed = speed,
+            hideHud = hideHud,
+            fadeIn = fadeIn,
+            fadeOut = fadeOut,
         )
     }
 }
