@@ -373,11 +373,11 @@ class HubMode : ServerMode {
         return entries
     }
 
-    private fun fakeEntry(uuid: UUID, listOrder: Int, displayName: net.kyori.adventure.text.Component): PlayerInfoUpdatePacket.Entry =
+    private fun fakeEntry(uuid: UUID, slot: Int, displayName: net.kyori.adventure.text.Component): PlayerInfoUpdatePacket.Entry =
         PlayerInfoUpdatePacket.Entry(
-            uuid, "!tab_%03d".format(listOrder), emptyList(),
+            uuid, "!tab_%03d".format(slot), emptyList(),
             true, -1, GameMode.SURVIVAL,
-            displayName, null, listOrder, false,
+            displayName, null, TAB_TOTAL - 1 - slot, false,
         )
 
     private fun syncExperienceBar(player: Player) {
