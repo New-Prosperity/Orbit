@@ -1,6 +1,8 @@
 package me.nebula.orbit.utils.gamechat
 
-import me.nebula.gravity.rank.RankManager
+import me.nebula.orbit.rank
+import me.nebula.orbit.rankColor
+import me.nebula.orbit.rankPrefix
 import me.nebula.orbit.mode.game.PlayerTracker
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
@@ -88,11 +90,11 @@ class GameChatPipeline {
 
 class RankPrefixProcessor : ChatProcessor {
     override fun process(context: ChatContext) {
-        val rank = RankManager.rankOf(context.sender.uuid) ?: return
-        if (rank.prefix.isNotEmpty()) {
-            context.prefixes.add("${rank.prefix} ")
+        val prefix = context.sender.rankPrefix
+        if (prefix.isNotEmpty()) {
+            context.prefixes.add("$prefix ")
         }
-        context.nameColor = "<${rank.color}>"
+        context.nameColor = "<${context.sender.rankColor}>"
     }
 }
 

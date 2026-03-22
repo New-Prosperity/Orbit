@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.inventorylayout
 
+import me.nebula.orbit.utils.itembuilder.itemStack
 import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
@@ -115,6 +116,7 @@ inline fun inventoryLayout(block: InventoryLayoutBuilder.() -> Unit): InventoryL
     InventoryLayoutBuilder().apply(block).build()
 
 fun fillerItem(material: Material = Material.GRAY_STAINED_GLASS_PANE): ItemStack =
-    ItemStack.of(material).with { builder ->
-        builder.set(net.minestom.server.component.DataComponents.CUSTOM_NAME, Component.empty())
+    itemStack(material) {
+        name(" ")
+        hideTooltip()
     }

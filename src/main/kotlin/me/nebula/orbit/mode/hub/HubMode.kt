@@ -11,9 +11,11 @@ import me.nebula.gravity.messaging.QueueProvisioningMessage
 import me.nebula.gravity.messaging.QueueRemovedMessage
 import me.nebula.gravity.property.NetworkProperties
 import me.nebula.gravity.property.PropertyStore
-import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankManager
-import me.nebula.gravity.rank.RankStore
+import me.nebula.orbit.rankName
+import me.nebula.orbit.rankColor
+import me.nebula.orbit.rankPrefix
+import me.nebula.orbit.rankWeight
 import me.nebula.gravity.session.SessionStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.ServerMode
@@ -65,10 +67,7 @@ class HubMode : ServerMode {
     private val resolver = placeholderResolver {
         global("online") { SessionStore.cachedSize.toString() }
         global("server") { Orbit.serverName }
-        perPlayer("rank") { player ->
-            val rankData = PlayerRankStore.load(player.uuid)
-            rankData?.let { RankStore.load(it.rank)?.name } ?: "Member"
-        }
+        perPlayer("rank") { player -> player.rankName }
     }
 
     override val maxPlayers: Int get() = PropertyStore[NetworkProperties.HUB_SLOTS]
@@ -327,7 +326,7 @@ class HubMode : ServerMode {
     private fun buildTabEntries(viewer: net.minestom.server.entity.Player): List<PlayerInfoUpdatePacket.Entry> {
         val sorted = MinecraftServer.getConnectionManager().onlinePlayers
             .sortedWith(
-                compareBy<net.minestom.server.entity.Player> { RankManager.rankOf(it.uuid)?.weight ?: 100 }
+                compareBy<net.minestom.server.entity.Player> { it.rankWeight }
                     .thenBy { it.username.lowercase() }
             )
 
@@ -346,10 +345,7 @@ class HubMode : ServerMode {
 
         for (i in 0 until displayCount) {
             val player = sorted[i]
-            val rank = RankManager.rankOf(player.uuid)
-            val prefix = rank?.prefix ?: ""
-            val color = rank?.color ?: "white"
-            val name = tabMm.deserialize("$prefix<$color>${player.username}")
+            val name = tabMm.deserialize("${player.rankPrefix}<${player.rankColor}>${player.username}")
             entries += fakeEntry(tabFakeUuids[PLAYER_START + i], PLAYER_START + i, name)
         }
 
