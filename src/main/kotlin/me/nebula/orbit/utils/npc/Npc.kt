@@ -81,10 +81,12 @@ class Npc internal constructor(
 
         showNameDisplay(player)
         standaloneModel?.show(player)
+        NpcSpeechTicker.get(this)?.onViewerAdd(player)
     }
 
     fun hide(player: Player) {
         if (!_viewers.remove(player.uuid)) return
+        NpcSpeechTicker.get(this)?.onViewerRemove(player)
         standaloneModel?.hide(player)
         player.sendPacket(DestroyEntitiesPacket(listOf(entityId, nameDisplayEntityId)))
         if (visual is NpcVisual.SkinVisual) {
@@ -93,6 +95,7 @@ class Npc internal constructor(
     }
 
     fun remove() {
+        NpcSpeechTicker.unregister(this)
         standaloneModel?.remove()
         standaloneModel = null
         val destroyPacket = DestroyEntitiesPacket(listOf(entityId, nameDisplayEntityId))
@@ -293,6 +296,10 @@ class NpcBuilder @PublishedApi internal constructor(private val nameRaw: String)
     @PublishedApi internal val equipment: MutableMap<EquipmentSlot, ItemStack> = mutableMapOf()
     @PublishedApi internal val entityMetadata: MutableMap<Int, Metadata.Entry<*>> = mutableMapOf()
     @PublishedApi internal var modelBlock: (ModeledEntityBuilder.() -> Unit)? = null
+    @PublishedApi internal var speechConfig: SpeechBubbleConfig? = null
+    @PublishedApi internal var translatedNameKey: String? = null
+    @PublishedApi internal var autoShowRange: Double = 0.0
+    @PublishedApi internal var invulnerable: Boolean = true
 
     fun skin(skin: PlayerSkin) { visual = NpcVisual.SkinVisual(skin) }
     fun skin(textures: String, signature: String) { visual = NpcVisual.SkinVisual(PlayerSkin(textures, signature)) }
@@ -300,9 +307,11 @@ class NpcBuilder @PublishedApi internal constructor(private val nameRaw: String)
     fun modelOnly() { visual = NpcVisual.ModelVisual }
 
     fun position(pos: Pos) { this.position = pos }
+    fun position(x: Double, y: Double, z: Double, yaw: Float = 0f, pitch: Float = 0f) { this.position = Pos(x, y, z, yaw, pitch) }
     fun onClick(handler: (Player) -> Unit) { onClickHandler = handler }
     fun lookAtPlayer(enabled: Boolean) { lookAtPlayer = enabled }
     fun nameOffset(offset: Double) { nameOffset = offset }
+    fun autoShow(range: Double) { autoShowRange = range }
 
     fun metadata(index: Int, entry: Metadata.Entry<*>) { entityMetadata[index] = entry }
 
@@ -314,6 +323,10 @@ class NpcBuilder @PublishedApi internal constructor(private val nameRaw: String)
     fun offHand(item: ItemStack) { equipment[EquipmentSlot.OFF_HAND] = item }
 
     fun model(block: ModeledEntityBuilder.() -> Unit) { modelBlock = block }
+
+    fun ambient(block: SpeechBubbleConfigBuilder.() -> Unit) {
+        speechConfig = SpeechBubbleConfigBuilder().apply(block).build()
+    }
 
     @PublishedApi internal fun build(): Npc {
         val resolvedVisual = when (val v = visual) {
@@ -340,6 +353,9 @@ class NpcBuilder @PublishedApi internal constructor(private val nameRaw: String)
         )
         modelBlock?.let { block ->
             npc.standaloneModel = standAloneModel(position, block)
+        }
+        speechConfig?.let { config ->
+            NpcSpeechTicker.register(npc, NpcSpeechManager(npc, config))
         }
         NpcRegistry.register(npc)
         return npc
