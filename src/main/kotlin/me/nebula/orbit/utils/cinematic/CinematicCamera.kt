@@ -16,11 +16,13 @@ import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.GameMode
+import net.minestom.server.entity.Metadata
 import net.minestom.server.entity.Player
 import net.minestom.server.network.packet.server.play.CameraPacket
 import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
-import net.minestom.server.network.packet.server.play.EntityPositionAndRotationPacket
-import net.minestom.server.network.packet.server.play.EntityPositionSyncPacket
+import net.minestom.server.network.packet.server.play.EntityHeadLookPacket
+import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
+import net.minestom.server.network.packet.server.play.EntityTeleportPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
@@ -29,10 +31,12 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.atan2
-import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 private val nextCameraEntityId = AtomicInteger(-4_000_000)
+private const val META_FLAGS = 0
+private const val META_NO_GRAVITY = 5
+private const val META_ARMORSTAND_FLAGS = 15
 
 data class CinematicNode(
     val time: Float,
@@ -68,17 +72,12 @@ class CinematicSession(
 ) {
     @Volatile var time: Float = 0f
     @Volatile var task: Task? = null
-    @Volatile var lastPos: Vec = Vec.ZERO
-    @Volatile var lastYaw: Float = 0f
-    @Volatile var lastPitch: Float = 0f
-    @Volatile var syncCounter: Int = 0
 }
 
 object CinematicCamera {
 
     private val sessions = ConcurrentHashMap<UUID, CinematicSession>()
     private const val TICK_SECONDS = 1f / 20f
-    private const val SYNC_INTERVAL = 40
 
     fun play(player: Player, sequence: CinematicSequence) {
         require(sequence.nodes.size >= 2) { "Cinematic requires at least 2 nodes" }
@@ -112,16 +111,18 @@ object CinematicCamera {
             cameraEntityId = entityId,
             cameraEntityUuid = entityUuid,
         )
-        session.lastPos = startNode.position
-        session.lastYaw = startNode.yaw
-        session.lastPitch = startNode.pitch
 
         sessions[player.uuid] = session
 
         player.sendPacket(SpawnEntityPacket(
-            entityId, entityUuid, EntityType.INTERACTION,
+            entityId, entityUuid, EntityType.ARMOR_STAND,
             startPos, startNode.yaw, 0, Vec.ZERO,
         ))
+        player.sendPacket(EntityMetaDataPacket(entityId, mapOf(
+            META_FLAGS to Metadata.Byte(0x20),
+            META_NO_GRAVITY to Metadata.Boolean(true),
+            META_ARMORSTAND_FLAGS to Metadata.Byte(0x10),
+        )))
 
         player.gameMode = GameMode.SPECTATOR
 
@@ -185,6 +186,7 @@ object CinematicCamera {
                 player.sendPacket(DestroyEntitiesPacket(listOf(session.cameraEntityId)))
                 player.gameMode = session.previousGameMode
                 player.teleport(session.startPosition)
+                if (session.sequence.hideHud) player.setReducedDebugScreenInformation(false)
             }
         }
         sessions.clear()
@@ -212,42 +214,18 @@ object CinematicCamera {
             pitch = p
         }
 
-        session.syncCounter++
-        if (session.syncCounter >= SYNC_INTERVAL) {
-            session.syncCounter = 0
-            player.sendPacket(EntityPositionSyncPacket(
-                session.cameraEntityId,
-                Vec(pos.x(), pos.y(), pos.z()),
-                Vec.ZERO, yaw, pitch, false,
-            ))
-        } else {
-            val dx = ((pos.x() - session.lastPos.x()) * 4096).roundToInt().toShort()
-            val dy = ((pos.y() - session.lastPos.y()) * 4096).roundToInt().toShort()
-            val dz = ((pos.z() - session.lastPos.z()) * 4096).roundToInt().toShort()
-
-            player.sendPacket(EntityPositionAndRotationPacket(
-                session.cameraEntityId,
-                dx, dy, dz,
-                yaw, pitch, false,
-            ))
-        }
-
-        session.lastPos = pos
-        session.lastYaw = yaw
-        session.lastPitch = pitch
+        player.sendPacket(EntityTeleportPacket(
+            session.cameraEntityId,
+            Pos(pos.x(), pos.y(), pos.z(), yaw, pitch),
+            Vec.ZERO, 0, false,
+        ))
+        player.sendPacket(EntityHeadLookPacket(session.cameraEntityId, yaw))
 
         session.sequence.onTick?.invoke(player, session.time / session.sequence.duration)
 
         if (session.time >= session.sequence.duration) {
             if (session.sequence.loop) {
                 session.time = 0f
-                val first = session.sequence.nodes.first()
-                player.sendPacket(EntityPositionSyncPacket(
-                    session.cameraEntityId,
-                    Vec(first.position.x(), first.position.y(), first.position.z()),
-                    Vec.ZERO, first.yaw, first.pitch, false,
-                ))
-                session.lastPos = first.position
             } else {
                 stop(player)
             }
