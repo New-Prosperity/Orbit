@@ -109,7 +109,7 @@ class WorldBuilder @PublishedApi internal constructor() {
     @PublishedApi internal var timeRate: Int? = null
     @PublishedApi internal var freezeTime: Boolean = false
     @PublishedApi internal var weather: Weather? = null
-    @PublishedApi internal var weatherTransitionTicks: Int = 0
+    @PublishedApi internal var weatherTransitionTicks: Int = 1
     @PublishedApi internal val gameRules = mutableMapOf<GameRule, Any>()
     @PublishedApi internal var borderDiameter: Double? = null
     @PublishedApi internal var borderCenter: Pos? = null
