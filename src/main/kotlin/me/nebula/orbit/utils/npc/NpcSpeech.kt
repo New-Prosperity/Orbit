@@ -37,9 +37,10 @@ private const val META_DISPLAY_FLAGS = 27
 private const val META_DISPLAY_INTERPOLATION_DELAY = 8
 private const val META_DISPLAY_TRANSFORM_DURATION = 9
 
-data class SpeechLine(
+class SpeechLine(
     val key: String,
-    val args: Map<String, String> = emptyMap(),
+    val staticArgs: Map<String, String> = emptyMap(),
+    val dynamicArgs: ((Player) -> Map<String, String>)? = null,
     val weight: Int = 1,
 )
 
@@ -65,7 +66,8 @@ class SpeechBubbleConfigBuilder @PublishedApi internal constructor() {
     @PublishedApi internal var range: Double = 16.0
 
     fun line(key: String, weight: Int = 1) { lines += SpeechLine(key, weight = weight) }
-    fun line(key: String, vararg args: Pair<String, String>, weight: Int = 1) { lines += SpeechLine(key, args.toMap(), weight) }
+    fun line(key: String, vararg args: Pair<String, String>, weight: Int = 1) { lines += SpeechLine(key, args.toMap(), weight = weight) }
+    fun line(key: String, weight: Int = 1, args: (Player) -> Map<String, String>) { lines += SpeechLine(key, dynamicArgs = args, weight = weight) }
     fun interval(min: Int, max: Int) { minInterval = min; maxInterval = max }
     fun displayTime(ticks: Int) { displayTicks = ticks }
     fun yOffset(value: Float) { yOffset = value }
@@ -182,7 +184,8 @@ class NpcSpeechManager(
     private fun resolveText(player: Player, line: SpeechLine): String {
         val locale = player.localeCode
         var text = Orbit.translations.get(line.key, locale) ?: line.key
-        for ((k, v) in line.args) text = text.replace("{$k}", v)
+        for ((k, v) in line.staticArgs) text = text.replace("{$k}", v)
+        line.dynamicArgs?.invoke(player)?.forEach { (k, v) -> text = text.replace("{$k}", v) }
         return text
     }
 
