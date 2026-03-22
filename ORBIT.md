@@ -933,7 +933,24 @@ Shader-based 3D armor rendering. Players equip dyed leather armor; client-side G
 
 **How it works**: Each armor gets a unique RGB via `ModelIdRegistry`. Server equips leather armor dyed to that RGB. Vertex shader (`entity.vsh`) reads pixel `(63,31)` of the leather texture to identify custom armor — CEM mode is guarded by `IS_LEATHER_LAYER` so only leather textures trigger it (non-leather entities render normally). Fragment shader (`entity.fsh`) raycasts 3D cubes via `ADD_BOX` macros instead of rendering flat texture. Transparent `leather_overlay.png` files suppress vanilla overlay remnants (stitching, belt, kneeguards).
 
-**Static shaders**: 16 files in `src/main/resources/shaders/armor/` from MC 1.21.6 overlay (compatible with 1.21.11). Key files: `entity.vsh`/`entity.fsh` (core pipeline), `frag_funcs.glsl` (CEM raycasting library), `armorparts.glsl` (STASIS constants), `setup.glsl` (UV-based part detection).
+**Static shaders**: 16 files in `src/main/resources/shaders/armor/` (GLSL 330 for MC 1.21.11). Key files: `entity.vsh`/`entity.fsh` (core pipeline), `frag_funcs.glsl` (CEM raycasting library), `armorparts.glsl` (STASIS constants), `setup.glsl` (UV-based part detection). Include files (`emissive_utils.glsl`, `matf.glsl`, `tools.glsl`) do not declare `#version` — version is inherited from the including core file.
+
+### Effects Shader Pack — `effects/EffectsShaderPack.kt`
+Visual effects shaders injected into the resource pack via `CustomContentRegistry.mergePack()`. All shaders use GLSL 330 and MC 1.21.11 UBO-based uniforms (`#moj_import <minecraft:fog.glsl>`, etc.).
+
+| Pack Path | Resource | Features |
+|---|---|---|
+| `core/particle.vsh/fsh` | Particle renderer | 3D cube raycasting for block particles |
+| `core/rendertype_crumbling.vsh/fsh` | Block break overlay | Parallax-mapped crumbling with depth illusion |
+| `core/rendertype_entity_glint.vsh/fsh` | Enchantment glint | Specular highlights, fog fade via `linear_fog_fade` × `GlintAlpha` |
+| `core/terrain.vsh/fsh` | Block terrain | Chunk fade-in (`ChunkVisibility` smoothstep), dynamic emissive (alpha 252), warm torch / cool moonlight lightmap grading, GUI passthrough |
+| `core/sky.vsh/fsh` | Sky gradient | Warmer sunset horizon colors, smooth `FogSkyEnd` transition |
+| `core/rendertype_outline.vsh/fsh` | Entity glow outline | Pulsing intensity via `GameTime`, per-entity color from `vertexColor` |
+| `core/rendertype_beacon_beam.vsh/fsh` | Beacon beam | Subtle hue shift animation, simplex noise sparkle, edge Fresnel glow |
+| `core/rendertype_clouds.vsh/fsh` | Cloud rendering | Soft edge alpha blending, sunrise/sunset tinting, FBM noise density modulation |
+| `core/position_tex.vsh/fsh` | GUI elements | Enhanced vignette (darkened + desaturated edges), crosshair pulse. All effects guarded behind element detection |
+| `core/rendertype_lines.vsh/fsh` | Block selection outline | Marching-ants dash animation via `GameTime`, alpha-modulated pattern |
+| `include/nebula_utils.glsl` | Shared utility include | Simplex noise (`snoise`), hash noise, value noise, FBM, `animTime` helper |
 
 ### Shader-Based HUD — `utils/hud/` (7 files)
 Boss bar text with custom bitmap font sprites repositioned by modified `rendertype_text` vertex shader. Resolution/GUI scale independent via `ProjMat`-derived normalization. Coexists with map screen shaders.
@@ -961,7 +978,7 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 - `modelengine/generator/ModelGenerator.kt` — added `generateRaw()` returning `RawGenerationResult(blueprint, boneModels, textureBytes)`, `buildBoneElements()` and `buildFlatModel()` helpers. Bone offsets are parent-relative (not absolute). `buildBoneElements(centerOffset)`: ModelEngine bones use `centerOffset=0f` so element [0,0,0] maps to entity position (correct rotation pivot for item_display transforms); custom content flat models use default `centerOffset=8f` (standard MC model centering). All pack paths and `ITEM_MODEL` values lowercased for Minecraft resource location compliance. Bone items use `DataComponents.ITEM_MODEL` (`"minecraft:me_<model>_<bone>"` flat naming — all under `minecraft` namespace with `me_` prefix) instead of `CUSTOM_MODEL_DATA`. All pack assets (textures, models, items) placed under `assets/minecraft/` for guaranteed client-side resolution
 - `modelengine/bone/BoneTransform.kt` — `toRelativePosition()` uses 3D Y-axis rotation matrix (not 2D rotation) to correctly position bones when the model has non-zero yaw
 - `Orbit.kt` — calls `CustomContentRegistry.init()` before mode install, auto-merges pack (pack distribution delegated to proxy). Registers test HUD layout, `HudManager.install()`, HUD tick task (2 ticks), `/hud` test command
-- `customcontent/CustomContentRegistry.kt` — `mergePack()` uses `HudShaderPack.generate()` + `HudFontProvider.generate()` instead of `MapShaderPack.generate()` directly (HudShaderPack internally generates map_decode.glsl via MapShaderPack)
+- `customcontent/CustomContentRegistry.kt` — `mergePack()` merges `ArmorShaderPack` + `HudShaderPack` + `HudFontProvider` + `EffectsShaderPack` into the resource pack. HudShaderPack internally generates map_decode.glsl via MapShaderPack
 - `customcontent/CustomContentCommand.kt` — removed `PackServer` and `/cc send` (pack sending delegated to proxy)
 
 ## Utility Framework — `utils/` (189 files)

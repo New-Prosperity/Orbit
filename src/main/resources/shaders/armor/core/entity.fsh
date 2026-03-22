@@ -1,4 +1,4 @@
-#version 150
+#version 330
 
 #define FSH
 
@@ -117,20 +117,20 @@ void main() {
     }
     
     float opacity = ceil(color.a * 255);
-    if (cem < 1) {  
+    if (cem < 1) {
         #ifdef ALPHA_CUTOUT
             if (color.a < ALPHA_CUTOUT) {
                 discard;
             }
         #endif
-        
+
         if (opacity == 254) {
             float animationTime = GameTime * 1000;
             color = mix(color * vertexColor, color, pow(sin(animationTime + texCoord0.x * 1.1), 2));
         } else if (opacity==128){
-            
+
             color *= vertexColor;
-            
+
         }else {
 
             color *= vertexColor;

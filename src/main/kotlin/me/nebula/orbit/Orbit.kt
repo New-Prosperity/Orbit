@@ -26,6 +26,10 @@ import me.nebula.gravity.map.MapStore
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.ServerDeregistrationMessage
 import me.nebula.gravity.messaging.ServerRegistrationMessage
+import me.nebula.gravity.messaging.TransferPlayerMessage
+import me.nebula.gravity.server.ServerStore
+import me.nebula.gravity.server.activeHubPredicate
+import me.nebula.gravity.server.activeLimboPredicate
 import me.nebula.gravity.mission.MissionStore
 import me.nebula.gravity.party.PartyLookupStore
 import me.nebula.gravity.party.PartyStore
@@ -59,7 +63,14 @@ import me.nebula.orbit.utils.cinematic.cinematicTestCommand
 import me.nebula.orbit.utils.commandbuilder.OnlinePlayerCache
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.customcontent.CustomContentRegistry
+import me.nebula.gravity.cache.PlayerCache
+import me.nebula.orbit.utils.actionbar.ActionBarManager
+import me.nebula.orbit.utils.bossbar.AnimatedBossBarManager
+import me.nebula.orbit.utils.counter.AnimatedCounterManager
+import me.nebula.orbit.utils.tablist.TabListManager
 import me.nebula.orbit.utils.customcontent.armor.armorTestCommand
+import me.nebula.orbit.utils.tooltip.TooltipStyleRegistry
+import me.nebula.orbit.utils.tooltip.tooltipCommand
 import me.nebula.orbit.utils.customcontent.customContentCommand
 import me.nebula.orbit.utils.hud.*
 import me.nebula.orbit.utils.modelengine.ModelEngine
@@ -257,6 +268,7 @@ object Orbit {
         app.resources.ensureDirectory("models")
         ModelEngine.install()
 
+        TooltipStyleRegistry.registerDefaults()
         CustomContentRegistry.init(app.resources, handler)
 
         app.resources.list("models", "bbmodel", recursive = true).forEach { path ->
@@ -297,6 +309,10 @@ object Orbit {
         })
 
         HudManager.install(handler)
+        ActionBarManager.install(handler)
+        AnimatedCounterManager.install(handler)
+        AnimatedBossBarManager.install(handler)
+        TabListManager.install(handler)
 
         val commandManager = MinecraftServer.getCommandManager()
         installBasicCommands(commandManager)
@@ -306,6 +322,7 @@ object Orbit {
         commandManager.register(cinematicTestCommand())
         commandManager.register(screenTestCommand())
         commandManager.register(armorTestCommand())
+        commandManager.register(tooltipCommand())
         commandManager.register(command("cosmetics") {
             onPlayerExecute { CosmeticMenu.openCategoryMenu(player) }
         })
@@ -344,9 +361,12 @@ object Orbit {
 
         mode.install(handler)
 
+        PlayerCache.installListeners()
+
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
             val player = event.player
-            val playerData = PlayerStore.load(player.uuid)
+            PlayerCache.preload(player.uuid).join()
+            val playerData = PlayerCache.get(player.uuid)?.player
             val locale = playerData?.language ?: translations.defaultLocale
             cacheLocale(player.uuid, locale)
             event.spawningInstance = mode.activeInstance
@@ -393,6 +413,7 @@ object Orbit {
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             AchievementRegistry.unloadPlayer(event.player.uuid)
             evictLocale(event.player.uuid)
+            PlayerCache.evict(event.player.uuid)
             val pUuid = provisionUuid
             if (pUuid != null) {
                 ServerStore.executeOnKey(pUuid, DisconnectPlayerProcessor(event.player.uuid))
@@ -407,6 +428,16 @@ object Orbit {
         MinecraftServer.getSchedulerManager()
             .buildTask { HudManager.tick() }
             .repeat(TaskSchedule.tick(2))
+            .schedule()
+
+        MinecraftServer.getSchedulerManager()
+            .buildTask { ActionBarManager.tick() }
+            .repeat(TaskSchedule.tick(2))
+            .schedule()
+
+        MinecraftServer.getSchedulerManager()
+            .buildTask { TabListManager.tick() }
+            .repeat(TaskSchedule.tick(20))
             .schedule()
 
         server.start("0.0.0.0", port)
@@ -429,9 +460,34 @@ object Orbit {
 
         Runtime.getRuntime().addShutdownHook(Thread {
             if (!shuttingDown.compareAndSet(false, true)) return@Thread
-            for (player in MinecraftServer.getConnectionManager().onlinePlayers.toList()) {
-                runCatching { player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid))) }
+
+            val players = MinecraftServer.getConnectionManager().onlinePlayers.toList()
+            if (players.isNotEmpty()) {
+                val hub = runCatching {
+                    ServerStore.entries(activeHubPredicate())
+                        .filter { it.value.name != serverName }
+                        .minByOrNull { it.value.playerCount }
+                        ?.value
+                }.getOrNull()
+
+                val limbo = if (hub == null) runCatching {
+                    ServerStore.entries(activeLimboPredicate())
+                        .firstOrNull()?.value
+                }.getOrNull() else null
+
+                val target = hub ?: limbo
+                if (target != null) {
+                    for (player in players) {
+                        runCatching { NetworkMessenger.publish(TransferPlayerMessage(player.uuid, target.name)) }
+                    }
+                    Thread.sleep(2000)
+                }
+
+                for (player in MinecraftServer.getConnectionManager().onlinePlayers.toList()) {
+                    runCatching { player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid))) }
+                }
             }
+
             if (serverUuid.isNotEmpty()) {
                 logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
                 runCatching { NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid)) }

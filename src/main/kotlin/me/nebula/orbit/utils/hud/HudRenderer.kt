@@ -15,6 +15,7 @@ object HudRenderer {
         val parts = mutableListOf<Component>()
 
         for (element in hud.layout.elements) {
+            if (!hud.isElementVisible(element.id)) continue
             when (element) {
                 is SpriteElement -> renderSprite(parts, element)
                 is BarElement -> renderBar(parts, element, hud)

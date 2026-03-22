@@ -5,9 +5,8 @@ import me.nebula.gravity.achievement.AchievementStore
 import me.nebula.gravity.achievement.IncrementAchievementProcessor
 import me.nebula.gravity.achievement.SetAchievementCompletedProcessor
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.sound.Sound
-import net.minestom.server.advancements.FrameType
-import net.minestom.server.advancements.Notification
+import me.nebula.orbit.utils.toast.ToastFrame
+import me.nebula.orbit.utils.toast.showToast
 import net.minestom.server.entity.Player
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
@@ -49,7 +48,7 @@ data class Achievement(
     val icon: Material = Material.DIAMOND,
     val hidden: Boolean = false,
     val maxProgress: Int = 1,
-    val frameType: FrameType = FrameType.TASK,
+    val toastFrame: ToastFrame = ToastFrame.TASK,
 )
 
 object AchievementRegistry {
@@ -161,14 +160,11 @@ object AchievementRegistry {
             return
         }
 
-        val notification = Notification(
-            achievement.name,
-            achievement.frameType,
-            ItemStack.of(achievement.icon),
-        )
-        player.sendNotification(notification)
-
-        player.playSound(Sound.sound(SoundEvent.UI_TOAST_CHALLENGE_COMPLETE.key(), Sound.Source.MASTER, 1f, 1f))
+        player.showToast {
+            title(achievement.name)
+            icon(achievement.icon)
+            frame(achievement.toastFrame)
+        }
     }
 }
 
@@ -180,9 +176,9 @@ class AchievementBuilder {
     var icon: Material = Material.DIAMOND
     var hidden: Boolean = false
     var maxProgress: Int = 1
-    var frameType: FrameType = FrameType.TASK
+    var toastFrame: ToastFrame = ToastFrame.TASK
 
-    fun build(): Achievement = Achievement(id, name, description, category, icon, hidden, maxProgress, frameType)
+    fun build(): Achievement = Achievement(id, name, description, category, icon, hidden, maxProgress, toastFrame)
 }
 
 inline fun achievement(id: String, block: AchievementBuilder.() -> Unit): Achievement =

@@ -5,6 +5,7 @@ import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.customcontent.armor.ArmorShaderPack
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
 import me.nebula.orbit.utils.customcontent.effects.EffectsShaderPack
+import me.nebula.orbit.utils.tooltip.TooltipStylePack
 import me.nebula.orbit.utils.hud.font.HudFontProvider
 import me.nebula.orbit.utils.hud.shader.HudShaderPack
 import me.nebula.orbit.utils.customcontent.block.*
@@ -157,7 +158,13 @@ object CustomContentRegistry {
         val hudFontEntries = HudFontProvider.generate()
         logger.info { "Generated HUD font provider: ${hudFontEntries.size} entries" }
 
-        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries
+        val effectsEntries = EffectsShaderPack.generate()
+        logger.info { "Generated effects shader pack: ${effectsEntries.size} entries" }
+
+        val tooltipEntries = TooltipStylePack.generate()
+        logger.info { "Generated tooltip style pack: ${tooltipEntries.size} entries" }
+
+        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries
         val result = PackMerger.merge(resources, MODELS_DIR, allRaw, allShaderEntries)
         mergeResult = result
 

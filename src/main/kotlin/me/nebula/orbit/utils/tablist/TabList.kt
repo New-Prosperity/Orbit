@@ -39,9 +39,14 @@ fun Player.setTabList(header: String, footer: String) {
     )
 }
 
+class TabSection(
+    val provider: (Player) -> String,
+    val visibleWhen: ((Player) -> Boolean)?,
+)
+
 class LiveTabList @PublishedApi internal constructor(
-    private val headerProvider: (Player) -> String,
-    private val footerProvider: (Player) -> String,
+    private val headerSections: List<TabSection>,
+    private val footerSections: List<TabSection>,
     refreshInterval: Duration,
 ) {
 
@@ -65,20 +70,12 @@ class LiveTabList @PublishedApi internal constructor(
 
     fun show(player: Player) {
         viewers.add(player.uuid)
-        player.sendPlayerListHeaderAndFooter(
-            miniMessage.deserialize(headerProvider(player)),
-            miniMessage.deserialize(footerProvider(player)),
-        )
+        send(player)
     }
 
     fun refreshAll() {
         for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
-            if (viewers.contains(player.uuid)) {
-                player.sendPlayerListHeaderAndFooter(
-                    miniMessage.deserialize(headerProvider(player)),
-                    miniMessage.deserialize(footerProvider(player)),
-                )
-            }
+            if (viewers.contains(player.uuid)) send(player)
         }
     }
 
@@ -87,24 +84,47 @@ class LiveTabList @PublishedApi internal constructor(
         MinecraftServer.getGlobalEventHandler().removeChild(eventNode)
         viewers.clear()
     }
+
+    private fun send(player: Player) {
+        val header = headerSections
+            .filter { it.visibleWhen?.invoke(player) != false }
+            .joinToString("\n") { it.provider(player) }
+        val footer = footerSections
+            .filter { it.visibleWhen?.invoke(player) != false }
+            .joinToString("\n") { it.provider(player) }
+        player.sendPlayerListHeaderAndFooter(
+            miniMessage.deserialize(header),
+            miniMessage.deserialize(footer),
+        )
+    }
 }
 
 class LiveTabListBuilder @PublishedApi internal constructor() {
 
-    @PublishedApi internal var headerProvider: (Player) -> String = { "" }
-    @PublishedApi internal var footerProvider: (Player) -> String = { "" }
+    @PublishedApi internal val headerSections = mutableListOf<TabSection>()
+    @PublishedApi internal val footerSections = mutableListOf<TabSection>()
     @PublishedApi internal var refreshInterval: Duration = 5.seconds
 
-    fun header(text: String) { headerProvider = { text } }
-    fun header(provider: (Player) -> String) { headerProvider = provider }
+    fun header(text: String) {
+        headerSections += TabSection({ text }, null)
+    }
 
-    fun footer(text: String) { footerProvider = { text } }
-    fun footer(provider: (Player) -> String) { footerProvider = provider }
+    fun header(visibleWhen: ((Player) -> Boolean)? = null, provider: (Player) -> String) {
+        headerSections += TabSection(provider, visibleWhen)
+    }
+
+    fun footer(text: String) {
+        footerSections += TabSection({ text }, null)
+    }
+
+    fun footer(visibleWhen: ((Player) -> Boolean)? = null, provider: (Player) -> String) {
+        footerSections += TabSection(provider, visibleWhen)
+    }
 
     fun refreshEvery(duration: Duration) { refreshInterval = duration }
 }
 
 inline fun liveTabList(block: LiveTabListBuilder.() -> Unit): LiveTabList {
     val builder = LiveTabListBuilder().apply(block)
-    return LiveTabList(builder.headerProvider, builder.footerProvider, builder.refreshInterval)
+    return LiveTabList(builder.headerSections.toList(), builder.footerSections.toList(), builder.refreshInterval)
 }

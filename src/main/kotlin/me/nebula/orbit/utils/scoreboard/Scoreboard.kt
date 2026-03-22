@@ -510,10 +510,11 @@ inline fun objective(name: String, block: ObjectiveBuilder.() -> Unit): Objectiv
 }
 
 sealed interface LiveLine {
+    val visibleWhen: ((Player) -> Boolean)?
 
-    data class Static(val content: String) : LiveLine
+    class Static(val content: String, override val visibleWhen: ((Player) -> Boolean)? = null) : LiveLine
 
-    data class Dynamic(val provider: (Player) -> String) : LiveLine
+    class Dynamic(val provider: (Player) -> String, override val visibleWhen: ((Player) -> Boolean)? = null) : LiveLine
 }
 
 class LiveScoreboard @PublishedApi internal constructor(
@@ -522,8 +523,12 @@ class LiveScoreboard @PublishedApi internal constructor(
     refreshInterval: Duration,
 ) {
 
-    private val sidebars = ConcurrentHashMap<UUID, Sidebar>()
-    private val lineIds = lines.indices.map { "line_$it" }
+    private class SidebarState(
+        var sidebar: Sidebar,
+        var visibleIndices: Set<Int>,
+    )
+
+    private val states = ConcurrentHashMap<UUID, SidebarState>()
     private val eventNode = EventNode.all("live-scoreboard-${System.nanoTime()}")
     private val refreshTask: Task
 
@@ -542,46 +547,69 @@ class LiveScoreboard @PublishedApi internal constructor(
     }
 
     fun show(player: Player) {
-        sidebars.remove(player.uuid)?.removeViewer(player)
-        val sidebar = Sidebar(miniMessage.deserialize(titleProvider(player)))
-        lines.forEachIndexed { index, line ->
-            val content = when (line) {
-                is LiveLine.Static -> line.content
-                is LiveLine.Dynamic -> line.provider(player)
-            }
-            sidebar.createLine(
-                Sidebar.ScoreboardLine(lineIds[index], miniMessage.deserialize(content), lines.size - index)
-            )
-        }
+        states.remove(player.uuid)?.sidebar?.removeViewer(player)
+        val visible = resolveVisible(player)
+        val sidebar = buildSidebar(player, visible)
         sidebar.addViewer(player)
-        sidebars[player.uuid] = sidebar
+        states[player.uuid] = SidebarState(sidebar, visible.map { it.first }.toSet())
     }
 
     fun hide(player: Player) {
-        sidebars.remove(player.uuid)?.removeViewer(player)
+        states.remove(player.uuid)?.sidebar?.removeViewer(player)
     }
 
     fun refresh(player: Player) {
-        val sidebar = sidebars[player.uuid] ?: return
-        sidebar.setTitle(miniMessage.deserialize(titleProvider(player)))
-        lines.forEachIndexed { index, line ->
-            if (line is LiveLine.Dynamic) {
-                sidebar.updateLineContent(lineIds[index], miniMessage.deserialize(line.provider(player)))
+        val visible = resolveVisible(player)
+        val visibleIndices = visible.map { it.first }.toSet()
+        val state = states[player.uuid]
+
+        if (state == null || state.visibleIndices != visibleIndices) {
+            state?.sidebar?.removeViewer(player)
+            val sidebar = buildSidebar(player, visible)
+            sidebar.addViewer(player)
+            states[player.uuid] = SidebarState(sidebar, visibleIndices)
+        } else {
+            state.sidebar.setTitle(miniMessage.deserialize(titleProvider(player)))
+            visible.forEachIndexed { displayIndex, (_, line) ->
+                val content = when (line) {
+                    is LiveLine.Static -> line.content
+                    is LiveLine.Dynamic -> line.provider(player)
+                }
+                state.sidebar.updateLineContent("line_$displayIndex", miniMessage.deserialize(content))
             }
         }
     }
 
     fun refreshAll() {
         for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
-            if (sidebars.containsKey(player.uuid)) refresh(player)
+            if (states.containsKey(player.uuid)) refresh(player)
         }
     }
 
     fun uninstall() {
         refreshTask.cancel()
         MinecraftServer.getGlobalEventHandler().removeChild(eventNode)
-        sidebars.values.forEach { sb -> sb.viewers.toList().forEach(sb::removeViewer) }
-        sidebars.clear()
+        states.values.forEach { s -> s.sidebar.viewers.toList().forEach(s.sidebar::removeViewer) }
+        states.clear()
+    }
+
+    private fun resolveVisible(player: Player): List<Pair<Int, LiveLine>> =
+        lines.withIndex()
+            .filter { it.value.visibleWhen?.invoke(player) != false }
+            .map { it.index to it.value }
+
+    private fun buildSidebar(player: Player, visible: List<Pair<Int, LiveLine>>): Sidebar {
+        val sidebar = Sidebar(miniMessage.deserialize(titleProvider(player)))
+        visible.forEachIndexed { displayIndex, (_, line) ->
+            val content = when (line) {
+                is LiveLine.Static -> line.content
+                is LiveLine.Dynamic -> line.provider(player)
+            }
+            sidebar.createLine(
+                Sidebar.ScoreboardLine("line_$displayIndex", miniMessage.deserialize(content), visible.size - displayIndex)
+            )
+        }
+        return sidebar
     }
 }
 
@@ -595,9 +623,13 @@ class LiveScoreboardBuilder @PublishedApi internal constructor() {
 
     fun title(provider: (Player) -> String) { titleProvider = provider }
 
-    fun line(content: String) { lines += LiveLine.Static(content) }
+    fun line(content: String) {
+        lines += LiveLine.Static(content)
+    }
 
-    fun line(provider: (Player) -> String) { lines += LiveLine.Dynamic(provider) }
+    fun line(visibleWhen: ((Player) -> Boolean)? = null, provider: (Player) -> String) {
+        lines += LiveLine.Dynamic(provider, visibleWhen)
+    }
 
     fun refreshEvery(duration: Duration) { refreshInterval = duration }
 }

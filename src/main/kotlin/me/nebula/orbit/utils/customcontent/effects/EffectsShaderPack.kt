@@ -13,8 +13,8 @@ object EffectsShaderPack {
         "assets/minecraft/shaders/core/particle.fsh" to "core/particle.fsh",
         "assets/minecraft/shaders/core/rendertype_crumbling.vsh" to "core/rendertype_crumbling.vsh",
         "assets/minecraft/shaders/core/rendertype_crumbling.fsh" to "core/rendertype_crumbling.fsh",
-        "assets/minecraft/shaders/core/glint.vsh" to "core/rendertype_entity_glint.vsh",
-        "assets/minecraft/shaders/core/glint.fsh" to "core/rendertype_entity_glint.fsh",
+        "assets/minecraft/shaders/core/rendertype_entity_glint.vsh" to "core/rendertype_entity_glint.vsh",
+        "assets/minecraft/shaders/core/rendertype_entity_glint.fsh" to "core/rendertype_entity_glint.fsh",
     )
 
     fun generate(): Map<String, ByteArray> {

@@ -15,9 +15,13 @@ class PlayerHud(
 ) {
     val values = ConcurrentHashMap<String, Any>()
     val groupItems = ConcurrentHashMap<String, MutableList<String>>()
+    val conditions = ConcurrentHashMap<String, (Player) -> Boolean>()
     val bossBar: BossBar = BossBar.bossBar(Component.empty(), 0f, BossBar.Color.WHITE, BossBar.Overlay.PROGRESS)
     var lastRendered: Component = Component.empty()
     var animationTick = 0L
+
+    fun isElementVisible(elementId: String): Boolean =
+        conditions[elementId]?.invoke(player) != false
 }
 
 object HudManager {

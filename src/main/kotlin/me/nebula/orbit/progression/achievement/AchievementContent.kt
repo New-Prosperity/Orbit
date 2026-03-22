@@ -7,7 +7,8 @@ import me.nebula.orbit.utils.achievement.AchievementCategories
 import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.orbit.utils.achievement.AchievementTriggerManager
 import me.nebula.orbit.utils.achievement.achievement
-import net.minestom.server.advancements.FrameType
+import me.nebula.orbit.utils.toast.ToastFrame
+import me.nebula.orbit.utils.toast.showToast
 import net.minestom.server.item.Material
 
 fun registerAchievementContent() {
@@ -32,7 +33,7 @@ fun registerAchievementContent() {
         category = AchievementCategories.GENERAL
         icon = Material.DIAMOND_SWORD
         maxProgress = 500
-        frameType = FrameType.CHALLENGE
+        toastFrame = ToastFrame.CHALLENGE
     })
     AchievementRegistry.register(achievement("collector") {
         name = Orbit.deserialize("orbit.achievement.collector.name", locale)
@@ -62,7 +63,7 @@ fun registerAchievementContent() {
         category = AchievementCategories.COMBAT
         icon = Material.NETHERITE_SWORD
         maxProgress = 500
-        frameType = FrameType.CHALLENGE
+        toastFrame = ToastFrame.CHALLENGE
     })
     AchievementRegistry.register(achievement("mass_murderer") {
         name = Orbit.deserialize("orbit.achievement.mass_murderer.name", locale)
@@ -70,7 +71,7 @@ fun registerAchievementContent() {
         category = AchievementCategories.COMBAT
         icon = Material.WITHER_SKELETON_SKULL
         maxProgress = 1000
-        frameType = FrameType.CHALLENGE
+        toastFrame = ToastFrame.CHALLENGE
         hidden = true
     })
     AchievementRegistry.register(achievement("double_trouble") {
@@ -86,7 +87,7 @@ fun registerAchievementContent() {
         category = AchievementCategories.COMBAT
         icon = Material.GOLDEN_SWORD
         maxProgress = 1
-        frameType = FrameType.GOAL
+        toastFrame = ToastFrame.GOAL
     })
     AchievementRegistry.register(achievement("rampage") {
         name = Orbit.deserialize("orbit.achievement.rampage.name", locale)
@@ -94,7 +95,7 @@ fun registerAchievementContent() {
         category = AchievementCategories.COMBAT
         icon = Material.NETHERITE_SWORD
         maxProgress = 1
-        frameType = FrameType.CHALLENGE
+        toastFrame = ToastFrame.CHALLENGE
         hidden = true
     })
 
@@ -118,7 +119,7 @@ fun registerAchievementContent() {
         category = AchievementCategories.SURVIVAL
         icon = Material.NETHER_STAR
         maxProgress = 50
-        frameType = FrameType.CHALLENGE
+        toastFrame = ToastFrame.CHALLENGE
     })
     AchievementRegistry.register(achievement("invincible") {
         name = Orbit.deserialize("orbit.achievement.invincible.name", locale)
@@ -126,7 +127,7 @@ fun registerAchievementContent() {
         category = AchievementCategories.SURVIVAL
         icon = Material.TOTEM_OF_UNDYING
         maxProgress = 1
-        frameType = FrameType.CHALLENGE
+        toastFrame = ToastFrame.CHALLENGE
         hidden = true
     })
 
@@ -159,7 +160,7 @@ fun registerAchievementContent() {
         category = AchievementCategories.MASTERY
         icon = Material.EXPERIENCE_BOTTLE
         maxProgress = 1
-        frameType = FrameType.CHALLENGE
+        toastFrame = ToastFrame.CHALLENGE
     })
     AchievementRegistry.register(achievement("mission_master") {
         name = Orbit.deserialize("orbit.achievement.mission_master.name", locale)
@@ -188,16 +189,11 @@ fun registerAchievementContent() {
     AchievementTriggerManager.bindThreshold("legend", "br_wins", 50)
 
     AchievementRegistry.onUnlock { player, achievement ->
-        val notification = net.minestom.server.advancements.Notification(
-            Orbit.deserialize("orbit.achievement.${achievement.id}.name", Orbit.localeOf(player.uuid)),
-            achievement.frameType,
-            net.minestom.server.item.ItemStack.of(achievement.icon),
-        )
-        player.sendNotification(notification)
-        player.playSound(net.kyori.adventure.sound.Sound.sound(
-            net.minestom.server.sound.SoundEvent.UI_TOAST_CHALLENGE_COMPLETE.key(),
-            net.kyori.adventure.sound.Sound.Source.MASTER, 1f, 1f,
-        ))
+        player.showToast {
+            title(Orbit.deserialize("orbit.achievement.${achievement.id}.name", Orbit.localeOf(player.uuid)))
+            icon(achievement.icon)
+            frame(achievement.toastFrame)
+        }
 
         when (achievement.id) {
             "legend" -> CosmeticStore.executeOnKey(player.uuid, UnlockCosmeticProcessor("win_effect_legend"))

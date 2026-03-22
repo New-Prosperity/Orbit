@@ -12,12 +12,14 @@ import me.nebula.gravity.messaging.QueueRemovedMessage
 import me.nebula.gravity.property.NetworkProperties
 import me.nebula.gravity.property.PropertyStore
 import me.nebula.gravity.rank.PlayerRankStore
+import me.nebula.gravity.rank.RankManager
 import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.session.SessionStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.translation.resolveTranslated
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.cosmetic.CosmeticMenu
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.placeholderResolver
@@ -34,6 +36,7 @@ import me.nebula.orbit.utils.scoreboard.LiveScoreboard
 import me.nebula.orbit.utils.scoreboard.liveScoreboard
 import me.nebula.orbit.utils.tablist.LiveTabList
 import me.nebula.orbit.utils.tablist.liveTabList
+import net.minestom.server.network.packet.server.play.PlayerInfoUpdatePacket
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
@@ -153,6 +156,8 @@ class HubMode : ServerMode {
             footer { player -> resolver.resolveTranslated(config.tabList.footer, player) }
         }
 
+        setupHubTabEntries(handler)
+
         hotbar = hotbar("hub") {
             for (item in config.hotbar) {
                 val material = Material.fromKey(item.material)
@@ -254,6 +259,115 @@ class HubMode : ServerMode {
 
         logger.info { "Hub mode installed" }
     }
+
+    private companion object {
+        const val TAB_ROWS = 20
+        const val TAB_TOTAL = 4 * TAB_ROWS
+        const val COLUMN1 = TAB_ROWS
+        const val HEADER_SLOT = COLUMN1
+        const val PLAYER_START = HEADER_SLOT + 1
+        const val PLAYER_SLOTS = TAB_TOTAL - PLAYER_START
+        const val MAX_VISIBLE = PLAYER_SLOTS - 1
+    }
+
+    private val tabFakeUuids = Array(TAB_TOTAL) { UUID.nameUUIDFromBytes("hubtab:$it".toByteArray()) }
+    private val tabMm = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage()
+    private val tabSentTo = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
+
+    private fun setupHubTabEntries(handler: GlobalEventHandler) {
+        handler.addListener(PlayerSpawnEvent::class.java) { event ->
+            if (!event.isFirstSpawn) return@addListener
+            sendFullTabList(event.player)
+        }
+
+        handler.addListener(PlayerDisconnectEvent::class.java) { event ->
+            tabSentTo.remove(event.player.uuid)
+            MinecraftServer.getSchedulerManager().buildTask {
+                broadcastTabUpdate()
+            }.delay(TaskSchedule.tick(1)).schedule()
+        }
+    }
+
+    private fun sendFullTabList(viewer: net.minestom.server.entity.Player) {
+        val entries = buildTabEntries(viewer)
+        if (tabSentTo.add(viewer.uuid)) {
+            viewer.sendPacket(PlayerInfoUpdatePacket(
+                java.util.EnumSet.of(
+                    PlayerInfoUpdatePacket.Action.ADD_PLAYER,
+                    PlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME,
+                    PlayerInfoUpdatePacket.Action.UPDATE_LISTED,
+                    PlayerInfoUpdatePacket.Action.UPDATE_LIST_ORDER,
+                ),
+                entries,
+            ))
+        } else {
+            viewer.sendPacket(PlayerInfoUpdatePacket(
+                java.util.EnumSet.of(
+                    PlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME,
+                    PlayerInfoUpdatePacket.Action.UPDATE_LIST_ORDER,
+                ),
+                entries,
+            ))
+        }
+    }
+
+    private fun broadcastTabUpdate() {
+        for (viewer in MinecraftServer.getConnectionManager().onlinePlayers) {
+            if (tabSentTo.contains(viewer.uuid)) sendFullTabList(viewer)
+        }
+    }
+
+    private fun buildTabEntries(viewer: net.minestom.server.entity.Player): List<PlayerInfoUpdatePacket.Entry> {
+        val sorted = MinecraftServer.getConnectionManager().onlinePlayers
+            .sortedWith(
+                compareBy<net.minestom.server.entity.Player> { RankManager.rankOf(it.uuid)?.weight ?: 100 }
+                    .thenBy { it.username.lowercase() }
+            )
+
+        val hasOverflow = sorted.size > MAX_VISIBLE
+        val displayCount = if (hasOverflow) MAX_VISIBLE else sorted.size
+        val overflowCount = if (hasOverflow) sorted.size - MAX_VISIBLE else 0
+
+        val entries = mutableListOf<PlayerInfoUpdatePacket.Entry>()
+
+        for (i in 0 until COLUMN1) {
+            entries += fakeEntry(tabFakeUuids[i], i, net.kyori.adventure.text.Component.text(" "))
+        }
+
+        val headerText = viewer.translateRaw("orbit.tab.players_header", "count" to sorted.size.toString())
+        entries += fakeEntry(tabFakeUuids[HEADER_SLOT], HEADER_SLOT, tabMm.deserialize(headerText))
+
+        for (i in 0 until displayCount) {
+            val player = sorted[i]
+            val rank = RankManager.rankOf(player.uuid)
+            val prefix = rank?.prefix ?: ""
+            val color = rank?.color ?: "white"
+            val name = tabMm.deserialize("$prefix<$color>${player.username}")
+            entries += fakeEntry(tabFakeUuids[PLAYER_START + i], PLAYER_START + i, name)
+        }
+
+        var nextSlot = PLAYER_START + displayCount
+
+        if (hasOverflow) {
+            val text = viewer.translateRaw("orbit.tab.overflow", "count" to overflowCount.toString())
+            entries += fakeEntry(tabFakeUuids[nextSlot], nextSlot, tabMm.deserialize(text))
+            nextSlot++
+        }
+
+        while (nextSlot < TAB_TOTAL) {
+            entries += fakeEntry(tabFakeUuids[nextSlot], nextSlot, net.kyori.adventure.text.Component.text(" "))
+            nextSlot++
+        }
+
+        return entries
+    }
+
+    private fun fakeEntry(uuid: UUID, listOrder: Int, displayName: net.kyori.adventure.text.Component): PlayerInfoUpdatePacket.Entry =
+        PlayerInfoUpdatePacket.Entry(
+            uuid, "!tab_$listOrder", emptyList(),
+            true, -1, GameMode.SURVIVAL,
+            displayName, null, listOrder, false,
+        )
 
     override fun shutdown() {
         hostStatusSubscription?.let { NetworkMessenger.unsubscribe<HostProvisionStatusMessage>(it) }
