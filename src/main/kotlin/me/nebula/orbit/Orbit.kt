@@ -260,6 +260,15 @@ object Orbit {
 
         val server = MinecraftServer.init(Auth.Velocity(env.all["VELOCITY_SECRET"]!!))
 
+        MinecraftServer.getExceptionManager().setExceptionHandler { throwable ->
+            val msg = throwable.message ?: ""
+            if (msg.contains("packet") && (msg.contains("invalid") || msg.contains("Unknown"))) {
+                logger.debug { "Suppressed packet-state error: $msg" }
+                return@setExceptionHandler
+            }
+            logger.error(throwable) { "Unhandled exception" }
+        }
+
         mode = resolveMode(resolvedWorldPath)
         logger.info { "Server mode: ${mode::class.simpleName}" }
 
@@ -364,49 +373,53 @@ object Orbit {
         PlayerCache.installListeners()
 
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
-            val player = event.player
-            PlayerCache.preload(player.uuid).join()
-            val playerData = PlayerCache.get(player.uuid)?.player
-            val locale = playerData?.language ?: translations.defaultLocale
-            cacheLocale(player.uuid, locale)
             event.spawningInstance = mode.activeInstance
-            player.respawnPoint = mode.activeSpawnPoint
-            AchievementRegistry.loadPlayer(player.uuid)
-            if (MissionStore.load(player.uuid) == null) {
-                val daily = MissionRegistry.randomDaily(3).map { t ->
-                    me.nebula.gravity.mission.ActiveMission(
-                        t.id,
-                        t.type,
-                        t.target,
-                        xpReward = t.xpReward,
-                        coinReward = t.coinReward
-                    )
-                }
-                val weekly = MissionRegistry.randomWeekly(3).map { t ->
-                    me.nebula.gravity.mission.ActiveMission(
-                        t.id,
-                        t.type,
-                        t.target,
-                        xpReward = t.xpReward,
-                        coinReward = t.coinReward
-                    )
-                }
-                val now = System.currentTimeMillis()
-                MissionStore.save(
-                    player.uuid, me.nebula.gravity.mission.MissionData(
-                        dailyMissions = daily,
-                        weeklyMissions = weekly,
-                        dailyResetAt = nextDailyReset(now),
-                        weeklyResetAt = nextWeeklyReset(now),
-                    )
-                )
-            }
+            event.player.respawnPoint = mode.activeSpawnPoint
+            PlayerCache.preload(event.player.uuid)
         }
 
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
+            val player = event.player
+            val cached = PlayerCache.getOrLoad(player.uuid)
+            val locale = cached.player?.language ?: translations.defaultLocale
+            cacheLocale(player.uuid, locale)
+            AchievementRegistry.loadPlayer(player.uuid)
+
+            Thread.startVirtualThread {
+                if (MissionStore.load(player.uuid) == null) {
+                    val daily = MissionRegistry.randomDaily(3).map { t ->
+                        me.nebula.gravity.mission.ActiveMission(
+                            t.id,
+                            t.type,
+                            t.target,
+                            xpReward = t.xpReward,
+                            coinReward = t.coinReward
+                        )
+                    }
+                    val weekly = MissionRegistry.randomWeekly(3).map { t ->
+                        me.nebula.gravity.mission.ActiveMission(
+                            t.id,
+                            t.type,
+                            t.target,
+                            xpReward = t.xpReward,
+                            coinReward = t.coinReward
+                        )
+                    }
+                    val now = System.currentTimeMillis()
+                    MissionStore.save(
+                        player.uuid, me.nebula.gravity.mission.MissionData(
+                            dailyMissions = daily,
+                            weeklyMissions = weekly,
+                            dailyResetAt = nextDailyReset(now),
+                            weeklyResetAt = nextWeeklyReset(now),
+                        )
+                    )
+                }
+            }
+
             val pUuid = provisionUuid
             if (pUuid != null) {
-                ServerStore.executeOnKey(pUuid, ConnectPlayerProcessor(event.player.uuid))
+                ServerStore.executeOnKey(pUuid, ConnectPlayerProcessor(player.uuid))
             }
         }
 
