@@ -58,7 +58,7 @@ import me.nebula.orbit.utils.counter.Easing
 import me.nebula.orbit.utils.nameplate.NameplateManager
 import me.nebula.orbit.utils.nameplate.nameplateLayout
 import me.nebula.orbit.utils.sound.playSound
-import me.nebula.orbit.utils.world.configure
+import me.nebula.orbit.utils.world.configureWorld
 import net.minestom.server.entity.Player
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
@@ -198,19 +198,7 @@ class HubMode : ServerMode {
         }
         lobby.install()
 
-        defaultInstance.configure {
-            doDaylightCycle(false)
-            doWeatherCycle(false)
-            doMobSpawning(false)
-            pvp(false)
-            fallDamage(false)
-            fireDamage(false)
-            drowningDamage(false)
-            freezeDamage(false)
-            freezeTime()
-            noon()
-            clear()
-        }
+        defaultInstance.configureWorld { it.lobby() }
 
         NameplateManager.setLayout(nameplateLayout("hub") {
             yOffset(0.3f)

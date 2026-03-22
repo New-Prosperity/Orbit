@@ -252,6 +252,11 @@ fun Instance.configure(block: WorldBuilder.() -> Unit) {
     builder.apply(this as InstanceContainer)
 }
 
+fun Instance.configureWorld(block: (WorldBuilder) -> Unit) {
+    val builder = WorldBuilder().also(block)
+    builder.apply(this as InstanceContainer)
+}
+
 fun Instance.setGameRule(rule: GameRule, value: Any) { gameRules.set(rule, value) }
 fun Instance.getGameRule(rule: GameRule): Any = gameRules.get(rule)
 fun Instance.getGameRuleBoolean(rule: GameRule): Boolean = gameRules.getBoolean(rule)
