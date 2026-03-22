@@ -284,13 +284,16 @@ class HubMode : ServerMode {
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
             if (!event.isFirstSpawn) return@addListener
             sendFullTabList(event.player)
+            MinecraftServer.getSchedulerManager().buildTask {
+                broadcastTabUpdate()
+            }.delay(TaskSchedule.tick(2)).schedule()
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             tabSentTo.remove(event.player.uuid)
             MinecraftServer.getSchedulerManager().buildTask {
                 broadcastTabUpdate()
-            }.delay(TaskSchedule.tick(1)).schedule()
+            }.delay(TaskSchedule.tick(2)).schedule()
         }
     }
 
