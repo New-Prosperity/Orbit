@@ -9,6 +9,7 @@ import net.minestom.server.component.DataComponent
 import net.minestom.server.component.DataComponents
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
+import net.minestom.server.item.component.AttributeList
 import net.minestom.server.item.component.CustomModelData
 import net.minestom.server.item.component.EnchantmentList
 import net.minestom.server.item.component.TooltipDisplay
@@ -38,6 +39,7 @@ class ItemBuilder @PublishedApi internal constructor(private val material: Mater
     @PublishedApi internal var tooltipStyle: String? = null
     @PublishedApi internal var hideTooltip = false
     @PublishedApi internal val hiddenComponents = mutableSetOf<DataComponent<*>>()
+    @PublishedApi internal var stripAttributes = false
     @PublishedApi internal val enchantments = mutableListOf<Pair<RegistryKey<Enchantment>, Int>>()
     @PublishedApi internal var skullTextures: String? = null
     @PublishedApi internal var itemModel: String? = null
@@ -96,6 +98,7 @@ class ItemBuilder @PublishedApi internal constructor(private val material: Mater
 
     fun clean() {
         unbreakable = true
+        stripAttributes = true
         hideAll()
     }
 
@@ -125,6 +128,10 @@ class ItemBuilder @PublishedApi internal constructor(private val material: Mater
                 GameProfile.Property("textures", skullTextures!!, null)
             ))
             item = item.with(DataComponents.PROFILE, ResolvableProfile(profile))
+        }
+
+        if (stripAttributes) {
+            item = item.with(DataComponents.ATTRIBUTE_MODIFIERS, AttributeList.EMPTY)
         }
 
         if (hideTooltip || hiddenComponents.isNotEmpty()) {

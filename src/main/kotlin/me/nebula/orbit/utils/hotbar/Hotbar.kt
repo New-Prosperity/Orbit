@@ -64,7 +64,14 @@ class Hotbar(
         if (lockInventory) {
             eventNode.addListener(InventoryPreClickEvent::class.java) { event ->
                 if (!activePlayers.contains(event.player.uuid)) return@addListener
-                if (event.inventory == null) event.isCancelled = true
+                if (event.inventory == null) {
+                    event.isCancelled = true
+                    return@addListener
+                }
+                val clickedSlot = event.slot
+                if (clickedSlot < 9) {
+                    event.isCancelled = true
+                }
             }
         }
 
