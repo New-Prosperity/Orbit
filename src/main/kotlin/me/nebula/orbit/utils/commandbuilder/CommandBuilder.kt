@@ -13,9 +13,10 @@ import net.minestom.server.command.builder.CommandContext
 import net.minestom.server.command.builder.arguments.Argument
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.command.builder.suggestion.SuggestionEntry
+import me.nebula.orbit.utils.cooldown.Cooldown
 import net.minestom.server.entity.Player
+import java.time.Duration
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 data class CommandExecutionContext(
     val player: Player,
@@ -179,22 +180,20 @@ class CommandBuilderDsl @PublishedApi internal constructor(
         return cmd
     }
 
-    private val cooldowns = ConcurrentHashMap<UUID, Long>()
+    private val cooldown: Cooldown<UUID>? by lazy {
+        if (cooldownMs > 0) Cooldown(Duration.ofMillis(cooldownMs)) else null
+    }
 
     private fun resolveHandler(): ((CommandSender, CommandContext) -> Unit)? {
         val playerHandler = playerExecuteHandler
         if (playerHandler != null) {
             val handler: (CommandSender, CommandContext) -> Unit = handler@{ sender, context ->
                 val player = sender as Player
-                if (cooldownMs > 0) {
-                    val now = System.currentTimeMillis()
-                    val last = cooldowns[player.uuid]
-                    if (last != null && now - last < cooldownMs) {
-                        val remaining = ((cooldownMs - (now - last)) / 1000.0)
-                        player.sendMessage(player.translate("orbit.command.cooldown", "seconds" to "%.1f".format(remaining)))
-                        return@handler
-                    }
-                    cooldowns[player.uuid] = now
+                val cd = cooldown
+                if (cd != null && !cd.tryUse(player.uuid)) {
+                    val remaining = cd.remaining(player.uuid).toMillis() / 1000.0
+                    player.sendMessage(player.translate("orbit.command.cooldown", "seconds" to "%.1f".format(remaining)))
+                    return@handler
                 }
                 Thread.startVirtualThread {
                     playerHandler(CommandExecutionContext(player, context, player.localeCode))
