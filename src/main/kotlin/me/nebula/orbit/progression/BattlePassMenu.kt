@@ -45,6 +45,7 @@ object BattlePassMenu {
                         "xp" to progress.xp.toString(),
                         "needed" to xpNeeded.toString(),
                     ))
+                    clean()
                 }) { p -> openTierView(p, definition.id) }
             }
             fill(Material.GRAY_STAINED_GLASS_PANE)
@@ -95,6 +96,7 @@ object BattlePassMenu {
                         reached && !freeClaimed -> lore("<yellow>${player.translateRaw("orbit.battlepass.click_claim")}")
                         !reached -> lore("<red>${player.translateRaw("orbit.battlepass.locked")}")
                     }
+                    clean()
                 }) { p ->
                     if (!reached) return@item
                     if (!freeClaimed) {
@@ -111,6 +113,7 @@ object BattlePassMenu {
                 staticSlot(47, itemStack(Material.GOLD_INGOT) {
                     name("<gold>${player.translateRaw("orbit.battlepass.unlock_premium")}")
                     lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
+                    clean()
                 }) { p ->
                     openPremiumConfirmation(p, passId)
                 }
@@ -119,6 +122,7 @@ object BattlePassMenu {
             if (BattlePassRegistry.activePasses().size > 1) {
                 staticSlot(49, itemStack(Material.ARROW) {
                     name("<gray>${player.translateRaw("orbit.battlepass.back")}")
+                    clean()
                 }) { p -> openPassSelector(p) }
             }
         }
@@ -132,6 +136,7 @@ object BattlePassMenu {
             slot(11, itemStack(Material.GREEN_WOOL) {
                 name("<green>${player.translateRaw("orbit.battlepass.premium_confirm")}")
                 lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
+                    clean()
             }) { p ->
                 BattlePassManager.purchasePremium(p, passId)
                 openTierView(p, passId)
@@ -140,10 +145,12 @@ object BattlePassMenu {
             slot(13, itemStack(Material.GOLD_INGOT) {
                 name("<gold>${player.translateRaw("orbit.battlepass.unlock_premium")}")
                 lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
+                    clean()
             })
 
             slot(15, itemStack(Material.RED_WOOL) {
                 name("<red>${player.translateRaw("orbit.battlepass.premium_cancel")}")
+                    clean()
             }) { p -> openTierView(p, passId) }
 
             fill(Material.GRAY_STAINED_GLASS_PANE)

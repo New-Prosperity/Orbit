@@ -53,6 +53,7 @@ object HostMenu {
                     lore(player.translateRaw("orbit.host.gamemode.players", "max" to config.maxPlayersPerServer.toString()))
                     lore("")
                     lore(player.translateRaw("orbit.host.tickets.count", "count" to ticketData.tickets.toString()))
+                    clean()
                 }) { p ->
                     val freshTickets = HostTicketStore.load(p.uuid) ?: HostTicketData()
                     if (freshTickets.tickets <= 0 && !RankManager.hasPermission(p.uuid, "*")) {
@@ -79,11 +80,13 @@ object HostMenu {
                 if (slotIndex > 16) break
                 slot(slotIndex, itemStack(Material.FILLED_MAP) {
                     name(player.translateRaw("orbit.host.map.name", "map" to map))
+                    clean()
                 }) { p -> openConfirmMenu(p, config, map) }
                 slotIndex++
             }
             slot(18, itemStack(Material.ARROW) {
                 name(player.translateRaw("orbit.host.back"))
+                    clean()
             }) { p -> openGameModeMenu(p) }
             fill(Material.GRAY_STAINED_GLASS_PANE)
         }
@@ -97,9 +100,11 @@ object HostMenu {
                 lore(player.translateRaw("orbit.host.confirm.gamemode", "gamemode" to config.gameMode))
                 map?.let { lore(player.translateRaw("orbit.host.confirm.map", "map" to it)) }
                 lore(player.translateRaw("orbit.host.confirm.cost"))
+                    clean()
             }) { p -> confirm(p, config, map) }
             slot(15, itemStack(Material.REDSTONE_BLOCK) {
                 name(player.translateRaw("orbit.host.confirm.cancel"))
+                    clean()
             }) { p -> openGameModeMenu(p) }
             fill(Material.GRAY_STAINED_GLASS_PANE)
         }

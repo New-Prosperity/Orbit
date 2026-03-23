@@ -20,6 +20,7 @@ object MissionMenu {
                 name(player.translateRaw("orbit.mission.daily_header"))
                 val resetIn = formatDuration(data.dailyResetAt - System.currentTimeMillis())
                 lore(player.translateRaw("orbit.mission.reset_timer", "time" to resetIn))
+                    clean()
             })
 
             buildMissionSlots(player, data.dailyMissions, intArrayOf(10, 12, 14))
@@ -28,6 +29,7 @@ object MissionMenu {
                 name(player.translateRaw("orbit.mission.weekly_header"))
                 val resetIn = formatDuration(data.weeklyResetAt - System.currentTimeMillis())
                 lore(player.translateRaw("orbit.mission.reset_timer", "time" to resetIn))
+                    clean()
             })
 
             buildMissionSlots(player, data.weeklyMissions, intArrayOf(19, 21, 23))
@@ -60,6 +62,7 @@ object MissionMenu {
                     "coins" to mission.coinReward.toString(),
                 ))
                 if (mission.completed) glowing()
+                    clean()
             })
         }
     }

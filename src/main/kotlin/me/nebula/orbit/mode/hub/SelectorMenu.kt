@@ -57,6 +57,7 @@ object SelectorMenu {
                         }
                         else -> lore(player.translateRaw("orbit.selector.click"))
                     }
+                    clean()
                 }) { p ->
                     if (maintenance) {
                         p.sendMessage(p.translate("orbit.queue.error.maintenance"))

@@ -45,6 +45,7 @@ object CosmeticMenu {
                 val (slot, material) = config
                 slot(slot, itemStack(material) {
                     name(player.translateRaw(category.displayKey))
+                    clean()
                 }) { p -> openCosmeticList(p, category) }
             }
             fill(Material.GRAY_STAINED_GLASS_PANE)
@@ -84,6 +85,7 @@ object CosmeticMenu {
 
             staticSlot(49, itemStack(Material.ARROW) {
                 name("<gray>Back")
+                    clean()
             }) { p -> openCategoryMenu(p) }
         }
         gui.open(player)
@@ -96,6 +98,7 @@ object CosmeticMenu {
             slot(11, itemStack(Material.GREEN_WOOL) {
                 name("<green>${player.translateRaw("orbit.cosmetic.confirm.accept")}")
                 lore(player.translateRaw("orbit.cosmetic.confirm.cost", "price" to cost.toString()))
+                    clean()
             }) { p ->
                 val purchased = EconomyStore.executeOnKey(p.uuid, PurchaseCosmeticProcessor("coins", cost.toDouble()))
                 if (!purchased) {
@@ -117,10 +120,12 @@ object CosmeticMenu {
             slot(13, itemStack(material) {
                 name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
                 lore(player.translateRaw("orbit.cosmetic.confirm.cost", "price" to cost.toString()))
+                    clean()
             })
 
             slot(15, itemStack(Material.RED_WOOL) {
                 name("<red>${player.translateRaw("orbit.cosmetic.confirm.cancel")}")
+                    clean()
             }) { p -> openCosmeticList(p, category) }
 
             fill(Material.GRAY_STAINED_GLASS_PANE)
