@@ -2,6 +2,11 @@ package me.nebula.orbit.utils.commandbuilder
 
 import me.nebula.gravity.rank.RankManager
 import me.nebula.orbit.Orbit
+import me.nebula.orbit.localeCode
+import me.nebula.orbit.translation.translate
+import net.kyori.adventure.text.Component
+import net.minestom.server.MinecraftServer
+import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.command.CommandSender
 import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.CommandContext
@@ -10,12 +15,55 @@ import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.command.builder.suggestion.SuggestionEntry
 import net.minestom.server.entity.Player
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 data class CommandExecutionContext(
     val player: Player,
     val args: CommandContext,
     val locale: String,
-)
+) {
+    fun arg(name: String): String = args.get(ArgumentType.String(name))
+    fun argOrNull(name: String): String? = runCatching { args.get(ArgumentType.String(name)) }.getOrNull()
+    fun intArg(name: String): Int = args.get(ArgumentType.Integer(name))
+    fun intArgOrNull(name: String): Int? = runCatching { args.get(ArgumentType.Integer(name)) }.getOrNull()
+    fun doubleArg(name: String): Double = args.get(ArgumentType.Double(name))
+    fun floatArg(name: String): Float = args.get(ArgumentType.Float(name))
+    fun boolArg(name: String): Boolean = args.get(ArgumentType.Boolean(name))
+
+    fun reply(key: String, vararg placeholders: Pair<String, String>) {
+        player.sendMessage(player.translate(key, *placeholders))
+    }
+
+    fun replyRaw(text: String) {
+        player.sendMessage(Component.text(text))
+    }
+
+    fun replyMM(text: String) {
+        player.sendMessage(MiniMessage.miniMessage().deserialize(text))
+    }
+
+    fun targetPlayer(argName: String = "player"): Player? {
+        val name = argOrNull(argName) ?: return null
+        return MinecraftServer.getConnectionManager().findOnlinePlayer(name)
+    }
+
+    fun targetPlayerOrSelf(argName: String = "player"): Player {
+        val name = argOrNull(argName)
+        if (name != null) {
+            return MinecraftServer.getConnectionManager().findOnlinePlayer(name) ?: run {
+                reply("orbit.command.player_not_found", "name" to name)
+                return player
+            }
+        }
+        return player
+    }
+
+    fun requireArg(name: String, errorKey: String = "orbit.command.missing_arg"): String? {
+        val value = argOrNull(name)
+        if (value == null) reply(errorKey, "arg" to name)
+        return value
+    }
+}
 
 class CommandBuilderDsl @PublishedApi internal constructor(
     @PublishedApi internal val name: String,
@@ -28,10 +76,14 @@ class CommandBuilderDsl @PublishedApi internal constructor(
     @PublishedApi internal var executeHandler: ((CommandSender, CommandContext) -> Unit)? = null
     @PublishedApi internal var playerExecuteHandler: ((CommandExecutionContext) -> Unit)? = null
     @PublishedApi internal var tabCompleteHandler: ((Player, String) -> List<String>)? = null
+    @PublishedApi internal var cooldownMs: Long = 0
+    @PublishedApi internal var usageKey: String? = null
 
     fun aliases(vararg names: String) { aliases += names }
     fun permission(perm: String) { permission = perm }
     fun playerOnly() { playerOnly = true }
+    fun cooldown(ms: Long) { cooldownMs = ms }
+    fun usage(translationKey: String) { usageKey = translationKey }
 
     fun <T> argument(arg: Argument<T>) { arguments += arg }
     fun stringArgument(name: String) { arguments += ArgumentType.String(name) }
@@ -41,6 +93,25 @@ class CommandBuilderDsl @PublishedApi internal constructor(
     fun booleanArgument(name: String) { arguments += ArgumentType.Boolean(name) }
     fun wordArgument(name: String) { arguments += ArgumentType.Word(name) }
     fun stringArrayArgument(name: String) { arguments += ArgumentType.StringArray(name) }
+
+    fun playerArgument(name: String = "player") {
+        val arg = ArgumentType.Word(name)
+        arg.setSuggestionCallback { sender, _, suggestion ->
+            if (sender !is Player) return@setSuggestionCallback
+            suggestPlayers(suggestion.input.substringAfterLast(" ")).forEach {
+                suggestion.addEntry(SuggestionEntry(it))
+            }
+        }
+        arguments += arg
+    }
+
+    fun enumArgument(name: String, values: Collection<String>) {
+        arguments += ArgumentType.Word(name).from(*values.toTypedArray())
+    }
+
+    fun enumArgument(name: String, vararg values: String) {
+        arguments += ArgumentType.Word(name).from(*values)
+    }
 
     fun subCommand(name: String, block: CommandBuilderDsl.() -> Unit) {
         subCommands += buildCommand(name, block)
@@ -87,23 +158,49 @@ class CommandBuilderDsl @PublishedApi internal constructor(
             }
         }
 
+        val usageKeyValue = usageKey
         resolvedHandler?.let { handler ->
             cmd.setDefaultExecutor { sender, _ ->
                 if (playerOnly && sender !is Player) return@setDefaultExecutor
+                if (usageKeyValue != null && sender is Player && arguments.isNotEmpty()) {
+                    sender.sendMessage(sender.translate(usageKeyValue))
+                    return@setDefaultExecutor
+                }
                 handler(sender, CommandContext(""))
+            }
+        } ?: run {
+            if (usageKeyValue != null) {
+                cmd.setDefaultExecutor { sender, _ ->
+                    if (sender is Player) sender.sendMessage(sender.translate(usageKeyValue))
+                }
             }
         }
 
         return cmd
     }
 
+    private val cooldowns = ConcurrentHashMap<UUID, Long>()
+
     private fun resolveHandler(): ((CommandSender, CommandContext) -> Unit)? {
         val playerHandler = playerExecuteHandler
-        if (playerHandler != null) return { sender, context ->
-            val player = sender as Player
-            Thread.startVirtualThread {
-                playerHandler(CommandExecutionContext(player, context, Orbit.localeOf(player.uuid)))
+        if (playerHandler != null) {
+            val handler: (CommandSender, CommandContext) -> Unit = handler@{ sender, context ->
+                val player = sender as Player
+                if (cooldownMs > 0) {
+                    val now = System.currentTimeMillis()
+                    val last = cooldowns[player.uuid]
+                    if (last != null && now - last < cooldownMs) {
+                        val remaining = ((cooldownMs - (now - last)) / 1000.0)
+                        player.sendMessage(player.translate("orbit.command.cooldown", "seconds" to "%.1f".format(remaining)))
+                        return@handler
+                    }
+                    cooldowns[player.uuid] = now
+                }
+                Thread.startVirtualThread {
+                    playerHandler(CommandExecutionContext(player, context, player.localeCode))
+                }
             }
+            return handler
         }
         val rawHandler = executeHandler
         if (rawHandler != null) return { sender, context ->
