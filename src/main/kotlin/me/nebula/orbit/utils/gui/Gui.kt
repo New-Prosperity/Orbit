@@ -11,8 +11,11 @@ import net.minestom.server.inventory.Inventory
 import net.minestom.server.inventory.InventoryType
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
+import net.minestom.server.tag.Tag
 
 private val miniMessage = MiniMessage.miniMessage()
+
+val CUSTOM_GUI_TAG: Tag<Boolean> = Tag.Boolean("nebula:custom_gui").defaultValue(false)
 
 private fun rowsToType(rows: Int): InventoryType = when (rows) {
     1 -> InventoryType.CHEST_1_ROW
@@ -37,6 +40,7 @@ class Gui(
 
     fun open(player: Player) {
         val inventory = Inventory(type, miniMessage.deserialize(title))
+        inventory.setTag(CUSTOM_GUI_TAG, true)
         val size = type.size
 
         borderItem?.let { border ->

@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.hotbar
 
 import me.nebula.orbit.utils.condition.Condition
+import me.nebula.orbit.utils.gui.CUSTOM_GUI_TAG
 import me.nebula.orbit.utils.sound.playSound
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
@@ -67,7 +68,9 @@ class Hotbar(
                 val openInv = event.player.openInventory
                 if (openInv == null) {
                     event.isCancelled = true
-                } else if (event.slot >= openInv.size) {
+                } else if (openInv.getTag(CUSTOM_GUI_TAG)) {
+                    if (event.slot >= openInv.size) event.isCancelled = true
+                } else {
                     event.isCancelled = true
                 }
             }
