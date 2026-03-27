@@ -68,7 +68,7 @@ object HostMenu {
                 }
                 slotIndex++
             }
-            fill(Material.GRAY_STAINED_GLASS_PANE)
+            fillDefault()
         }
         player.openGui(gui)
     }
@@ -86,9 +86,9 @@ object HostMenu {
             }
             slot(18, itemStack(Material.ARROW) {
                 name(player.translateRaw("orbit.host.back"))
-                    clean()
+                clean()
             }) { p -> openGameModeMenu(p) }
-            fill(Material.GRAY_STAINED_GLASS_PANE)
+            fillDefault()
         }
         player.openGui(gui)
     }
@@ -100,13 +100,13 @@ object HostMenu {
                 lore(player.translateRaw("orbit.host.confirm.gamemode", "gamemode" to config.gameMode))
                 map?.let { lore(player.translateRaw("orbit.host.confirm.map", "map" to it)) }
                 lore(player.translateRaw("orbit.host.confirm.cost"))
-                    clean()
+                clean()
             }) { p -> confirm(p, config, map) }
             slot(15, itemStack(Material.REDSTONE_BLOCK) {
                 name(player.translateRaw("orbit.host.confirm.cancel"))
-                    clean()
+                clean()
             }) { p -> openGameModeMenu(p) }
-            fill(Material.GRAY_STAINED_GLASS_PANE)
+            fillDefault()
         }
         player.openGui(gui)
     }

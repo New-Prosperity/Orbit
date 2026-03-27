@@ -50,6 +50,7 @@ import me.nebula.orbit.translation.resolveTranslated
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.sound.playSound
+import me.nebula.orbit.utils.vanish.VanishManager
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
@@ -548,7 +549,7 @@ abstract class GameMode : ServerMode {
     private fun handlePlayerJoin(player: Player) {
         when (phase) {
             GamePhase.WAITING -> {
-                if (tracker.size >= settings.timing.maxPlayers) {
+                if (VanishManager.isVanished(player) || tracker.size >= settings.timing.maxPlayers) {
                     player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
                     return
                 }
@@ -563,7 +564,7 @@ abstract class GameMode : ServerMode {
                 checkMinPlayersThreshold()
             }
             GamePhase.STARTING -> {
-                if (tracker.size >= settings.timing.maxPlayers) {
+                if (VanishManager.isVanished(player) || tracker.size >= settings.timing.maxPlayers) {
                     player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
                     return
                 }
@@ -601,7 +602,7 @@ abstract class GameMode : ServerMode {
             return
         }
 
-        if (canLateJoin()) {
+        if (canLateJoin() && !VanishManager.isVanished(player)) {
             lateJoinCount.incrementAndGet()
             tracker.join(player.uuid)
 
@@ -633,6 +634,7 @@ abstract class GameMode : ServerMode {
     }
 
     private fun handlePlayerDisconnect(player: Player) {
+        killFeed?.removePlayer(player.uuid)
         when (phase) {
             GamePhase.WAITING -> {
                 tracker.remove(player.uuid)
@@ -1024,6 +1026,10 @@ abstract class GameMode : ServerMode {
         }
 
         for (player in lobbyInstance.players) {
+            if (VanishManager.isVanished(player)) {
+                player.gameMode = net.minestom.server.entity.GameMode.SPECTATOR
+                continue
+            }
             tracker.join(player.uuid)
             player.gameMode = net.minestom.server.entity.GameMode.valueOf(settings.lobby.gameMode)
             if (!isDualInstance) player.teleport(lobbySpawnPoint)

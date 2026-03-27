@@ -10,6 +10,7 @@ import me.nebula.orbit.utils.modelengine.math.quatToEuler
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.title.Title
 import net.kyori.adventure.title.TitlePart
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -18,6 +19,9 @@ import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.GameMode
 import net.minestom.server.entity.Metadata
 import net.minestom.server.entity.Player
+import net.minestom.server.event.Event
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.network.packet.server.play.CameraPacket
 import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
 import net.minestom.server.network.packet.server.play.EntityHeadLookPacket
@@ -25,7 +29,6 @@ import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
 import net.minestom.server.network.packet.server.play.EntityTeleportPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -141,13 +144,10 @@ object CinematicCamera {
 
         player.sendPacket(CameraPacket(entityId))
 
-        session.task = MinecraftServer.getSchedulerManager()
-            .buildTask {
-                val current = sessions[player.uuid] ?: return@buildTask
-                tick(current, player)
-            }
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+        session.task = repeat(1) {
+            val current = sessions[player.uuid] ?: return@repeat
+            tick(current, player)
+        }
     }
 
     fun stop(player: Player) {
@@ -176,6 +176,12 @@ object CinematicCamera {
     }
 
     fun isPlaying(player: Player): Boolean = sessions.containsKey(player.uuid)
+
+    fun install(eventNode: EventNode<Event>) {
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            stop(event.player)
+        }
+    }
 
     fun stopAll() {
         for ((uuid, session) in sessions) {

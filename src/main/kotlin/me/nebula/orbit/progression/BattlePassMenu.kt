@@ -48,7 +48,7 @@ object BattlePassMenu {
                     clean()
                 }) { p -> openTierView(p, definition.id) }
             }
-            fill(Material.GRAY_STAINED_GLASS_PANE)
+            fillDefault()
         }
         player.openGui(selectorGui)
     }
@@ -136,7 +136,7 @@ object BattlePassMenu {
             slot(11, itemStack(Material.GREEN_WOOL) {
                 name("<green>${player.translateRaw("orbit.battlepass.premium_confirm")}")
                 lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
-                    clean()
+                clean()
             }) { p ->
                 BattlePassManager.purchasePremium(p, passId)
                 openTierView(p, passId)
@@ -145,15 +145,15 @@ object BattlePassMenu {
             slot(13, itemStack(Material.GOLD_INGOT) {
                 name("<gold>${player.translateRaw("orbit.battlepass.unlock_premium")}")
                 lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
-                    clean()
+                clean()
             })
 
             slot(15, itemStack(Material.RED_WOOL) {
                 name("<red>${player.translateRaw("orbit.battlepass.premium_cancel")}")
-                    clean()
+                clean()
             }) { p -> openTierView(p, passId) }
 
-            fill(Material.GRAY_STAINED_GLASS_PANE)
+            fillDefault()
         }
         player.openGui(confirmGui)
     }

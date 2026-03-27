@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.podium
 
+import me.nebula.orbit.utils.scheduler.delay
 import net.kyori.adventure.sound.Sound
-import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
@@ -11,7 +11,6 @@ import net.minestom.server.instance.Instance
 import net.minestom.server.instance.block.Block
 import net.minestom.server.sound.SoundEvent
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -66,10 +65,7 @@ class PodiumDisplay @PublishedApi internal constructor(
             )
         }
 
-        cleanupTask = MinecraftServer.getSchedulerManager()
-            .buildTask { cleanup() }
-            .delay(TaskSchedule.millis(displayDuration.inWholeMilliseconds))
-            .schedule()
+        cleanupTask = delay((displayDuration.inWholeMilliseconds / 50).toInt()) { cleanup() }
     }
 
     fun cleanup() {
@@ -87,10 +83,7 @@ class PodiumDisplay @PublishedApi internal constructor(
         entity.setInstance(instance, position)
         spawnedEntities.add(entity)
 
-        MinecraftServer.getSchedulerManager()
-            .buildTask { if (!entity.isRemoved) entity.remove() }
-            .delay(TaskSchedule.tick(30))
-            .schedule()
+        delay(30) { if (!entity.isRemoved) entity.remove() }
     }
 }
 

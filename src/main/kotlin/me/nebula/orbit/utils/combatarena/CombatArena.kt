@@ -1,15 +1,15 @@
 package me.nebula.orbit.utils.combatarena
 
 import me.nebula.orbit.utils.kit.Kit
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -19,7 +19,7 @@ data class PlayerStats(
     val uuid: UUID,
     val kills: AtomicInteger = AtomicInteger(0),
     val deaths: AtomicInteger = AtomicInteger(0),
-    val damageDealt: java.util.concurrent.atomic.AtomicLong = java.util.concurrent.atomic.AtomicLong(0),
+    val damageDealt: AtomicLong = AtomicLong(0),
 )
 
 data class ArenaResult(
@@ -77,13 +77,10 @@ class CombatArena @PublishedApi internal constructor(
         ticksElapsed = 0
 
         if (durationTicks > 0) {
-            timerTask = MinecraftServer.getSchedulerManager()
-                .buildTask {
+            timerTask = repeat(1) {
                     ticksElapsed++
                     if (ticksElapsed >= durationTicks) end()
                 }
-                .repeat(TaskSchedule.tick(1))
-                .schedule()
         }
     }
 

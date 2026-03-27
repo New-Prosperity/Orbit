@@ -10,13 +10,13 @@ import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
 import com.google.gson.reflect.TypeToken
 import me.nebula.ether.utils.storage.StorageScope
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
 import net.kyori.adventure.nbt.TagStringIO
 import net.minestom.server.item.ItemStack
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.io.ByteArrayOutputStream
 import java.lang.reflect.Type
 import java.util.UUID
@@ -136,8 +136,8 @@ class ReplayPlayer(private val data: ReplayData) {
         currentTick = 0
         tickAccumulator = 0.0
 
-        task = MinecraftServer.getSchedulerManager().buildTask {
-            if (!playing) return@buildTask
+        task = repeat(1) {
+            if (!playing) return@repeat
 
             tickAccumulator += speed
             while (tickAccumulator >= 1.0) {
@@ -153,10 +153,10 @@ class ReplayPlayer(private val data: ReplayData) {
                     task?.cancel()
                     task = null
                     onComplete?.invoke()
-                    return@buildTask
+                    return@repeat
                 }
             }
-        }.repeat(TaskSchedule.tick(1)).schedule()
+        }
     }
 
     fun stop() {

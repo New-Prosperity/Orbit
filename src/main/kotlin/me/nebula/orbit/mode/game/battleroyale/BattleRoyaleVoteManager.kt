@@ -49,7 +49,7 @@ object BattleRoyaleVoteManager {
     fun openCategoryMenu(player: Player) {
         val categories = season.voteCategories
         gui(player.translateRaw("orbit.game.br.vote.title"), rows = 3) {
-            fill(Material.GRAY_STAINED_GLASS_PANE)
+            fillDefault()
             val totalWidth = (categories.size - 1).coerceAtLeast(0) * 2
             val startSlot = 9 + (9 - totalWidth) / 2
             categories.forEachIndexed { i, cat ->
@@ -76,7 +76,7 @@ object BattleRoyaleVoteManager {
     fun openOptionMenu(player: Player, categoryId: String) {
         val cat = season.voteCategories.firstOrNull { it.id == categoryId } ?: return
         gui(player.translateRaw(cat.nameKey), rows = 3) {
-            fill(Material.GRAY_STAINED_GLASS_PANE)
+            fillDefault()
             val totalWidth = (cat.options.size - 1).coerceAtLeast(0) * 2
             val startSlot = 9 + (9 - totalWidth) / 2
             cat.options.forEachIndexed { i, option ->

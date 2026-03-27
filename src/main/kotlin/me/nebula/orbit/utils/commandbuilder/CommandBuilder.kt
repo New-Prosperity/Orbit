@@ -6,7 +6,7 @@ import me.nebula.orbit.localeCode
 import me.nebula.orbit.translation.translate
 import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.command.CommandSender
 import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.CommandContext
@@ -40,7 +40,7 @@ data class CommandExecutionContext(
     }
 
     fun replyMM(text: String) {
-        player.sendMessage(MiniMessage.miniMessage().deserialize(text))
+        player.sendMessage(miniMessage.deserialize(text))
     }
 
     fun targetPlayer(argName: String = "player"): Player? {
@@ -99,7 +99,7 @@ class CommandBuilderDsl @PublishedApi internal constructor(
         val arg = ArgumentType.Word(name)
         arg.setSuggestionCallback { sender, _, suggestion ->
             if (sender !is Player) return@setSuggestionCallback
-            suggestPlayers(suggestion.input.substringAfterLast(" ")).forEach {
+            suggestPlayers(suggestion.input.substringAfterLast(" "), sender).forEach {
                 suggestion.addEntry(SuggestionEntry(it))
             }
         }

@@ -4,14 +4,16 @@ import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
 import me.nebula.orbit.utils.modelengine.modeledEntity
 import me.nebula.orbit.utils.pathfinding.Pathfinder
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.EntityCreature
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.Player
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -32,17 +34,23 @@ object PetManager {
 
     private val pets = ConcurrentHashMap<UUID, ActivePet>()
     private var task: Task? = null
+    private var eventNode: EventNode<*>? = null
 
     fun install() {
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask { tick() }
-            .repeat(TaskSchedule.tick(2))
-            .schedule()
+        task = repeat(2) { tick() }
+        val node = EventNode.all("pet-manager")
+        node.addListener(PlayerDisconnectEvent::class.java) { event ->
+            despawn(event.player.uuid)
+        }
+        MinecraftServer.getGlobalEventHandler().addChild(node)
+        eventNode = node
     }
 
     fun uninstall() {
         task?.cancel()
         task = null
+        eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        eventNode = null
         val iterator = pets.entries.iterator()
         while (iterator.hasNext()) {
             val (_, pet) = iterator.next()

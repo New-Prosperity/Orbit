@@ -3,11 +3,13 @@ package me.nebula.orbit.cosmetic
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.model.StandaloneModelOwner
 import me.nebula.orbit.utils.modelengine.model.standAloneModel
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -23,17 +25,23 @@ object CompanionManager {
     private val companions = ConcurrentHashMap<UUID, ActiveCompanion>()
     private val tickCounter = AtomicLong(0L)
     private var task: Task? = null
+    private var eventNode: EventNode<*>? = null
 
     fun install() {
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask { tick() }
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+        task = repeat(1) { tick() }
+        val node = EventNode.all("companion-manager")
+        node.addListener(PlayerDisconnectEvent::class.java) { event ->
+            despawn(event.player.uuid)
+        }
+        MinecraftServer.getGlobalEventHandler().addChild(node)
+        eventNode = node
     }
 
     fun uninstall() {
         task?.cancel()
         task = null
+        eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        eventNode = null
         val iterator = companions.entries.iterator()
         while (iterator.hasNext()) {
             val (_, companion) = iterator.next()

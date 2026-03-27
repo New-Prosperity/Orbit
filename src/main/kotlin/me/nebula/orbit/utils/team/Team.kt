@@ -1,14 +1,12 @@
 package me.nebula.orbit.utils.team
 
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.scoreboard.Team
 import java.util.concurrent.ConcurrentHashMap
-
-private val miniMessage = MiniMessage.miniMessage()
 
 object TeamManager {
 

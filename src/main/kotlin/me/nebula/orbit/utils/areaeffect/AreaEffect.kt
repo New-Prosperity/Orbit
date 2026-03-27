@@ -1,13 +1,12 @@
 package me.nebula.orbit.utils.areaeffect
 
 import me.nebula.orbit.utils.region.Region
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 import net.minestom.server.potion.Potion
 import net.minestom.server.potion.PotionEffect
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -26,10 +25,7 @@ data class AreaEffectZone(
 
     fun start() {
         task?.cancel()
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask { tick() }
-            .repeat(TaskSchedule.tick(intervalTicks))
-            .schedule()
+        task = repeat(intervalTicks) { tick() }
     }
 
     fun stop() {

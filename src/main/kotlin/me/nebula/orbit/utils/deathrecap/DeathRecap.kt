@@ -1,9 +1,13 @@
 package me.nebula.orbit.utils.deathrecap
 
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.utils.vanish.VanishManager
 import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
+import net.minestom.server.event.Event
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -79,9 +83,10 @@ class DeathRecapTracker {
         victim.sendMessage(victim.translate("orbit.deathrecap.header"))
 
         if (recap.killerName != null) {
+            val killerVisible = recap.killerUuid?.let { !VanishManager.isVanished(it) } ?: true
             victim.sendMessage(victim.translate("orbit.deathrecap.killer",
-                "killer" to recap.killerName,
-                "health" to formatHealth(recap.killerHealth),
+                "killer" to if (killerVisible) recap.killerName else "?",
+                "health" to if (killerVisible) formatHealth(recap.killerHealth) else "?",
             ))
         }
 
@@ -90,18 +95,22 @@ class DeathRecapTracker {
         ))
 
         for (entry in recap.entries.takeLast(5)) {
+            val attackerVisible = entry.attackerUuid?.let { !VanishManager.isVanished(it) } ?: true
             victim.sendMessage(victim.translate("orbit.deathrecap.entry",
-                "attacker" to entry.attackerName,
+                "attacker" to if (attackerVisible) entry.attackerName else "?",
                 "damage" to "%.1f".format(entry.amount),
                 "source" to entry.source,
             ))
         }
 
         if (recap.assists.isNotEmpty()) {
-            val assistNames = recap.assists.joinToString(", ") { "${it.name} (${" %.1f".format(it.damage).trim()})" }
-            victim.sendMessage(victim.translate("orbit.deathrecap.assists",
-                "assists" to assistNames,
-            ))
+            val visibleAssists = recap.assists.filter { !VanishManager.isVanished(it.uuid) }
+            if (visibleAssists.isNotEmpty()) {
+                val assistNames = visibleAssists.joinToString(", ") { "${it.name} (${" %.1f".format(it.damage).trim()})" }
+                victim.sendMessage(victim.translate("orbit.deathrecap.assists",
+                    "assists" to assistNames,
+                ))
+            }
         }
 
         victim.sendMessage(Component.empty())
@@ -109,6 +118,12 @@ class DeathRecapTracker {
 
     fun clearPlayer(uuid: UUID) {
         damageHistory.remove(uuid)
+    }
+
+    fun install(eventNode: EventNode<Event>) {
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            clearPlayer(event.player.uuid)
+        }
     }
 
     fun clear() {

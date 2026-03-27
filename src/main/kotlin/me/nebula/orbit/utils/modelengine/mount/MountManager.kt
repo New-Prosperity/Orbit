@@ -2,13 +2,13 @@ package me.nebula.orbit.utils.modelengine.mount
 
 import me.nebula.orbit.utils.modelengine.behavior.MountBehavior
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerPacketEvent
 import net.minestom.server.network.packet.client.play.ClientInputPacket
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -79,10 +79,7 @@ object MountManager {
         MinecraftServer.getGlobalEventHandler().addChild(node)
         eventNode = node
 
-        tickTask = MinecraftServer.getSchedulerManager()
-            .buildTask(::tick)
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+        tickTask = repeat(1) { tick() }
     }
 
     fun uninstall() {

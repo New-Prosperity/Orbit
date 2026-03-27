@@ -1,11 +1,11 @@
 package me.nebula.orbit.utils.trail
 
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.network.packet.server.play.ParticlePacket
 import net.minestom.server.particle.Particle
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -39,10 +39,7 @@ object TrailManager {
 
     fun start(intervalTicks: Int = 2) {
         stop()
-        tickTask = MinecraftServer.getSchedulerManager()
-            .buildTask(::tick)
-            .repeat(TaskSchedule.tick(intervalTicks))
-            .schedule()
+        tickTask = repeat(intervalTicks) { tick() }
     }
 
     fun stop() {

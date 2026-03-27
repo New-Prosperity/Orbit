@@ -1,8 +1,7 @@
 package me.nebula.orbit.utils.gamestate
 
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.concurrent.CopyOnWriteArrayList
 
 typealias StateTransitionCallback<S> = (from: S, to: S) -> Unit
@@ -13,6 +12,7 @@ class GameStateMachine<S : Enum<S>>(
     private val onEnter: Map<S, () -> Unit>,
     private val onExit: Map<S, () -> Unit>,
     private val timedTransitions: Map<S, Pair<Int, S>>,
+    private val guards: Map<Pair<S, S>, () -> Boolean>,
 ) {
 
     @Volatile
@@ -21,17 +21,27 @@ class GameStateMachine<S : Enum<S>>(
 
     private val listeners = CopyOnWriteArrayList<StateTransitionCallback<S>>()
     private var timerTask: Task? = null
+    private val _stateHistory = ArrayDeque<Pair<S, Long>>(MAX_HISTORY)
+
+    val stateHistory: List<Pair<S, Long>> get() = _stateHistory.toList()
 
     @Volatile
     private var ticksInState = 0
 
+    init {
+        recordHistory(initialState)
+    }
+
     fun transition(to: S): Boolean {
         val allowed = transitions[current] ?: return false
         if (to !in allowed) return false
+        val guardFn = guards[current to to]
+        if (guardFn != null && !guardFn()) return false
         val from = current
         onExit[from]?.invoke()
         current = to
         ticksInState = 0
+        recordHistory(to)
         onEnter[to]?.invoke()
         listeners.forEach { it(from, to) }
         scheduleTimedTransition()
@@ -43,9 +53,17 @@ class GameStateMachine<S : Enum<S>>(
         onExit[from]?.invoke()
         current = to
         ticksInState = 0
+        recordHistory(to)
         onEnter[to]?.invoke()
         listeners.forEach { it(from, to) }
         scheduleTimedTransition()
+    }
+
+    fun canTransition(to: S): Boolean {
+        val allowed = transitions[current] ?: return false
+        if (to !in allowed) return false
+        val guardFn = guards[current to to]
+        return guardFn == null || guardFn()
     }
 
     fun onTransition(callback: StateTransitionCallback<S>) {
@@ -58,12 +76,9 @@ class GameStateMachine<S : Enum<S>>(
 
     fun startTicking() {
         timerTask?.cancel()
-        timerTask = MinecraftServer.getSchedulerManager()
-            .buildTask {
+        timerTask = repeat(1) {
                 ticksInState++
             }
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
         scheduleTimedTransition()
     }
 
@@ -81,20 +96,27 @@ class GameStateMachine<S : Enum<S>>(
     fun destroy() {
         stopTicking()
         listeners.clear()
+        _stateHistory.clear()
     }
 
     private fun scheduleTimedTransition() {
         val (ticks, target) = timedTransitions[current] ?: return
         timerTask?.cancel()
-        timerTask = MinecraftServer.getSchedulerManager()
-            .buildTask {
+        timerTask = repeat(1) {
                 ticksInState++
                 if (ticksInState >= ticks) {
                     transition(target)
                 }
             }
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+    }
+
+    private fun recordHistory(state: S) {
+        if (_stateHistory.size >= MAX_HISTORY) _stateHistory.removeFirst()
+        _stateHistory.addLast(state to System.currentTimeMillis())
+    }
+
+    private companion object {
+        const val MAX_HISTORY = 20
     }
 }
 
@@ -106,6 +128,7 @@ class GameStateMachineBuilder<S : Enum<S>> @PublishedApi internal constructor(
     @PublishedApi internal val onEnter = mutableMapOf<S, () -> Unit>()
     @PublishedApi internal val onExit = mutableMapOf<S, () -> Unit>()
     @PublishedApi internal val timedTransitions = mutableMapOf<S, Pair<Int, S>>()
+    @PublishedApi internal val guards = mutableMapOf<Pair<S, S>, () -> Boolean>()
 
     fun allow(from: S, vararg to: S) {
         transitions.getOrPut(from) { mutableSetOf() }.addAll(to)
@@ -124,12 +147,17 @@ class GameStateMachineBuilder<S : Enum<S>> @PublishedApi internal constructor(
         timedTransitions[from] = ticks to to
     }
 
+    fun guard(from: S, to: S, predicate: () -> Boolean) {
+        guards[from to to] = predicate
+    }
+
     @PublishedApi internal fun build(): GameStateMachine<S> = GameStateMachine(
         initialState = initialState,
         transitions = transitions.mapValues { it.value.toSet() },
         onEnter = onEnter.toMap(),
         onExit = onExit.toMap(),
         timedTransitions = timedTransitions.toMap(),
+        guards = guards.toMap(),
     )
 }
 

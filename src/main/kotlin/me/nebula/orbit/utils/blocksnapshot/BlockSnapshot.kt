@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.blocksnapshot
 
 import me.nebula.orbit.utils.region.Region
+import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Point
 import net.minestom.server.coordinate.Pos
@@ -8,7 +9,6 @@ import net.minestom.server.instance.Instance
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.instance.block.Block
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -180,10 +180,7 @@ class BlockRestoreHandle @PublishedApi internal constructor(
 
     init {
         autoRestoreAfter?.let { duration ->
-            autoTask = MinecraftServer.getSchedulerManager()
-                .buildTask { restore() }
-                .delay(TaskSchedule.duration(duration))
-                .schedule()
+            autoTask = delay(duration) { restore() }
         }
     }
 

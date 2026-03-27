@@ -2,10 +2,10 @@ package me.nebula.orbit.utils.leaderboard
 
 import me.nebula.gravity.ranking.Periodicity
 import me.nebula.gravity.ranking.RankedPlayer
+import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.scheduler.repeat
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -28,7 +28,6 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-private val miniMessage = MiniMessage.miniMessage()
 private val periodicities = Periodicity.entries.toTypedArray()
 private val nextEntityId = AtomicInteger(-2_000_000)
 

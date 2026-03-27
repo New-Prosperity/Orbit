@@ -4,8 +4,11 @@ import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.cooldown.Cooldown
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.particle.ParticleShape
+import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Player
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.particle.Particle
@@ -20,8 +23,25 @@ object GadgetManager {
 
     private val cooldowns = ConcurrentHashMap<String, Cooldown<UUID>>()
     private val activeGadgets = ConcurrentHashMap<UUID, String>()
+    private var eventNode: EventNode<*>? = null
 
     const val GADGET_SLOT = 4
+
+    fun install() {
+        val node = EventNode.all("gadget-manager")
+        node.addListener(PlayerDisconnectEvent::class.java) { event ->
+            unequip(event.player)
+        }
+        MinecraftServer.getGlobalEventHandler().addChild(node)
+        eventNode = node
+    }
+
+    fun uninstall() {
+        eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        eventNode = null
+        activeGadgets.clear()
+        cooldowns.clear()
+    }
 
     fun equip(player: Player, cosmeticId: String, level: Int) {
         unequip(player)

@@ -1,6 +1,6 @@
 # Freeze
 
-Player movement freeze system using event cancellation.
+Player movement freeze system using event cancellation. State is stored on the Player via `Tag.Boolean("nebula:frozen")`.
 
 ## FreezeManager
 
@@ -10,11 +10,10 @@ Player movement freeze system using event cancellation.
 | `stop()` | Remove listener and unfreeze all |
 | `freeze(player)` | Freeze a player |
 | `unfreeze(player)` | Unfreeze a player |
-| `isFrozen(player)` | Check by player |
-| `isFrozen(uuid)` | Check by UUID |
+| `isFrozen(player)` | Check if player is frozen |
 | `toggle(player)` | Toggle freeze, returns `true` if now frozen |
-| `unfreezeAll()` | Unfreeze everyone |
-| `frozenPlayers()` | `Set<UUID>` of all frozen players |
+| `unfreezeAll()` | Unfreeze all online players |
+| `frozenPlayers()` | `Set<Player>` of all frozen online players |
 
 ## Extension Functions
 

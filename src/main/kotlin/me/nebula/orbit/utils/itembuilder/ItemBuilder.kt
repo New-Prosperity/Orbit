@@ -1,9 +1,9 @@
 package me.nebula.orbit.utils.itembuilder
 
+import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.tooltip.withTooltipStyle
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextDecoration
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.color.Color
 import net.minestom.server.component.DataComponent
 import net.minestom.server.component.DataComponents
@@ -19,8 +19,6 @@ import net.minestom.server.network.player.ResolvableProfile
 import net.minestom.server.registry.RegistryKey
 import net.minestom.server.utils.Unit as MinestomUnit
 import java.util.UUID
-
-private val miniMessage = MiniMessage.miniMessage()
 
 private fun Component.noItalic(): Component =
     decorationIfAbsent(TextDecoration.ITALIC, TextDecoration.State.FALSE)

@@ -1,10 +1,9 @@
 package me.nebula.orbit.utils.weathercontrol
 
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.Weather
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.concurrent.ConcurrentHashMap
 
 enum class WeatherState(val rainLevel: Float, val thunderLevel: Float) {
@@ -28,12 +27,9 @@ object WeatherController {
         instance.weather = Weather(state.rainLevel, state.thunderLevel)
 
         if (durationTicks > 0) {
-            val task = MinecraftServer.getSchedulerManager()
-                .buildTask {
+            val task = delay(durationTicks) {
                     setWeather(instance, WeatherState.SUNNY)
                 }
-                .delay(TaskSchedule.tick(durationTicks))
-                .schedule()
             weatherStates[instance] = WeatherEntry(state, durationTicks, task)
         } else {
             weatherStates[instance] = WeatherEntry(state, -1, null)

@@ -3,9 +3,11 @@ package me.nebula.orbit.utils.knockback
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
+import net.minestom.server.tag.Tag
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 data class KnockbackProfile(
     val name: String,
@@ -19,7 +21,7 @@ data class KnockbackProfile(
 object KnockbackManager {
 
     private val profiles = ConcurrentHashMap<String, KnockbackProfile>()
-    private val playerOverrides = ConcurrentHashMap<java.util.UUID, String>()
+    private val OVERRIDE_TAG = Tag.String("nebula:knockback_override")
 
     val DEFAULT = KnockbackProfile("default")
 
@@ -34,15 +36,15 @@ object KnockbackManager {
     fun get(name: String): KnockbackProfile? = profiles[name]
 
     fun setPlayerProfile(player: Player, profileName: String) {
-        playerOverrides[player.uuid] = profileName
+        player.setTag(OVERRIDE_TAG, profileName)
     }
 
     fun clearPlayerProfile(player: Player) {
-        playerOverrides.remove(player.uuid)
+        player.removeTag(OVERRIDE_TAG)
     }
 
     fun getEffectiveProfile(player: Player): KnockbackProfile =
-        playerOverrides[player.uuid]?.let { profiles[it] } ?: DEFAULT
+        player.getTag(OVERRIDE_TAG)?.let { profiles[it] } ?: DEFAULT
 
     fun all(): Collection<KnockbackProfile> = profiles.values
 }
@@ -50,7 +52,7 @@ object KnockbackManager {
 fun Entity.applyKnockback(source: Entity, profile: KnockbackProfile = KnockbackManager.DEFAULT) {
     val dx = position.x() - source.position.x()
     val dz = position.z() - source.position.z()
-    val dist = kotlin.math.sqrt(dx * dx + dz * dz).coerceAtLeast(0.001)
+    val dist = sqrt(dx * dx + dz * dz).coerceAtLeast(0.001)
     val nx = dx / dist
     val nz = dz / dist
     velocity = Vec(

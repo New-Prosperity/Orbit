@@ -1,11 +1,10 @@
 package me.nebula.orbit.utils.entityformation
 
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -53,7 +52,7 @@ class Formation internal constructor(
     fun animate(entities: List<Entity>, center: Pos, speed: Double): Task {
         animationTask?.cancel()
         var angle = 0.0
-        val task = MinecraftServer.getSchedulerManager().buildTask {
+        val task = repeat(1) {
             angle += speed
             val rotatedCenter = center.withYaw((center.yaw() + angle).toFloat())
             val positions = computePositions(rotatedCenter, entities.size)
@@ -62,7 +61,7 @@ class Formation internal constructor(
                     entity.teleport(positions[index])
                 }
             }
-        }.repeat(TaskSchedule.tick(1)).schedule()
+        }
         animationTask = task
         return task
     }

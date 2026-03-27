@@ -1,19 +1,16 @@
 package me.nebula.orbit.cosmetic
 
 import me.nebula.gravity.cosmetic.CosmeticCategory
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 
 object AuraManager {
 
     private var task: Task? = null
 
     fun install() {
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask { tick() }
-            .repeat(TaskSchedule.tick(5))
-            .schedule()
+        task = repeat(5) { tick() }
     }
 
     fun uninstall() {

@@ -1,9 +1,9 @@
 package me.nebula.orbit.utils.actionbar
 
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.JoinConfiguration
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.Event
@@ -31,7 +31,6 @@ object ActionBarManager {
     var separator: Component = Component.text(" \u2502 ", NamedTextColor.DARK_GRAY)
     private const val RESEND_INTERVAL = 40
 
-    private val miniMessage = MiniMessage.miniMessage()
     private val state = ConcurrentHashMap<UUID, PlayerActionBarState>()
 
     fun set(

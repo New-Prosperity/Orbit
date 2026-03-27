@@ -30,6 +30,8 @@ import me.nebula.gravity.messaging.TransferPlayerMessage
 import me.nebula.gravity.server.ServerStore
 import me.nebula.gravity.server.activeHubPredicate
 import me.nebula.gravity.server.activeLimboPredicate
+import me.nebula.gravity.mission.ActiveMission
+import me.nebula.gravity.mission.MissionData
 import me.nebula.gravity.mission.MissionStore
 import me.nebula.gravity.party.PartyLookupStore
 import me.nebula.gravity.party.PartyStore
@@ -49,6 +51,8 @@ import me.nebula.gravity.session.SessionStore
 import me.nebula.gravity.stats.StatsStore
 import me.nebula.orbit.commands.installBasicCommands
 import me.nebula.orbit.commands.installGameCommands
+import me.nebula.orbit.commands.settingsCommand
+import me.nebula.orbit.commands.vanishCommand
 import me.nebula.orbit.cosmetic.*
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.game.battleroyale.BattleRoyaleMode
@@ -65,6 +69,16 @@ import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.customcontent.CustomContentRegistry
 import me.nebula.gravity.cache.PlayerCache
 import me.nebula.gravity.leveling.LevelStore
+import me.nebula.gravity.nick.NickData
+import me.nebula.gravity.nick.NickPoolManager
+import me.nebula.gravity.nick.NickPoolStore
+import me.nebula.gravity.nick.NickStore
+import me.nebula.gravity.rank.RankManager
+import me.nebula.orbit.nick.NickManager
+import me.nebula.orbit.nick.nickCommands
+import me.nebula.orbit.staff.StaffSpectateManager
+import me.nebula.orbit.staff.spectateCommand
+import me.nebula.orbit.utils.vanish.VanishManager
 import me.nebula.orbit.utils.actionbar.ActionBarManager
 import me.nebula.orbit.utils.bossbar.AnimatedBossBarManager
 import me.nebula.orbit.utils.counter.AnimatedCounterManager
@@ -77,19 +91,25 @@ import me.nebula.orbit.utils.hud.*
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.modelEngineCommand
+import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.screen.screenTestCommand
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
+import net.minestom.server.timer.Task
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
-import net.minestom.server.timer.TaskSchedule
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.nio.file.Path
+import java.time.DayOfWeek
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.temporal.TemporalAdjusters
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -115,8 +135,8 @@ object Orbit {
         private set
 
     private val logger = logger("Orbit")
-    val miniMessage = MiniMessage.miniMessage()
     private val localeCache = ConcurrentHashMap<UUID, String>()
+    private val globalTasks = mutableListOf<Task>()
 
     fun localeOf(playerId: UUID): String =
         localeCache[playerId] ?: translations.defaultLocale
@@ -203,6 +223,8 @@ object Orbit {
                         +BattlePassStore
                         +MissionStore
                         +LevelStore
+                        +NickStore
+                        +NickPoolStore
                     }
                 }
             }
@@ -334,6 +356,10 @@ object Orbit {
         commandManager.register(screenTestCommand())
         commandManager.register(armorTestCommand())
         commandManager.register(tooltipCommand())
+        nickCommands().forEach(commandManager::register)
+        commandManager.register(vanishCommand())
+        commandManager.register(settingsCommand())
+        commandManager.register(spectateCommand())
         commandManager.register(command("cosmetics") {
             onPlayerExecute { CosmeticMenu.openCategoryMenu(player) }
         })
@@ -367,12 +393,16 @@ object Orbit {
         AuraManager.install()
         CompanionManager.install()
         PetManager.install()
+        GadgetManager.install()
         GravestoneManager.install()
         CosmeticMountManager.install()
 
         mode.install(handler)
 
         PlayerCache.installListeners()
+        NickManager.installListeners()
+        VanishManager.installListeners()
+        StaffSpectateManager.installListeners()
 
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
             event.spawningInstance = mode.activeInstance
@@ -392,10 +422,32 @@ object Orbit {
             cacheLocale(player.uuid, locale)
             AchievementRegistry.loadPlayer(player.uuid)
 
+            val nickData = cached.nick
+            if (nickData != null) {
+                NickManager.applyNick(player, nickData)
+            } else if (cached.preferences.streamerMode && RankManager.hasPermission(player.uuid, "nebula.streamer") && !NickManager.isNicked(player)) {
+                val entry = NickPoolManager.claimRandom()
+                if (entry != null) {
+                    val autoNick = NickData(entry.name, entry.skinTextures, entry.skinSignature, entry.identity)
+                    NickStore.save(player.uuid, autoNick)
+                    NickManager.applyNick(player, autoNick)
+                }
+            }
+
+            if (cached.preferences.staffAutoVanish && RankManager.hasPermission(player.uuid, "staff.vanish") && !VanishManager.isVanished(player)) {
+                VanishManager.vanish(player)
+            }
+
+            for (other in event.spawnInstance.players) {
+                if (other === player) continue
+                val otherNick = PlayerCache.get(other.uuid)?.nick ?: continue
+                NickManager.sendNickedInfoTo(viewer = player, target = other, otherNick)
+            }
+
             Thread.startVirtualThread {
                 if (MissionStore.load(player.uuid) == null) {
                     val daily = MissionRegistry.randomDaily(3).map { t ->
-                        me.nebula.gravity.mission.ActiveMission(
+                        ActiveMission(
                             t.id,
                             t.type,
                             t.target,
@@ -404,7 +456,7 @@ object Orbit {
                         )
                     }
                     val weekly = MissionRegistry.randomWeekly(3).map { t ->
-                        me.nebula.gravity.mission.ActiveMission(
+                        ActiveMission(
                             t.id,
                             t.type,
                             t.target,
@@ -414,7 +466,7 @@ object Orbit {
                     }
                     val now = System.currentTimeMillis()
                     MissionStore.save(
-                        player.uuid, me.nebula.gravity.mission.MissionData(
+                        player.uuid, MissionData(
                             dailyMissions = daily,
                             weeklyMissions = weekly,
                             dailyResetAt = nextDailyReset(now),
@@ -440,25 +492,10 @@ object Orbit {
             }
         }
 
-        MinecraftServer.getSchedulerManager()
-            .buildTask { OnlinePlayerCache.refresh() }
-            .repeat(TaskSchedule.seconds(5))
-            .schedule()
-
-        MinecraftServer.getSchedulerManager()
-            .buildTask { HudManager.tick() }
-            .repeat(TaskSchedule.tick(2))
-            .schedule()
-
-        MinecraftServer.getSchedulerManager()
-            .buildTask { ActionBarManager.tick() }
-            .repeat(TaskSchedule.tick(2))
-            .schedule()
-
-        MinecraftServer.getSchedulerManager()
-            .buildTask { TabListManager.tick() }
-            .repeat(TaskSchedule.tick(20))
-            .schedule()
+        globalTasks += repeat(Duration.ofSeconds(5)) { OnlinePlayerCache.refresh() }
+        globalTasks += repeat(2) { HudManager.tick() }
+        globalTasks += repeat(2) { ActionBarManager.tick() }
+        globalTasks += repeat(20) { TabListManager.tick() }
 
         server.start("0.0.0.0", port)
 
@@ -472,10 +509,7 @@ object Orbit {
 
         val pUuid = provisionUuid
         if (pUuid != null) {
-            MinecraftServer.getSchedulerManager()
-                .buildTask { syncConnectedPlayers() }
-                .repeat(TaskSchedule.seconds(5))
-                .schedule()
+            globalTasks += repeat(Duration.ofSeconds(5)) { syncConnectedPlayers() }
         }
 
         Runtime.getRuntime().addShutdownHook(Thread {
@@ -512,10 +546,16 @@ object Orbit {
                 logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
                 runCatching { NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid)) }
             }
+            globalTasks.forEach { it.cancel() }
+            globalTasks.clear()
+            NickManager.uninstallListeners()
+            VanishManager.uninstallListeners()
+            StaffSpectateManager.uninstallListeners()
             CosmeticListener.uninstall()
             AuraManager.uninstall()
             CompanionManager.uninstall()
             PetManager.uninstall()
+            GadgetManager.uninstall()
             GravestoneManager.uninstall()
             CosmeticMountManager.uninstall()
             ModelEngine.uninstall()
@@ -526,15 +566,15 @@ object Orbit {
     }
 
     private fun nextDailyReset(now: Long): Long {
-        val tomorrow = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC)
-            .toLocalDate().plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC)
+        val tomorrow = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC)
+            .toLocalDate().plusDays(1).atStartOfDay(ZoneOffset.UTC)
         return tomorrow.toInstant().toEpochMilli()
     }
 
     private fun nextWeeklyReset(now: Long): Long {
-        val date = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC).toLocalDate()
-        val nextMonday = date.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY))
-        return nextMonday.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        val date = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).toLocalDate()
+        val nextMonday = date.with(TemporalAdjusters.next(DayOfWeek.MONDAY))
+        return nextMonday.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
     }
 
     private fun resolveMode(worldPath: String? = null): ServerMode =

@@ -1,8 +1,11 @@
 package me.nebula.orbit.utils.condition
 
 import me.nebula.orbit.utils.permissions.PermissionManager
+import me.nebula.orbit.utils.region.Region
 import net.minestom.server.entity.Player
+import net.minestom.server.instance.Instance
 import net.minestom.server.item.Material
+import net.minestom.server.potion.PotionEffect
 
 fun interface Condition<T> {
     fun test(target: T): Boolean
@@ -47,7 +50,7 @@ fun hasItem(material: Material): Condition<Player> = Condition { player ->
 fun hasPermission(permission: String): Condition<Player> =
     Condition { PermissionManager.hasPermission(it.uuid, permission) }
 
-fun isInRegion(region: me.nebula.orbit.utils.region.Region): Condition<Player> =
+fun isInRegion(region: Region): Condition<Player> =
     Condition { region.contains(it.position) }
 
 fun isOnGround(): Condition<Player> = Condition { it.isOnGround }
@@ -61,9 +64,30 @@ fun hasMinPlayers(count: Int): Condition<Player> = Condition { player ->
     instance.players.size >= count
 }
 
-fun isInInstance(instance: net.minestom.server.instance.Instance): Condition<Player> =
+fun isInInstance(instance: Instance): Condition<Player> =
     Condition { it.instance == instance }
 
 fun hasExperience(min: Int): Condition<Player> = Condition { it.level >= min }
+
+fun isFlying(): Condition<Player> = Condition { it.isFlying }
+
+fun isDay(): Condition<Player> = Condition { player ->
+    val instance = player.instance ?: return@Condition false
+    instance.time % 24000 < 12000
+}
+
+fun isNight(): Condition<Player> = Condition { player ->
+    val instance = player.instance ?: return@Condition false
+    instance.time % 24000 >= 12000
+}
+
+fun hasEffect(effect: PotionEffect): Condition<Player> = Condition { player ->
+    player.activeEffects.any { it.potion().effect() == effect }
+}
+
+fun maxPlayers(count: Int): Condition<Player> = Condition { player ->
+    val instance = player.instance ?: return@Condition false
+    instance.players.size <= count
+}
 
 fun Player.meets(condition: Condition<Player>): Boolean = condition.test(this)

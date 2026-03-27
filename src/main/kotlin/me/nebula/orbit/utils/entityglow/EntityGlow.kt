@@ -1,12 +1,13 @@
 package me.nebula.orbit.utils.entityglow
 
+import me.nebula.orbit.utils.scheduler.delay
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Metadata
 import net.minestom.server.entity.Player
 import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -28,17 +29,14 @@ object EntityGlowManager {
         if (glowing) {
             if (viewerMap.containsKey(target.entityId)) return
             sendGlowMetadata(viewer, target, true)
-            val task = MinecraftServer.getSchedulerManager()
-                .buildTask {
+            val task = repeat(20) {
                     if (target.isRemoved || !viewer.isOnline) {
                         viewerMap.remove(target.entityId)?.cancel()
                         if (viewerMap.isEmpty()) glowStates.remove(viewer.uuid)
-                        return@buildTask
+                        return@repeat
                     }
                     sendGlowMetadata(viewer, target, true)
                 }
-                .repeat(TaskSchedule.tick(20))
-                .schedule()
             viewerMap[target.entityId] = task
         } else {
             val task = viewerMap.remove(target.entityId) ?: return
@@ -84,10 +82,7 @@ object EntityGlowManager {
 
     fun setTimedGlowing(target: Entity, durationTicks: Int): Task {
         target.isGlowing = true
-        return MinecraftServer.getSchedulerManager()
-            .buildTask { target.isGlowing = false }
-            .delay(TaskSchedule.tick(durationTicks))
-            .schedule()
+        return delay(durationTicks) { target.isGlowing = false }
     }
 
     private fun sendGlowMetadata(viewer: Player, target: Entity, glowing: Boolean) {

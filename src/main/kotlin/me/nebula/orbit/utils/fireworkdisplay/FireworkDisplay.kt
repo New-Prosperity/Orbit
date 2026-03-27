@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.fireworkdisplay
 
+import me.nebula.orbit.utils.scheduler.delay
 import net.kyori.adventure.text.format.NamedTextColor
-import net.minestom.server.MinecraftServer
 import net.minestom.server.color.Color
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -9,7 +9,6 @@ import net.minestom.server.entity.Entity
 import net.minestom.server.entity.EntityType
 import net.minestom.server.instance.Instance
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 
 enum class FireworkShape {
     BALL,
@@ -87,12 +86,9 @@ class FireworkShowRunner @PublishedApi internal constructor(
     fun start() {
         val grouped = launches.groupBy { it.tickOffset }
         grouped.forEach { (tickOffset, group) ->
-            val task = MinecraftServer.getSchedulerManager()
-                .buildTask {
+            val task = delay(tickOffset.coerceAtLeast(1)) {
                     group.forEach { scheduled -> spawnFirework(scheduled.firework) }
                 }
-                .delay(TaskSchedule.tick(tickOffset.coerceAtLeast(1)))
-                .schedule()
             tasks.add(task)
         }
     }
@@ -110,13 +106,10 @@ class FireworkShowRunner @PublishedApi internal constructor(
         entity.setInstance(instance, config.position)
         entities.add(entity)
 
-        MinecraftServer.getSchedulerManager()
-            .buildTask {
+        delay(config.flightTicks) {
                 if (!entity.isRemoved) entity.remove()
                 entities.remove(entity)
             }
-            .delay(TaskSchedule.tick(config.flightTicks))
-            .schedule()
     }
 }
 
@@ -138,9 +131,6 @@ fun Instance.launchFirework(position: Pos, velocity: Vec = Vec(0.0, 20.0, 0.0), 
     val entity = Entity(EntityType.FIREWORK_ROCKET)
     entity.velocity = velocity
     entity.setInstance(this, position)
-    MinecraftServer.getSchedulerManager()
-        .buildTask { if (!entity.isRemoved) entity.remove() }
-        .delay(TaskSchedule.tick(flightTicks))
-        .schedule()
+    delay(flightTicks) { if (!entity.isRemoved) entity.remove() }
     return entity
 }

@@ -1,6 +1,6 @@
 package me.nebula.orbit.utils.deathmessage
 
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.damage.DamageType
@@ -12,7 +12,6 @@ import net.minestom.server.item.ItemStack
 import net.minestom.server.tag.Tag
 import java.util.UUID
 
-private val miniMessage = MiniMessage.miniMessage()
 private val LAST_DAMAGE_TYPE_TAG = Tag.String("util:death_msg:last_damage_type")
 private val LAST_ATTACKER_UUID_TAG = Tag.String("util:death_msg:last_attacker_uuid")
 

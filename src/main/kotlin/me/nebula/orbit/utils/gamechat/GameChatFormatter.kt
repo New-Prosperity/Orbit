@@ -4,14 +4,15 @@ import me.nebula.orbit.rank
 import me.nebula.orbit.rankColor
 import me.nebula.orbit.rankPrefix
 import me.nebula.orbit.mode.game.PlayerTracker
+import me.nebula.orbit.utils.chat.miniMessage
+import me.nebula.orbit.utils.cooldown.Cooldown
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerChatEvent
+import java.time.Duration
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 class ChatContext(
@@ -34,8 +35,6 @@ class GameChatPipeline {
 
     private val processors = CopyOnWriteArrayList<Pair<String, ChatProcessor>>()
     private var eventNode: EventNode<*>? = null
-    private val miniMessage = MiniMessage.miniMessage()
-
     fun addProcessor(name: String, processor: ChatProcessor) {
         processors.add(name to processor)
     }
@@ -135,20 +134,16 @@ class MuteCheckProcessor(private val isMuted: (UUID) -> Boolean) : ChatProcessor
     }
 }
 
-class CooldownProcessor(private val cooldownMillis: Long) : ChatProcessor {
-    private val lastMessageTime = ConcurrentHashMap<UUID, Long>()
+class CooldownProcessor(cooldownMillis: Long) : ChatProcessor {
+    private val cooldown = Cooldown<UUID>(Duration.ofMillis(cooldownMillis))
 
     override fun process(context: ChatContext) {
-        val now = System.currentTimeMillis()
-        val last = lastMessageTime[context.sender.uuid]
-        if (last != null && now - last < cooldownMillis) {
+        if (!cooldown.tryUse(context.sender.uuid)) {
             context.cancelled = true
-            return
         }
-        lastMessageTime[context.sender.uuid] = now
     }
 
-    fun clear() = lastMessageTime.clear()
+    fun clear() = cooldown.resetAll()
 }
 
 class RadiusChatProcessor(private val radius: Double) : ChatProcessor {

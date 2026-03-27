@@ -13,6 +13,7 @@ import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 data class AchievementCategory(val id: String, val displayKey: String)
 
@@ -40,6 +41,8 @@ object AchievementCategories {
     fun unregister(id: String) = registry.remove(id)
 }
 
+data class AchievementReward(val type: String, val amount: Int)
+
 data class Achievement(
     val id: String,
     val name: Component,
@@ -49,6 +52,8 @@ data class Achievement(
     val hidden: Boolean = false,
     val maxProgress: Int = 1,
     val toastFrame: ToastFrame = ToastFrame.TASK,
+    val rewards: List<AchievementReward> = emptyList(),
+    val prerequisites: List<String> = emptyList(),
 )
 
 object AchievementRegistry {
@@ -147,6 +152,11 @@ object AchievementRegistry {
     fun totalInCategory(category: AchievementCategory): Int =
         achievements.values.count { it.category == category }
 
+    fun canUnlock(playerUuid: UUID, achievementId: String): Boolean {
+        val achievement = achievements[achievementId] ?: return false
+        return achievement.prerequisites.all { isCompleted(playerUuid, it) }
+    }
+
     fun clear() {
         achievements.clear()
         localProgress.clear()
@@ -177,8 +187,21 @@ class AchievementBuilder {
     var hidden: Boolean = false
     var maxProgress: Int = 1
     var toastFrame: ToastFrame = ToastFrame.TASK
+    @PublishedApi internal val rewards = mutableListOf<AchievementReward>()
+    @PublishedApi internal val prerequisites = mutableListOf<String>()
 
-    fun build(): Achievement = Achievement(id, name, description, category, icon, hidden, maxProgress, toastFrame)
+    fun reward(type: String, amount: Int) {
+        rewards.add(AchievementReward(type, amount))
+    }
+
+    fun requires(achievementId: String) {
+        prerequisites.add(achievementId)
+    }
+
+    fun build(): Achievement = Achievement(
+        id, name, description, category, icon, hidden, maxProgress, toastFrame,
+        rewards.toList(), prerequisites.toList(),
+    )
 }
 
 inline fun achievement(id: String, block: AchievementBuilder.() -> Unit): Achievement =
@@ -196,7 +219,7 @@ data class AchievementTriggerBinding(
 
 object AchievementTriggerManager {
 
-    private val bindings = java.util.concurrent.CopyOnWriteArrayList<AchievementTriggerBinding>()
+    private val bindings = CopyOnWriteArrayList<AchievementTriggerBinding>()
 
     fun bind(achievementId: String, statKey: String, trigger: AchievementTrigger) {
         bindings += AchievementTriggerBinding(achievementId, statKey, trigger)
@@ -219,4 +242,10 @@ object AchievementTriggerManager {
     fun clear() {
         bindings.clear()
     }
+}
+
+fun progressBar(current: Int, max: Int, length: Int = 20): String {
+    val filled = if (max <= 0) 0 else (current.coerceIn(0, max).toLong() * length / max).toInt()
+    val empty = length - filled
+    return "[${"█".repeat(filled)}${"░".repeat(empty)}]"
 }

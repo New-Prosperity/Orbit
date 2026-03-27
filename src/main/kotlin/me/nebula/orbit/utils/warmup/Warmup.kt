@@ -1,7 +1,8 @@
 package me.nebula.orbit.utils.warmup
 
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
@@ -9,12 +10,9 @@ import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.event.player.PlayerChatEvent
 import net.minestom.server.event.player.PlayerMoveEvent
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-
-private val miniMessage = MiniMessage.miniMessage()
 
 enum class CancelTrigger {
     MOVE,
@@ -54,7 +52,7 @@ object WarmupManager {
         val startTime = System.currentTimeMillis()
         val durationMs = config.duration.toMillis()
 
-        val task = MinecraftServer.getSchedulerManager().buildTask {
+        val task = repeat(2) {
             val elapsed = System.currentTimeMillis() - startTime
             val remainingMs = durationMs - elapsed
             val remaining = Duration.ofMillis(remainingMs.coerceAtLeast(0))
@@ -62,7 +60,7 @@ object WarmupManager {
             if (remainingMs <= 0) {
                 active.remove(player.uuid)
                 config.onCompleteHandler?.invoke(player)
-                return@buildTask
+                return@repeat
             }
 
             config.onTickHandler?.invoke(player, remaining)
@@ -79,7 +77,7 @@ object WarmupManager {
                     .replace("{time}", "%.1f".format(seconds))
                 player.sendActionBar(miniMessage.deserialize(bar))
             }
-        }.repeat(TaskSchedule.tick(2)).schedule()
+        }
 
         active[player.uuid] = ActiveWarmup(
             config = config,

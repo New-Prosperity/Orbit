@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.entitybuilder
 
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.Component
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Entity
@@ -76,7 +77,7 @@ class EntityBuilder @PublishedApi internal constructor(
     fun equip(slot: EquipmentSlot, item: ItemStack) { equipment[slot] = item }
 
     fun name(component: Component) { customName = component }
-    fun name(text: String) { customName = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(text) }
+    fun name(text: String) { customName = miniMessage.deserialize(text) }
     fun nameVisible(visible: Boolean) { nameVisible = visible }
 
     fun onSpawn(block: (SmartEntity) -> Unit) { onSpawn = block }

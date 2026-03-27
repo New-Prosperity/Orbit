@@ -1,8 +1,7 @@
 package me.nebula.orbit.utils.roundmanager
 
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -68,7 +67,7 @@ class RoundManager(
         val roundMs = roundDuration.toMillis()
         val startTime = System.currentTimeMillis()
 
-        activeTask = MinecraftServer.getSchedulerManager().buildTask {
+        activeTask = repeat(1) {
             val elapsed = System.currentTimeMillis() - startTime
             val remaining = roundMs - elapsed
             if (remaining <= 0) {
@@ -76,7 +75,7 @@ class RoundManager(
             } else {
                 onRoundTickHandler?.invoke(currentRound, Duration.ofMillis(remaining))
             }
-        }.repeat(TaskSchedule.tick(1)).schedule()
+        }
     }
 
     fun endRound() {
@@ -94,7 +93,7 @@ class RoundManager(
         val intermissionMs = intermissionDuration.toMillis()
         val startTime = System.currentTimeMillis()
 
-        activeTask = MinecraftServer.getSchedulerManager().buildTask {
+        activeTask = repeat(1) {
             val elapsed = System.currentTimeMillis() - startTime
             val remaining = intermissionMs - elapsed
             if (remaining <= 0) {
@@ -102,7 +101,7 @@ class RoundManager(
             } else {
                 onIntermissionHandler?.invoke(currentRound + 1, Duration.ofMillis(remaining))
             }
-        }.repeat(TaskSchedule.tick(1)).schedule()
+        }
     }
 
     fun endGame() {

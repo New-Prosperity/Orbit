@@ -3,6 +3,8 @@ package me.nebula.orbit.cosmetic
 import me.nebula.gravity.cosmetic.CosmeticCategory
 import me.nebula.gravity.cosmetic.CosmeticPlayerData
 import me.nebula.orbit.mode.config.CosmeticConfig
+import me.nebula.orbit.utils.scheduler.repeat
+import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.Player
@@ -14,7 +16,6 @@ import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.tag.Tag
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 
 private val TRAIL_TICK_TAG = Tag.Long("cosmetic:trail:last_tick").defaultValue(0L)
 private val SHOOTER_TAG = Tag.Integer("mechanic:projectile:shooter")
@@ -108,15 +109,13 @@ object CosmeticListener {
         handler.addChild(node)
         eventNode = node
 
-        projectileTrailTask = net.minestom.server.MinecraftServer.getSchedulerManager()
-            .buildTask { tickProjectileTrails() }
-            .repeat(TaskSchedule.tick(2)).schedule()
+        projectileTrailTask = repeat(2) { tickProjectileTrails() }
     }
 
     fun uninstall() {
         projectileTrailTask?.cancel()
         projectileTrailTask = null
-        eventNode?.let { net.minestom.server.MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
         eventNode = null
         CosmeticDataCache.clear()
     }
@@ -191,7 +190,7 @@ object CosmeticListener {
         category.name in activeConfig.enabledCategories && cosmeticId !in activeConfig.blacklist
 
     private fun tickProjectileTrails() {
-        net.minestom.server.MinecraftServer.getInstanceManager().instances.forEach { instance ->
+        MinecraftServer.getInstanceManager().instances.forEach { instance ->
             instance.entities
                 .filter { it.entityType == EntityType.ARROW || it.entityType == EntityType.SPECTRAL_ARROW }
                 .forEach { projectile ->

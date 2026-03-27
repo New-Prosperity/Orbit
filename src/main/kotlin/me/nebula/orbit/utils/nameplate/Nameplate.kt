@@ -1,9 +1,11 @@
 package me.nebula.orbit.utils.nameplate
 
 import me.nebula.orbit.localeCode
+import me.nebula.orbit.utils.vanish.VanishManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.JoinConfiguration
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.chat.miniMessage
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.EntityType
@@ -18,12 +20,9 @@ import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
 import net.minestom.server.network.packet.server.play.SetPassengersPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-
-private val mm = MiniMessage.miniMessage()
 
 private const val META_NO_GRAVITY = 5
 private const val META_DISPLAY_TRANSLATION = 11
@@ -178,6 +177,7 @@ object NameplateManager {
     }
 
     fun showTo(target: Player, viewer: Player) {
+        if (!VanishManager.canSee(viewer, target)) return
         val plate = activePlates[target.uuid] ?: return
         if (!plate.viewers.add(viewer.uuid)) return
         spawnForViewer(plate, viewer)
@@ -196,15 +196,18 @@ object NameplateManager {
             if (activeLayout != null && !activePlates.containsKey(joiner.uuid)) {
                 apply(joiner)
             }
-            for ((uuid, plate) in activePlates) {
+            for ((uuid, _) in activePlates) {
                 if (uuid == joiner.uuid) continue
                 val target = findPlayer(uuid) ?: continue
+                if (!VanishManager.canSee(joiner, target)) continue
                 showTo(target, joiner)
             }
             val joinerPlate = activePlates[joiner.uuid]
             if (joinerPlate != null) {
                 for (other in MinecraftServer.getConnectionManager().onlinePlayers) {
-                    if (other.uuid != joiner.uuid) showTo(joiner, other)
+                    if (other.uuid == joiner.uuid) continue
+                    if (!VanishManager.canSee(other, joiner)) continue
+                    showTo(joiner, other)
                 }
             }
         }
@@ -217,10 +220,7 @@ object NameplateManager {
             }
         }
 
-        refreshTask = MinecraftServer.getSchedulerManager()
-            .buildTask(::refreshAll)
-            .repeat(TaskSchedule.tick(refreshTicks))
-            .schedule()
+        refreshTask = repeat(refreshTicks) { refreshAll() }
     }
 
     fun uninstall() {
@@ -276,7 +276,7 @@ object NameplateManager {
         val parts = mutableListOf<Component>()
         for (line in plate.layout.lines) {
             val text = line.render(plate.target, viewer) ?: continue
-            parts += mm.deserialize(text)
+            parts += miniMessage.deserialize(text)
         }
         return Component.join(JoinConfiguration.separator(Component.newline()), parts)
     }

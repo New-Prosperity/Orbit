@@ -1,10 +1,10 @@
 package me.nebula.orbit.utils.npcdialog
 
+import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.chat.mm
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.LivingEntity
@@ -14,7 +14,6 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-private val miniMessage = MiniMessage.miniMessage()
 private val commandCounter = AtomicInteger(0)
 
 class DialogOption(

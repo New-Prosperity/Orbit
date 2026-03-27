@@ -2,6 +2,7 @@ package me.nebula.orbit.translation
 
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.localeCode
+import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.mode.config.PlaceholderResolver
 import net.kyori.adventure.text.Component
 import net.minestom.server.entity.Player
@@ -18,7 +19,7 @@ private fun applyPlaceholders(template: String, args: Array<out Pair<String, Str
 fun Player.translate(key: String, vararg args: Pair<String, String>): Component {
     val locale = localeCode
     val template = applyPlaceholders(Orbit.translations.require(key, locale), args)
-    return Orbit.miniMessage.deserialize(template)
+    return miniMessage.deserialize(template)
 }
 
 fun Player.translateRaw(key: String, vararg args: Pair<String, String>): String {
@@ -30,13 +31,13 @@ fun Player.translateRaw(key: String, vararg args: Pair<String, String>): String 
 fun translateDefault(key: String, vararg args: Pair<String, String>): Component {
     val locale = Orbit.translations.defaultLocale
     val template = applyPlaceholders(Orbit.translations.require(key, locale), args)
-    return Orbit.miniMessage.deserialize(template)
+    return miniMessage.deserialize(template)
 }
 
 fun translateFor(uuid: UUID, key: String, vararg args: Pair<String, String>): Component {
     val locale = uuid.localeCode
     val template = applyPlaceholders(Orbit.translations.require(key, locale), args)
-    return Orbit.miniMessage.deserialize(template)
+    return miniMessage.deserialize(template)
 }
 
 fun PlaceholderResolver.resolveTranslated(key: String, player: Player): String {

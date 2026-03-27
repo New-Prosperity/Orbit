@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.modelengine.behavior
 
 import me.nebula.orbit.utils.modelengine.bone.ModelBone
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
+import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -112,11 +113,11 @@ class PlayerLimbBehavior(
             17 to Metadata.Byte(0x7F),
         )))
 
-        MinecraftServer.getSchedulerManager().buildTask {
+        delay(40) {
             if (viewers.contains(player.uuid)) {
                 player.sendPacket(PlayerInfoRemovePacket(listOf(limbUuid)))
             }
-        }.delay(net.minestom.server.timer.TaskSchedule.tick(40)).schedule()
+        }
     }
 
     private fun findPlayer(uuid: UUID): Player? =

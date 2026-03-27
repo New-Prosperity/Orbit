@@ -1,13 +1,14 @@
 package me.nebula.orbit.utils.graceperiod
 
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.entity.EntityAttackEvent
 import net.minestom.server.event.entity.EntityDamageEvent
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerMoveEvent
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
@@ -121,13 +122,14 @@ object GracePeriodManager {
             }
         }
 
+        node.addListener(PlayerDisconnectEvent::class.java) { event ->
+            active.remove(event.player.uuid)
+        }
+
         MinecraftServer.getGlobalEventHandler().addChild(node)
         eventNode = node
 
-        cleanupTask = MinecraftServer.getSchedulerManager()
-            .buildTask { cleanupExpired() }
-            .repeat(TaskSchedule.tick(20))
-            .schedule()
+        cleanupTask = repeat(20) { cleanupExpired() }
     }
 
     private fun cleanupExpired() {

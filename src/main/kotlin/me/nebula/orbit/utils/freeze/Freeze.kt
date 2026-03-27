@@ -4,18 +4,17 @@ import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerMoveEvent
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
+import net.minestom.server.tag.Tag
 
 object FreezeManager {
 
-    private val frozen = ConcurrentHashMap.newKeySet<UUID>()
+    private val TAG = Tag.Boolean("nebula:frozen")
     private var eventNode: EventNode<*>? = null
 
     fun start() {
         val node = EventNode.all("freeze-manager")
         node.addListener(PlayerMoveEvent::class.java) { event ->
-            if (frozen.contains(event.player.uuid)) {
+            if (event.player.getTag(TAG) == true) {
                 event.isCancelled = true
             }
         }
@@ -26,24 +25,30 @@ object FreezeManager {
     fun stop() {
         eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
         eventNode = null
-        frozen.clear()
+        unfreezeAll()
     }
 
-    fun freeze(player: Player) { frozen.add(player.uuid) }
-    fun unfreeze(player: Player) { frozen.remove(player.uuid) }
-    fun isFrozen(player: Player): Boolean = frozen.contains(player.uuid)
-    fun isFrozen(uuid: UUID): Boolean = frozen.contains(uuid)
+    fun freeze(player: Player) { player.setTag(TAG, true) }
+    fun unfreeze(player: Player) { player.removeTag(TAG) }
+    fun isFrozen(player: Player): Boolean = player.getTag(TAG) == true
     fun toggle(player: Player): Boolean {
-        return if (frozen.contains(player.uuid)) {
-            frozen.remove(player.uuid)
+        return if (isFrozen(player)) {
+            unfreeze(player)
             false
         } else {
-            frozen.add(player.uuid)
+            freeze(player)
             true
         }
     }
-    fun unfreezeAll() = frozen.clear()
-    fun frozenPlayers(): Set<UUID> = frozen.toSet()
+
+    fun unfreezeAll() {
+        MinecraftServer.getConnectionManager().onlinePlayers.forEach { it.removeTag(TAG) }
+    }
+
+    fun frozenPlayers(): Set<Player> =
+        MinecraftServer.getConnectionManager().onlinePlayers
+            .filter { it.getTag(TAG) == true }
+            .toSet()
 }
 
 val Player.isFrozen: Boolean get() = FreezeManager.isFrozen(this)

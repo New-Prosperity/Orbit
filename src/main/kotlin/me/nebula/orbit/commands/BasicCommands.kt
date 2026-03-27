@@ -14,13 +14,11 @@ import net.minestom.server.entity.Player
 import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.entity.EntityDamageEvent
-import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
+import net.minestom.server.tag.Tag
 
-private val godPlayers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+private val GOD_TAG = Tag.Boolean("nebula:god_mode")
 private var eventNode: EventNode<*>? = null
 
 fun installBasicCommands(commandManager: CommandManager) {
@@ -45,12 +43,9 @@ fun installBasicCommands(commandManager: CommandManager) {
     val node = EventNode.all("basic-commands")
     node.addListener(EntityDamageEvent::class.java) { event ->
         val entity = event.entity
-        if (entity is Player && entity.uuid in godPlayers) {
+        if (entity is Player && entity.getTag(GOD_TAG) == true) {
             event.isCancelled = true
         }
-    }
-    node.addListener(PlayerDisconnectEvent::class.java) { event ->
-        godPlayers.remove(event.player.uuid)
     }
     MinecraftServer.getGlobalEventHandler().addChild(node)
     eventNode = node
@@ -59,7 +54,6 @@ fun installBasicCommands(commandManager: CommandManager) {
 fun uninstallBasicCommands() {
     eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
     eventNode = null
-    godPlayers.clear()
 }
 
 private fun resolveOnline(name: String): Player? =
@@ -344,11 +338,11 @@ private fun godCommand() = command("god") {
             player.sendMM("<red>Player not found: <white>${cmdArgs!![0]}")
             return@onPlayerExecute
         }
-        val enabled = if (target.uuid in godPlayers) {
-            godPlayers.remove(target.uuid)
+        val enabled = if (target.getTag(GOD_TAG) == true) {
+            target.removeTag(GOD_TAG)
             false
         } else {
-            godPlayers.add(target.uuid)
+            target.setTag(GOD_TAG, true)
             true
         }
         val state = if (enabled) "<green>enabled" else "<red>disabled"

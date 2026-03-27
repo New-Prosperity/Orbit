@@ -53,7 +53,7 @@ pipeline.uninstall()
 | `DeadPlayerDimProcessor(tracker)` | Dims dead player messages (dark gray + skull) |
 | `SpectatorIsolationProcessor(tracker)` | Spectators see only spectator chat, alive see only alive |
 | `MuteCheckProcessor(predicate)` | Cancels message if sender is muted |
-| `CooldownProcessor(millis)` | Enforces per-player chat cooldown |
+| `CooldownProcessor(millis)` | Enforces per-player chat cooldown via `Cooldown<UUID>` from the cooldown util |
 | `RadiusChatProcessor(radius)` | Proximity chat — filters recipients by distance |
 
 ### Custom Processors

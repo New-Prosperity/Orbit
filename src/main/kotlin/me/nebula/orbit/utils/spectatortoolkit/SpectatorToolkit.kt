@@ -5,10 +5,10 @@ import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.hotbar.Hotbar
 import me.nebula.orbit.utils.hotbar.hotbar
 import me.nebula.orbit.utils.itembuilder.itemStack
+import me.nebula.orbit.utils.vanish.VanishManager
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
+import net.minestom.server.tag.Tag
 
 class SpectatorToolkit @PublishedApi internal constructor(
     private val nextTarget: (Player) -> Player?,
@@ -18,7 +18,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
     private val onLeave: ((Player) -> Unit)?,
 ) {
 
-    private val currentSpeedIndex = ConcurrentHashMap<UUID, Int>()
+    private val speedIndexTag = Tag.Integer("spectator:speed_index")
     private var hotbar: Hotbar? = null
 
     fun install() {
@@ -78,7 +78,6 @@ class SpectatorToolkit @PublishedApi internal constructor(
     fun uninstall() {
         hotbar?.uninstall()
         hotbar = null
-        currentSpeedIndex.clear()
     }
 
     fun apply(player: Player) {
@@ -86,15 +85,15 @@ class SpectatorToolkit @PublishedApi internal constructor(
     }
 
     fun remove(player: Player) {
-        currentSpeedIndex.remove(player.uuid)
+        player.removeTag(speedIndexTag)
         hotbar?.remove(player)
         player.flyingSpeed = DEFAULT_FLY_SPEED
     }
 
     private fun cycleSpeed(player: Player) {
         if (speedSteps.isEmpty()) return
-        val index = (currentSpeedIndex.getOrDefault(player.uuid, 0) + 1) % speedSteps.size
-        currentSpeedIndex[player.uuid] = index
+        val index = ((player.getTag(speedIndexTag) ?: 0) + 1) % speedSteps.size
+        player.setTag(speedIndexTag, index)
         val speed = speedSteps[index]
         player.flyingSpeed = DEFAULT_FLY_SPEED * speed
         player.sendActionBar(
@@ -103,7 +102,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
     }
 
     private fun openPlayerSelector(spectator: Player) {
-        val alive = alivePlayers()
+        val alive = alivePlayers().filter { VanishManager.canSee(spectator, it) }
         if (alive.isEmpty()) return
 
         val rows = ((alive.size + 8) / 9).coerceIn(1, 6)
@@ -112,6 +111,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
                 if (index >= rows * 9) return@forEachIndexed
                 slot(index, itemStack(Material.PLAYER_HEAD) {
                     name("<yellow>${target.username}")
+                    clean()
                 }) { player ->
                     player.closeInventory()
                     player.spectate(target)

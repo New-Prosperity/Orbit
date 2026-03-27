@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.killfeed
 
 import me.nebula.orbit.mode.game.PlayerTracker
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.utils.vanish.VanishManager
 import net.kyori.adventure.key.Key
 import net.kyori.adventure.sound.Sound
 import net.minestom.server.MinecraftServer
@@ -39,7 +40,11 @@ class KillFeed @PublishedApi internal constructor(
     private val firstBloodClaimed = AtomicBoolean(false)
 
     fun reportKill(event: KillEvent) {
-        val viewers = broadcastProvider()
+        val allViewers = broadcastProvider()
+        val viewers = allViewers.filter { viewer ->
+            (event.killer == null || VanishManager.canSee(viewer, event.killer)) &&
+                VanishManager.canSee(viewer, event.victim)
+        }
 
         for (viewer in viewers) {
             viewer.sendMessage(renderer.render(event, viewer))
@@ -54,6 +59,10 @@ class KillFeed @PublishedApi internal constructor(
             handleMultiKill(event.killer, viewers)
             handleStreak(event.killer, viewers)
         }
+    }
+
+    fun removePlayer(uuid: UUID) {
+        multiKillTracker.remove(uuid)
     }
 
     fun clear() {

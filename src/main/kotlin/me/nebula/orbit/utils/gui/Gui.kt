@@ -1,9 +1,10 @@
 package me.nebula.orbit.utils.gui
 
+import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.sound.playSound
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
@@ -17,8 +18,6 @@ import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
 import net.minestom.server.tag.Tag
 import java.util.concurrent.atomic.AtomicBoolean
-
-private val miniMessage = MiniMessage.miniMessage()
 
 val CUSTOM_GUI_TAG: Tag<Boolean> = Tag.Boolean("nebula:custom_gui").defaultValue(false)
 
@@ -99,9 +98,7 @@ class Gui(
         guiNode.addListener(InventoryCloseEvent::class.java) { event ->
             if (event.inventory !== inventory) return@addListener
             if (preventClose) {
-                MinecraftServer.getSchedulerManager().buildTask {
-                    event.player.openInventory(inventory)
-                }.delay(net.minestom.server.timer.TaskSchedule.tick(1)).schedule()
+                delay(1) { event.player.openInventory(inventory) }
                 return@addListener
             }
             cleanup(event.player)

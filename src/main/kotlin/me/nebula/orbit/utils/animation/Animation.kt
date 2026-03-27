@@ -1,6 +1,6 @@
 package me.nebula.orbit.utils.animation
 
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.coordinate.Point
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -9,7 +9,6 @@ import net.minestom.server.instance.Instance
 import net.minestom.server.instance.block.Block
 import net.minestom.server.network.packet.server.play.BlockChangePacket
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 
 data class BlockFrame(val positions: Map<Point, Block>)
 
@@ -36,10 +35,7 @@ class BlockAnimation(
             }
         }
 
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask(::tick)
-            .repeat(TaskSchedule.tick(intervalTicks))
-            .schedule()
+        task = repeat(intervalTicks) { tick() }
     }
 
     fun stop() {
@@ -94,10 +90,7 @@ class EntityAnimation(
     private var progress = 0f
 
     fun start() {
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask(::tick)
-            .repeat(TaskSchedule.tick(intervalTicks))
-            .schedule()
+        task = repeat(intervalTicks) { tick() }
     }
 
     fun stop() {

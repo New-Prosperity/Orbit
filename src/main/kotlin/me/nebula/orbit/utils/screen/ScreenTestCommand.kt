@@ -9,14 +9,13 @@ import me.nebula.orbit.utils.screen.canvas.linearGradient
 import me.nebula.orbit.utils.screen.canvas.roundedRect
 import me.nebula.orbit.utils.screen.canvas.stroke
 import me.nebula.orbit.utils.screen.font.DEFAULT_FONT
+import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.screen.font.drawText
 import net.kyori.adventure.text.Component
-import net.minestom.server.MinecraftServer
 import net.minestom.server.command.builder.Command
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
-import net.minestom.server.timer.TaskSchedule
 
 private const val EYE_HEIGHT = 1.62
 
@@ -100,23 +99,20 @@ fun screenTestCommand(): Command = command("screen") {
             ))
 
             var tickTask: net.minestom.server.timer.Task? = null
-            tickTask = MinecraftServer.getSchedulerManager()
-                .buildTask {
-                    if (!Screen.isOpen(player)) {
-                        tickTask?.cancel()
-                        return@buildTask
-                    }
-                    Screen.update(player) { canvas ->
-                        canvas.roundedRect(60, 320, 200, 16, 4, 0xFF333333.toInt())
-                        val fillW = (200 * progress).toInt()
-                        if (fillW > 0) {
-                            canvas.roundedRect(60, 320, fillW, 16, 4, 0xFF4CAF50.toInt())
-                        }
-                    }
-                    if (!animCtrl.hasActive()) tickTask?.cancel()
+            tickTask = repeat(1) {
+                if (!Screen.isOpen(player)) {
+                    tickTask?.cancel()
+                    return@repeat
                 }
-                .repeat(TaskSchedule.tick(1))
-                .schedule()
+                Screen.update(player) { canvas ->
+                    canvas.roundedRect(60, 320, 200, 16, 4, 0xFF333333.toInt())
+                    val fillW = (200 * progress).toInt()
+                    if (fillW > 0) {
+                        canvas.roundedRect(60, 320, fillW, 16, 4, 0xFF4CAF50.toInt())
+                    }
+                }
+                if (!animCtrl.hasActive()) tickTask?.cancel()
+            }
         }
     }
 
@@ -238,16 +234,13 @@ fun screenTestCommand(): Command = command("screen") {
             }
 
             var tickTask: net.minestom.server.timer.Task? = null
-            tickTask = MinecraftServer.getSchedulerManager()
-                .buildTask {
-                    if (!Screen.isOpen(player)) {
-                        tickTask?.cancel()
-                        return@buildTask
-                    }
-                    Screen.update(player) {}
+            tickTask = repeat(2) {
+                if (!Screen.isOpen(player)) {
+                    tickTask?.cancel()
+                    return@repeat
                 }
-                .repeat(TaskSchedule.tick(2))
-                .schedule()
+                Screen.update(player) {}
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 # AFK Detector
 
-Automatic AFK detection based on player movement and chat activity. Registers a scoped event node and periodic check task.
+Automatic AFK detection based on player movement and chat activity. State is stored on the Player via `Tag.Long("nebula:afk_last_activity")` and `Tag.Boolean("nebula:afk")`. Registers a scoped event node and periodic check task.
 
 ## Key Classes
 
@@ -32,6 +32,6 @@ AfkDetector.stop()
 
 - Listens to `PlayerMoveEvent` and `PlayerChatEvent` to track activity
 - Checks every 10 seconds for players exceeding the threshold
-- Automatically cleans up disconnected players
+- Tags are automatically cleaned up when players disconnect (Player object is released)
 - `onAfk` fires once when a player becomes AFK
 - `onReturn` fires once when an AFK player becomes active again

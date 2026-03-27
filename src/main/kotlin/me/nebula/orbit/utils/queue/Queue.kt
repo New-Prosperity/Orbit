@@ -1,9 +1,12 @@
 package me.nebula.orbit.utils.queue
 
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
+import net.minestom.server.event.Event
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
@@ -78,16 +81,13 @@ class GameQueue(
     private fun startCountdown() {
         state = QueueState.COUNTDOWN
         countdown = countdownTicks
-        countdownTask = MinecraftServer.getSchedulerManager()
-            .buildTask {
+        countdownTask = repeat(1) {
                 countdown--
                 onCountdownTick?.invoke(countdown)
                 if (countdown <= 0) {
                     forceStart()
                 }
             }
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
     }
 
     private fun cancelCountdown() {
@@ -142,19 +142,20 @@ class SimpleQueue(
     val requiredPlayers: Int = 1,
 ) {
     private val queue = ConcurrentLinkedQueue<UUID>()
-    private val playerMap = ConcurrentHashMap<UUID, Player>()
 
     val size: Int get() = queue.size
     val isEmpty: Boolean get() = queue.isEmpty()
+
+    private fun resolve(uuid: UUID): Player? =
+        MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
 
     fun join(player: Player): Boolean {
         if (queue.size >= maxSize) return false
         if (queue.contains(player.uuid)) return false
         queue.offer(player.uuid)
-        playerMap[player.uuid] = player
         onJoin(player, queue.size)
         if (queue.size >= requiredPlayers) {
-            val ready = queue.take(requiredPlayers).mapNotNull { playerMap[it] }
+            val ready = queue.take(requiredPlayers).mapNotNull { resolve(it) }
             if (ready.size >= requiredPlayers) {
                 ready.forEach { leave(it) }
                 onReady(ready)
@@ -165,18 +166,23 @@ class SimpleQueue(
 
     fun leave(player: Player): Boolean {
         if (!queue.remove(player.uuid)) return false
-        playerMap.remove(player.uuid)
         onLeave(player)
+        return true
+    }
+
+    fun leave(uuid: UUID): Boolean {
+        val player = resolve(uuid)
+        if (!queue.remove(uuid)) return false
+        player?.let { onLeave(it) }
         return true
     }
 
     fun contains(player: Player): Boolean = queue.contains(player.uuid)
 
-    fun players(): List<Player> = queue.mapNotNull { playerMap[it] }
+    fun players(): List<Player> = queue.mapNotNull { resolve(it) }
 
     fun clear() {
         queue.clear()
-        playerMap.clear()
     }
 
     fun position(player: Player): Int {
@@ -224,6 +230,12 @@ object QueueRegistry {
     fun require(name: String): GameQueue = requireNotNull(queues[name]) { "Queue '$name' not found" }
     fun all(): Map<String, GameQueue> = queues.toMap()
     fun clear() { queues.values.forEach { it.reset() }; queues.clear() }
+
+    fun install(eventNode: EventNode<Event>) {
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            queues.values.forEach { it.leave(event.player.uuid) }
+        }
+    }
 }
 
 fun Player.joinQueue(name: String): JoinResult =

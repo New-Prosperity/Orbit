@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.hologram
 
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
@@ -18,7 +18,6 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-private val miniMessage = MiniMessage.miniMessage()
 private val nextEntityId = AtomicInteger(-1_000_000)
 
 private const val META_NO_GRAVITY = 5

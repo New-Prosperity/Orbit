@@ -3,11 +3,11 @@ package me.nebula.orbit.cosmetic
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.model.StandaloneModelOwner
 import me.nebula.orbit.utils.modelengine.model.standAloneModel
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.instance.Instance
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -25,10 +25,7 @@ object GravestoneManager {
     private var task: Task? = null
 
     fun install() {
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask { tick() }
-            .repeat(TaskSchedule.tick(20))
-            .schedule()
+        task = repeat(20) { tick() }
     }
 
     fun uninstall() {

@@ -1,10 +1,12 @@
 package me.nebula.orbit.utils.npc
 
+import me.nebula.orbit.utils.scheduler.delay
+import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.modelengine.model.ModeledEntityBuilder
 import me.nebula.orbit.utils.modelengine.model.StandaloneModelOwner
 import me.nebula.orbit.utils.modelengine.model.standAloneModel
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -24,13 +26,15 @@ import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
 import net.minestom.server.network.packet.server.play.PlayerInfoRemovePacket
 import net.minestom.server.network.packet.server.play.PlayerInfoUpdatePacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.Event
+import net.minestom.server.timer.Task
 import java.util.EnumSet
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
-private val miniMessage = MiniMessage.miniMessage()
 private val nextEntityId = AtomicInteger(-2_000_000)
 
 private const val META_NO_GRAVITY = 5
@@ -181,9 +185,7 @@ class Npc internal constructor(
             player.sendPacket(EntityEquipmentPacket(entityId, equipment))
         }
 
-        MinecraftServer.getSchedulerManager().buildTask {
-            player.sendPacket(PlayerInfoRemovePacket(listOf(uuid)))
-        }.delay(net.minestom.server.timer.TaskSchedule.tick(40)).schedule()
+        delay(40) { player.sendPacket(PlayerInfoRemovePacket(listOf(uuid))) }
     }
 
     private fun showEntity(player: Player, entity: NpcVisual.EntityVisual) {
@@ -245,6 +247,8 @@ object NpcRegistry {
 
     private val npcs = ConcurrentHashMap<Int, Npc>()
     private val installed = AtomicBoolean(false)
+    private var lookAtTask: Task? = null
+    private var eventNode: EventNode<Event>? = null
 
     fun register(npc: Npc) {
         npcs[npc.entityId] = npc
@@ -264,8 +268,20 @@ object NpcRegistry {
         npcs.clear()
     }
 
+    fun cleanup() {
+        lookAtTask?.cancel()
+        lookAtTask = null
+        val node = eventNode
+        if (node != null) {
+            MinecraftServer.getGlobalEventHandler().removeChild(node)
+            eventNode = null
+        }
+        clear()
+        installed.set(false)
+    }
+
     private fun install() {
-        val node = net.minestom.server.event.EventNode.all("npc-registry")
+        val node = EventNode.all("npc-registry")
 
         node.addListener(net.minestom.server.event.entity.EntityAttackEvent::class.java) { event ->
             val player = event.entity as? Player ?: return@addListener
@@ -278,11 +294,10 @@ object NpcRegistry {
             npc.handleInteract(event.player)
         }
 
+        eventNode = node
         MinecraftServer.getGlobalEventHandler().addChild(node)
 
-        MinecraftServer.getSchedulerManager().buildTask {
-            npcs.values.forEach { it.tickLookAt() }
-        }.repeat(net.minestom.server.timer.TaskSchedule.tick(5)).schedule()
+        lookAtTask = repeat(5) { npcs.values.forEach { it.tickLookAt() } }
     }
 }
 

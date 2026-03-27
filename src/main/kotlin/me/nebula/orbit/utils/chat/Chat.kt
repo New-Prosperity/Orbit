@@ -8,7 +8,7 @@ import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 
-private val miniMessage = MiniMessage.miniMessage()
+val miniMessage: MiniMessage = MiniMessage.miniMessage()
 
 fun mm(text: String, vararg resolvers: TagResolver): Component =
     miniMessage.deserialize(text, *resolvers)

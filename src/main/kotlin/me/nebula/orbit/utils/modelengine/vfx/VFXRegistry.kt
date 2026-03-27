@@ -1,8 +1,7 @@
 package me.nebula.orbit.utils.modelengine.vfx
 
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -29,10 +28,7 @@ object VFXRegistry {
 
     fun install() {
         if (tickTask != null) return
-        tickTask = MinecraftServer.getSchedulerManager()
-            .buildTask(::tick)
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+        tickTask = repeat(1) { tick() }
     }
 
     fun uninstall() {

@@ -1,6 +1,6 @@
 package me.nebula.orbit.utils.playervault
 
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.entity.Player
 import net.minestom.server.inventory.Inventory
 import net.minestom.server.inventory.InventoryType
@@ -14,7 +14,6 @@ class PlayerVaultManager @PublishedApi internal constructor(
 ) {
 
     private val vaults = ConcurrentHashMap<Long, Inventory>()
-    private val miniMessage = MiniMessage.miniMessage()
 
     fun open(player: Player, vaultId: Int = 0) {
         require(vaultId in 0 until maxVaults) { "Vault ID must be in 0..<$maxVaults" }

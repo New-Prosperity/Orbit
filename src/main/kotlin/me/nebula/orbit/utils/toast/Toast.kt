@@ -1,16 +1,14 @@
 package me.nebula.orbit.utils.toast
 
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.sound.Sound
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.entity.Player
 import net.minestom.server.advancements.FrameType
 import net.minestom.server.advancements.Notification
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
-
-private val miniMessage = MiniMessage.miniMessage()
 
 enum class ToastFrame {
     TASK,

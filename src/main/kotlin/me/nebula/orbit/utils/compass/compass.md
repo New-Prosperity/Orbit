@@ -1,6 +1,6 @@
 # CompassTracker
 
-Tracks a target (player or position) for players holding a compass, displaying direction and distance on the action bar.
+Tracks a target (player or position) for players holding a compass, displaying direction and distance on the action bar. Cleans up tracked targets on player disconnect.
 
 ## API
 

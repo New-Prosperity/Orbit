@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.hotbar
 
 import me.nebula.orbit.utils.condition.Condition
 import me.nebula.orbit.utils.gui.CUSTOM_GUI_TAG
+import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.sound.playSound
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
@@ -9,18 +10,24 @@ import net.minestom.server.event.EventNode
 import net.minestom.server.event.inventory.InventoryPreClickEvent
 import net.minestom.server.event.player.PlayerBlockInteractEvent
 import net.minestom.server.event.player.PlayerBlockPlaceEvent
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerHandAnimationEvent
 import net.minestom.server.event.player.PlayerSwapItemEvent
 import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.item.ItemStack
 import net.minestom.server.sound.SoundEvent
-import net.minestom.server.timer.TaskSchedule
+import net.minestom.server.tag.Tag
+import net.minestom.server.timer.Task
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+
+val HOTBAR_ITEM_TAG: Tag<String> = Tag.String("nebula:hotbar_item")
+val ACTIVE_HOTBAR_TAG: Tag<String> = Tag.String("nebula:active_hotbar")
 
 enum class ClickType { RIGHT, LEFT, SHIFT_RIGHT, SHIFT_LEFT }
 
 class HotbarSlot(
+    val id: String,
     val slot: Int,
     val item: ItemStack,
     val dynamicItem: ((Player) -> ItemStack)?,
@@ -41,30 +48,36 @@ class Hotbar(
     val preventPlace: Boolean,
     val refreshIntervalTicks: Int,
 ) {
-    private val activePlayers = ConcurrentHashMap.newKeySet<UUID>()
+    private val slotsById: Map<String, HotbarSlot> = slots.values.associateBy { it.id }
     private val cooldowns = ConcurrentHashMap<Long, Long>()
     private val playerOverrides = ConcurrentHashMap<UUID, ConcurrentHashMap<Int, ItemStack>>()
     val eventNode: EventNode<net.minestom.server.event.Event> = EventNode.all("hotbar:$name")
-    private var refreshTask: net.minestom.server.timer.Task? = null
+    private var refreshTask: Task? = null
+
+    private fun isOurs(player: Player): Boolean =
+        player.getTag(ACTIVE_HOTBAR_TAG) == name
+
+    private fun resolveSlot(player: Player): HotbarSlot? {
+        val id = player.itemInMainHand.getTag(HOTBAR_ITEM_TAG) ?: return null
+        return slotsById[id]
+    }
 
     init {
         eventNode.addListener(PlayerUseItemEvent::class.java) { event ->
-            if (!activePlayers.contains(event.player.uuid)) return@addListener
-            val held = event.player.heldSlot.toInt()
-            val hotbarSlot = slots[held] ?: return@addListener
+            if (!isOurs(event.player)) return@addListener
+            val hotbarSlot = resolveSlot(event.player) ?: return@addListener
             handleClick(event.player, hotbarSlot, ClickType.RIGHT)
         }
 
         eventNode.addListener(PlayerHandAnimationEvent::class.java) { event ->
-            if (!activePlayers.contains(event.player.uuid)) return@addListener
-            val held = event.player.heldSlot.toInt()
-            val hotbarSlot = slots[held] ?: return@addListener
+            if (!isOurs(event.player)) return@addListener
+            val hotbarSlot = resolveSlot(event.player) ?: return@addListener
             if (hotbarSlot.onClick != null) handleClick(event.player, hotbarSlot, ClickType.LEFT)
         }
 
         if (lockInventory) {
             eventNode.addListener(InventoryPreClickEvent::class.java) { event ->
-                if (!activePlayers.contains(event.player.uuid)) return@addListener
+                if (!isOurs(event.player)) return@addListener
                 val openInv = event.player.openInventory
                 if (openInv == null) {
                     event.isCancelled = true
@@ -78,28 +91,32 @@ class Hotbar(
 
         if (preventDrop) {
             eventNode.addListener(net.minestom.server.event.item.ItemDropEvent::class.java) { event ->
-                if (!activePlayers.contains(event.player.uuid)) return@addListener
+                if (!isOurs(event.player)) return@addListener
                 event.isCancelled = true
             }
         }
 
         if (preventSwap) {
             eventNode.addListener(PlayerSwapItemEvent::class.java) { event ->
-                if (!activePlayers.contains(event.player.uuid)) return@addListener
+                if (!isOurs(event.player)) return@addListener
                 event.isCancelled = true
             }
         }
 
         if (preventPlace) {
             eventNode.addListener(PlayerBlockPlaceEvent::class.java) { event ->
-                if (!activePlayers.contains(event.player.uuid)) return@addListener
+                if (!isOurs(event.player)) return@addListener
                 event.isCancelled = true
             }
             eventNode.addListener(PlayerBlockInteractEvent::class.java) { event ->
-                if (!activePlayers.contains(event.player.uuid)) return@addListener
-                val held = event.player.heldSlot.toInt()
-                if (slots.containsKey(held)) event.isCancelled = true
+                if (!isOurs(event.player)) return@addListener
+                val heldItem = event.player.itemInMainHand
+                if (heldItem.getTag(HOTBAR_ITEM_TAG) != null) event.isCancelled = true
             }
+        }
+
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            playerOverrides.remove(event.player.uuid)
         }
     }
 
@@ -110,14 +127,14 @@ class Hotbar(
         for ((slot, entry) in slots) {
             if (entry.visibleWhen != null && !entry.visibleWhen.test(player)) continue
             val override = playerOverrides[player.uuid]?.get(slot)
-            val item = override ?: entry.dynamicItem?.invoke(player) ?: entry.item
+            val item = override ?: entry.dynamicItem?.invoke(player)?.withTag(HOTBAR_ITEM_TAG, entry.id) ?: entry.item
             player.inventory.setItemStack(slot, item)
         }
-        activePlayers.add(player.uuid)
+        player.setTag(ACTIVE_HOTBAR_TAG, name)
     }
 
     fun remove(player: Player) {
-        activePlayers.remove(player.uuid)
+        player.removeTag(ACTIVE_HOTBAR_TAG)
         playerOverrides.remove(player.uuid)
         if (clearOtherSlots) {
             for (i in 0..8) player.inventory.setItemStack(i, ItemStack.AIR)
@@ -127,34 +144,39 @@ class Hotbar(
     }
 
     fun refresh(player: Player) {
-        if (!activePlayers.contains(player.uuid)) return
+        if (!isOurs(player)) return
         for ((slot, entry) in slots) {
             val visible = entry.visibleWhen?.test(player) != false
             val override = playerOverrides[player.uuid]?.get(slot)
-            val item = if (visible) (override ?: entry.dynamicItem?.invoke(player) ?: entry.item) else ItemStack.AIR
+            val item = if (visible) {
+                override ?: entry.dynamicItem?.invoke(player)?.withTag(HOTBAR_ITEM_TAG, entry.id) ?: entry.item
+            } else ItemStack.AIR
             player.inventory.setItemStack(slot, item)
         }
     }
 
     fun refreshAll() {
-        for (uuid in activePlayers) {
-            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
-            refresh(player)
-        }
+        MinecraftServer.getConnectionManager().onlinePlayers
+            .filter { isOurs(it) }
+            .forEach { refresh(it) }
     }
 
     fun refreshSlot(player: Player, slot: Int) {
-        if (!activePlayers.contains(player.uuid)) return
+        if (!isOurs(player)) return
         val entry = slots[slot] ?: return
         val visible = entry.visibleWhen?.test(player) != false
         val override = playerOverrides[player.uuid]?.get(slot)
-        val item = if (visible) (override ?: entry.dynamicItem?.invoke(player) ?: entry.item) else ItemStack.AIR
+        val item = if (visible) {
+            override ?: entry.dynamicItem?.invoke(player)?.withTag(HOTBAR_ITEM_TAG, entry.id) ?: entry.item
+        } else ItemStack.AIR
         player.inventory.setItemStack(slot, item)
     }
 
     fun overrideSlot(player: Player, slot: Int, item: ItemStack) {
-        playerOverrides.getOrPut(player.uuid) { ConcurrentHashMap() }[slot] = item
-        if (activePlayers.contains(player.uuid)) player.inventory.setItemStack(slot, item)
+        val entry = slots[slot] ?: return
+        val tagged = item.withTag(HOTBAR_ITEM_TAG, entry.id)
+        playerOverrides.getOrPut(player.uuid) { ConcurrentHashMap() }[slot] = tagged
+        if (isOurs(player)) player.inventory.setItemStack(slot, tagged)
     }
 
     fun clearOverride(player: Player, slot: Int) {
@@ -167,15 +189,12 @@ class Hotbar(
         refresh(player)
     }
 
-    fun isActive(player: Player): Boolean = activePlayers.contains(player.uuid)
+    fun isActive(player: Player): Boolean = isOurs(player)
 
     fun install() {
         MinecraftServer.getGlobalEventHandler().addChild(eventNode)
         if (refreshIntervalTicks > 0) {
-            refreshTask = MinecraftServer.getSchedulerManager()
-                .buildTask(::refreshAll)
-                .repeat(TaskSchedule.tick(refreshIntervalTicks))
-                .schedule()
+            refreshTask = repeat(refreshIntervalTicks) { refreshAll() }
         }
     }
 
@@ -183,7 +202,9 @@ class Hotbar(
         refreshTask?.cancel()
         refreshTask = null
         MinecraftServer.getGlobalEventHandler().removeChild(eventNode)
-        activePlayers.clear()
+        MinecraftServer.getConnectionManager().onlinePlayers
+            .filter { isOurs(it) }
+            .forEach { remove(it) }
         cooldowns.clear()
         playerOverrides.clear()
     }
@@ -193,7 +214,7 @@ class Hotbar(
         if (slot.visibleWhen != null && !slot.visibleWhen.test(player)) return
 
         if (slot.cooldownTicks > 0) {
-            val key = player.uuid.mostSignificantBits xor slot.slot.toLong()
+            val key = player.uuid.mostSignificantBits xor slot.id.hashCode().toLong()
             val now = System.currentTimeMillis()
             val cooldownMs = slot.cooldownTicks * 50L
             val lastUse = cooldowns[key]
@@ -210,6 +231,7 @@ class HotbarSlotBuilder @PublishedApi internal constructor(
     @PublishedApi internal val slot: Int,
     @PublishedApi internal var item: ItemStack,
 ) {
+    @PublishedApi internal var id: String = "slot_$slot"
     @PublishedApi internal var dynamicItem: ((Player) -> ItemStack)? = null
     @PublishedApi internal var visibleWhen: Condition<Player>? = null
     @PublishedApi internal var cooldownTicks: Int = 4
@@ -217,6 +239,7 @@ class HotbarSlotBuilder @PublishedApi internal constructor(
     @PublishedApi internal var soundPitch: Float = 1f
     @PublishedApi internal var onClick: ((Player, ClickType) -> Unit)? = null
 
+    fun id(value: String) { id = value }
     fun dynamicItem(provider: (Player) -> ItemStack) { dynamicItem = provider }
     fun visibleWhen(condition: Condition<Player>) { visibleWhen = condition }
     fun visibleWhen(predicate: (Player) -> Boolean) { visibleWhen = Condition { predicate(it) } }
@@ -225,8 +248,10 @@ class HotbarSlotBuilder @PublishedApi internal constructor(
     fun onClick(handler: (Player) -> Unit) { onClick = { player, _ -> handler(player) } }
     fun onClick(handler: (Player, ClickType) -> Unit) { onClick = handler }
 
-    @PublishedApi internal fun build(): HotbarSlot =
-        HotbarSlot(slot, item, dynamicItem, visibleWhen, cooldownTicks, sound, soundPitch, onClick)
+    @PublishedApi internal fun build(): HotbarSlot {
+        val taggedItem = item.withTag(HOTBAR_ITEM_TAG, id)
+        return HotbarSlot(id, slot, taggedItem, dynamicItem, visibleWhen, cooldownTicks, sound, soundPitch, onClick)
+    }
 }
 
 class HotbarBuilder @PublishedApi internal constructor(val name: String) {
@@ -247,12 +272,16 @@ class HotbarBuilder @PublishedApi internal constructor(val name: String) {
 
     fun slot(slot: Int, item: ItemStack, onClick: (Player) -> Unit) {
         require(slot in 0..8) { "Hotbar slot must be 0-8" }
-        slots[slot] = HotbarSlot(slot, item, null, null, 4, null, 1f) { player, _ -> onClick(player) }
+        val id = "slot_$slot"
+        val tagged = item.withTag(HOTBAR_ITEM_TAG, id)
+        slots[slot] = HotbarSlot(id, slot, tagged, null, null, 4, null, 1f) { player, _ -> onClick(player) }
     }
 
     fun slot(slot: Int, item: ItemStack, visibleWhen: Condition<Player>, onClick: (Player) -> Unit) {
         require(slot in 0..8) { "Hotbar slot must be 0-8" }
-        slots[slot] = HotbarSlot(slot, item, null, visibleWhen, 4, null, 1f) { player, _ -> onClick(player) }
+        val id = "slot_$slot"
+        val tagged = item.withTag(HOTBAR_ITEM_TAG, id)
+        slots[slot] = HotbarSlot(id, slot, tagged, null, visibleWhen, 4, null, 1f) { player, _ -> onClick(player) }
     }
 
     fun configuredSlot(slot: Int, item: ItemStack, block: HotbarSlotBuilder.() -> Unit) {

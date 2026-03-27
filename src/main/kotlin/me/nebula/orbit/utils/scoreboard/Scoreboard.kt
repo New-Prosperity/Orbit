@@ -1,21 +1,20 @@
 package me.nebula.orbit.utils.scoreboard
 
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
+import java.time.Duration as JavaDuration
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.scoreboard.Sidebar
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
-
-private val miniMessage = MiniMessage.miniMessage()
 
 sealed interface ScoreboardLine {
 
@@ -196,10 +195,7 @@ class AnimatedScoreboard(
         }
         sidebar = sb
 
-        tickTask = MinecraftServer.getSchedulerManager()
-            .buildTask(::advanceFrame)
-            .repeat(TaskSchedule.tick(frameIntervalTicks))
-            .schedule()
+        tickTask = repeat(frameIntervalTicks) { advanceFrame() }
     }
 
     private fun advanceFrame() {
@@ -540,10 +536,7 @@ class LiveScoreboard @PublishedApi internal constructor(
             hide(event.player)
         }
         MinecraftServer.getGlobalEventHandler().addChild(eventNode)
-        refreshTask = MinecraftServer.getSchedulerManager()
-            .buildTask(::refreshAll)
-            .repeat(TaskSchedule.millis(refreshInterval.inWholeMilliseconds))
-            .schedule()
+        refreshTask = repeat(JavaDuration.ofMillis(refreshInterval.inWholeMilliseconds)) { refreshAll() }
     }
 
     fun show(player: Player) {

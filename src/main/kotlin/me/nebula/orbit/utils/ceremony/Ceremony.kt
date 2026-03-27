@@ -9,8 +9,9 @@ import net.kyori.adventure.sound.Sound
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.title.Title
+import me.nebula.orbit.utils.scheduler.delay
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -20,12 +21,9 @@ import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 import net.minestom.server.sound.SoundEvent
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.time.Duration
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
-
-private val miniMessage = MiniMessage.miniMessage()
 
 class Ceremony @PublishedApi internal constructor(
     private val instance: Instance,
@@ -157,53 +155,44 @@ class Ceremony @PublishedApi internal constructor(
 
     private fun startFireworks() {
         val winnerUuid = result.winner?.first
-        fireworkTask = MinecraftServer.getSchedulerManager()
-            .buildTask {
-                if (maxFireworks > 0 && fireworkCount >= maxFireworks) {
-                    fireworkTask?.cancel()
-                    fireworkTask = null
-                    return@buildTask
-                }
-
-                val position = if (winnerUuid != null) {
-                    MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(winnerUuid)?.position
-                } else null
-
-                val pos = position ?: podiumPositions[1] ?: return@buildTask
-
-                val offsets = listOf(
-                    Vec(1.5, 0.0, 0.0), Vec(-1.5, 0.0, 0.0),
-                    Vec(0.0, 0.0, 1.5), Vec(0.0, 0.0, -1.5),
-                    Vec(1.0, 0.0, 1.0), Vec(-1.0, 0.0, -1.0),
-                )
-                val offset = offsets[fireworkCount % offsets.size]
-
-                val entity = Entity(EntityType.FIREWORK_ROCKET)
-                entity.velocity = Vec(offset.x() * 2, 25.0 + (Math.random() * 5), offset.z() * 2)
-                entity.setInstance(instance, pos.add(offset.x(), 0.0, offset.z()))
-                fireworkEntities.add(entity)
-
-                MinecraftServer.getSchedulerManager()
-                    .buildTask { if (!entity.isRemoved) entity.remove() }
-                    .delay(TaskSchedule.tick(25 + (Math.random() * 10).toInt()))
-                    .schedule()
-
-                fireworkCount++
+        fireworkTask = repeat(fireworkInterval) {
+            if (maxFireworks > 0 && fireworkCount >= maxFireworks) {
+                fireworkTask?.cancel()
+                fireworkTask = null
+                return@repeat
             }
-            .repeat(TaskSchedule.tick(fireworkInterval))
-            .schedule()
+
+            val position = if (winnerUuid != null) {
+                MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(winnerUuid)?.position
+            } else null
+
+            val pos = position ?: podiumPositions[1] ?: return@repeat
+
+            val offsets = listOf(
+                Vec(1.5, 0.0, 0.0), Vec(-1.5, 0.0, 0.0),
+                Vec(0.0, 0.0, 1.5), Vec(0.0, 0.0, -1.5),
+                Vec(1.0, 0.0, 1.0), Vec(-1.0, 0.0, -1.0),
+            )
+            val offset = offsets[fireworkCount % offsets.size]
+
+            val entity = Entity(EntityType.FIREWORK_ROCKET)
+            entity.velocity = Vec(offset.x() * 2, 25.0 + (Math.random() * 5), offset.z() * 2)
+            entity.setInstance(instance, pos.add(offset.x(), 0.0, offset.z()))
+            fireworkEntities.add(entity)
+
+            delay(25 + (Math.random() * 10).toInt()) { if (!entity.isRemoved) entity.remove() }
+
+            fireworkCount++
+        }
     }
 
     private fun schedulePersonalStats(players: Collection<Player>) {
-        statsTask = MinecraftServer.getSchedulerManager()
-            .buildTask {
-                for (player in players) {
-                    if (!player.isOnline) continue
-                    sendPersonalStats(player)
-                }
+        statsTask = delay(personalStatsDelay) {
+            for (player in players) {
+                if (!player.isOnline) continue
+                sendPersonalStats(player)
             }
-            .delay(TaskSchedule.tick(personalStatsDelay))
-            .schedule()
+        }
     }
 
     private fun sendPersonalStats(player: Player) {

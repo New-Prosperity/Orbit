@@ -37,7 +37,7 @@ object AchievementMenu {
                     clean()
                 }) { p -> openCategory(p, category) }
             }
-            fill(Material.GRAY_STAINED_GLASS_PANE)
+            fillDefault()
         }
         player.openGui(categoryGui)
     }
@@ -56,7 +56,7 @@ object AchievementMenu {
                     item(itemStack(Material.COAL_BLOCK) {
                         name("<dark_gray>???")
                         lore(player.translateRaw("orbit.achievement.hidden"))
-                    clean()
+                        clean()
                     })
                     continue
                 }
@@ -81,7 +81,7 @@ object AchievementMenu {
 
             staticSlot(49, itemStack(Material.ARROW) {
                 name("<gray>${player.translateRaw("orbit.achievement.back")}")
-                    clean()
+                clean()
             }) { p -> open(p) }
         }
         listGui.open(player)

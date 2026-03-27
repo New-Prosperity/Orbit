@@ -1,13 +1,16 @@
 package me.nebula.orbit.utils.cooldown
 
+import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.chat.mm
 import net.kyori.adventure.bossbar.BossBar
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
+import net.minestom.server.event.Event
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.item.Material
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -52,8 +55,6 @@ class Cooldown<K : Any>(private val duration: Duration) {
         cooldowns.entries.removeIf { it.value <= now }
     }
 }
-
-private val miniMessage = MiniMessage.miniMessage()
 
 private data class NamedKey(val uuid: UUID, val name: String)
 
@@ -107,6 +108,12 @@ object NamedCooldown {
         cooldowns.keys.removeAll { it.uuid == player.uuid }
     }
 
+    fun install(eventNode: EventNode<Event>) {
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            resetAll(event.player)
+        }
+    }
+
     fun cleanup() {
         val now = System.currentTimeMillis()
         cooldowns.entries.removeIf { it.value <= now }
@@ -151,10 +158,7 @@ object MaterialCooldown {
     fun installCleanup() {
         if (cleanupInstalled) return
         cleanupInstalled = true
-        MinecraftServer.getSchedulerManager()
-            .buildTask { cleanup() }
-            .repeat(TaskSchedule.tick(100))
-            .schedule()
+        repeat(100) { cleanup() }
     }
 
     fun set(player: Player, material: Material, ticks: Int) {
@@ -184,6 +188,12 @@ object MaterialCooldown {
 
     fun clearAll(player: Player) {
         cooldowns.keys.removeAll { it.uuid == player.uuid }
+    }
+
+    fun install(eventNode: EventNode<Event>) {
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            clearAll(event.player)
+        }
     }
 
     private fun cleanup() {
@@ -285,6 +295,12 @@ object SkillCooldown {
         cooldowns.clear()
     }
 
+    fun install(eventNode: EventNode<Event>) {
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            clearPlayer(event.player)
+        }
+    }
+
     private fun startIndicator(player: Player, entry: SkillEntry, key: PlayerSkillKey) {
         when (entry.skill.indicator) {
             CooldownIndicator.BOSS_BAR -> startBossBarIndicator(player, entry, key)
@@ -299,54 +315,45 @@ object SkillCooldown {
         entry.bossBar = bar
         player.showBossBar(bar)
         val totalMs = entry.skill.duration.inWholeMilliseconds.toFloat()
-        entry.displayTask = MinecraftServer.getSchedulerManager()
-            .buildTask {
-                val remaining = entry.expiresAt - System.currentTimeMillis()
-                if (remaining <= 0) {
-                    cleanupEntry(key, entry)
-                    player.hideBossBar(bar)
-                    entry.skill.onReady?.invoke(player)
-                } else {
-                    bar.progress((remaining / totalMs).coerceIn(0f, 1f))
-                    bar.name(mm("<yellow>${entry.skill.name} <gray>${"%.1f".format(remaining / 1000.0)}s"))
-                }
+        entry.displayTask = repeat(2) {
+            val remaining = entry.expiresAt - System.currentTimeMillis()
+            if (remaining <= 0) {
+                cleanupEntry(key, entry)
+                player.hideBossBar(bar)
+                entry.skill.onReady?.invoke(player)
+            } else {
+                bar.progress((remaining / totalMs).coerceIn(0f, 1f))
+                bar.name(mm("<yellow>${entry.skill.name} <gray>${"%.1f".format(remaining / 1000.0)}s"))
             }
-            .repeat(TaskSchedule.tick(2))
-            .schedule()
+        }
     }
 
     private fun startActionBarIndicator(player: Player, entry: SkillEntry, key: PlayerSkillKey) {
         val totalMs = entry.skill.duration.inWholeMilliseconds.toFloat()
-        entry.displayTask = MinecraftServer.getSchedulerManager()
-            .buildTask {
-                val remaining = entry.expiresAt - System.currentTimeMillis()
-                if (remaining <= 0) {
-                    cleanupEntry(key, entry)
-                    player.sendActionBar(mm("<green>${entry.skill.name} ready!"))
-                    entry.skill.onReady?.invoke(player)
-                } else {
-                    val progress = remaining / totalMs
-                    val barLength = 20
-                    val filled = ((1f - progress) * barLength).toInt()
-                    val empty = barLength - filled
-                    val bar = "<green>${"|".repeat(filled)}<gray>${"|".repeat(empty)}"
-                    player.sendActionBar(mm("<yellow>${entry.skill.name} $bar <white>${"%.1f".format(remaining / 1000.0)}s"))
-                }
+        entry.displayTask = repeat(2) {
+            val remaining = entry.expiresAt - System.currentTimeMillis()
+            if (remaining <= 0) {
+                cleanupEntry(key, entry)
+                player.sendActionBar(mm("<green>${entry.skill.name} ready!"))
+                entry.skill.onReady?.invoke(player)
+            } else {
+                val progress = remaining / totalMs
+                val barLength = 20
+                val filled = ((1f - progress) * barLength).toInt()
+                val empty = barLength - filled
+                val bar = "<green>${"|".repeat(filled)}<gray>${"|".repeat(empty)}"
+                player.sendActionBar(mm("<yellow>${entry.skill.name} $bar <white>${"%.1f".format(remaining / 1000.0)}s"))
             }
-            .repeat(TaskSchedule.tick(2))
-            .schedule()
+        }
     }
 
     private fun scheduleReadyCallback(player: Player, entry: SkillEntry, key: PlayerSkillKey) {
-        entry.displayTask = MinecraftServer.getSchedulerManager()
-            .buildTask {
-                if (System.currentTimeMillis() >= entry.expiresAt) {
-                    cleanupEntry(key, entry)
-                    entry.skill.onReady?.invoke(player)
-                }
+        entry.displayTask = repeat(5) {
+            if (System.currentTimeMillis() >= entry.expiresAt) {
+                cleanupEntry(key, entry)
+                entry.skill.onReady?.invoke(player)
             }
-            .repeat(TaskSchedule.tick(5))
-            .schedule()
+        }
     }
 
     private fun cleanupEntry(key: PlayerSkillKey, entry: SkillEntry) {

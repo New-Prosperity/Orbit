@@ -8,12 +8,12 @@ import me.nebula.orbit.utils.modelengine.model.ModeledEntityBuilder
 import me.nebula.orbit.utils.modelengine.model.asModelOwner
 import me.nebula.orbit.utils.modelengine.mount.MountManager
 import me.nebula.orbit.utils.modelengine.vfx.VFXRegistry
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Entity
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -85,10 +85,7 @@ object ModelEngine {
     fun install() {
         require(tickTask == null) { "ModelEngine already installed" }
 
-        tickTask = MinecraftServer.getSchedulerManager()
-            .buildTask(::tick)
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+        tickTask = repeat(1) { tick() }
 
         val node = EventNode.all("model-engine-sessions")
         node.addListener(PlayerDisconnectEvent::class.java) { event ->

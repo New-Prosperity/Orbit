@@ -8,16 +8,18 @@ import me.nebula.orbit.utils.modelengine.model.ModeledEntity
 import me.nebula.orbit.utils.modelengine.modeledEntity
 import me.nebula.orbit.utils.modelengine.mount.MountManager
 import me.nebula.orbit.utils.modelengine.mount.WalkingController
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.EntityCreature
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.Player
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.tag.Tag
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -38,20 +40,26 @@ object CosmeticMountManager {
 
     private val mounts = ConcurrentHashMap<UUID, ActiveMount>()
     private var task: Task? = null
+    private var eventNode: EventNode<*>? = null
 
     const val MOUNT_SLOT = 8
 
     fun install() {
         MountManager.install()
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask { tick() }
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+        task = repeat(1) { tick() }
+        val node = EventNode.all("cosmetic-mount-manager")
+        node.addListener(PlayerDisconnectEvent::class.java) { event ->
+            despawn(event.player.uuid)
+        }
+        MinecraftServer.getGlobalEventHandler().addChild(node)
+        eventNode = node
     }
 
     fun uninstall() {
         task?.cancel()
         task = null
+        eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        eventNode = null
         val iterator = mounts.entries.iterator()
         while (iterator.hasNext()) {
             val (uuid, mount) = iterator.next()

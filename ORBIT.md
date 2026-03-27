@@ -13,14 +13,88 @@ Standalone Minestom game server for the Nebula network. Runs on every server —
 - `object Orbit` with `@JvmStatic fun main()`.
 - Env vars: `VELOCITY_SECRET` (required), `SERVER_PORT` (default 25565), `P_SERVER_UUID` (optional), `SERVER_HOST` (optional), `HAZELCAST_ADDRESSES` (optional, comma-separated cluster addresses for client discovery — omit to use Hazelcast auto-discovery).
 - **Provision self-discovery**: When `P_SERVER_UUID` is set, Orbit looks up `ProvisionStore.load(serverUuid)` from the distributed Hazelcast store (populated by Pulsar's `ServerSynchronizer.sync()`), deriving `serverName` from the provision's server name and `gameMode` from `provision.metadata["game_mode"]`. No direct Proton API call needed — Orbit relies on the cluster-synced store. When `P_SERVER_UUID` is empty or no provision found, `serverName` defaults to `"orbit-local"` and `gameMode` to `null` (hub mode).
-- Hazelcast: **client mode** with 22 stores (includes ReconnectionStore, HostTicketStore, HostRequestStore, HostRequestLookupStore, BattleRoyaleKitStore). Smart client auto-discovers all members after initial connection. Near-cache configs wired automatically by HazelcastModule for stores with `nearCacheSeconds > 0`.
+- Hazelcast: **client mode** with 24 stores (includes ReconnectionStore, HostTicketStore, HostRequestStore, HostRequestLookupStore, BattleRoyaleKitStore, NickStore, NickPoolStore). Smart client auto-discovers all members after initial connection. Near-cache configs wired automatically by HazelcastModule for stores with `nearCacheSeconds > 0`.
 - **Provision metadata**: Extracts `game_mode`, `host_owner` (UUID), and `map` from provision metadata. `Orbit.hostOwner` and `Orbit.mapName` are set when server is host-provisioned.
 - **Map loading**: When `gameMode` is set and `STORAGE_URL`/`STORAGE_TOKEN` are provided, loads map via `MapLoader.load()` wrapped in `runCatching` — on failure, logs the error and falls back to the season default world path (null `resolvedWorldPath`). `MapLoader` validates cached maps have a `region/` directory; corrupted caches (missing `region/`) are deleted and re-downloaded. Also initializes `ReplayStorage` with a `"replays"` scope from the same storage client.
-- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → map loading (with fallback) → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `ModelEngine.install()` → `CustomContentRegistry.init()` (loads items, blocks, armors) → load `.bbmodel` model files → `CustomContentRegistry.mergePack()` (generates armor shaders + HUD shaders + HUD font, merges all) → register HUD test layout → `HudManager.install(handler)` → register commands (basic, game, model, cc, cinematic, screen, armor, hud) → `mode.install(handler)` → common listeners → HUD tick task (2 ticks) → `server.start()` → registration → shutdown hook.
-- **Graceful shutdown**: Shutdown hook kicks all connected players ("Server shutting down") before deregistering, so Velocity redirects them to a hub instead of disconnecting.
+- Init order: `environment {}` → `appDelegate` → `app.start()` → provision self-discovery → map loading (with fallback) → `MinecraftServer.init()` → `resolveMode()` → ensure `data/models/` directory → `ModelEngine.install()` → `CustomContentRegistry.init()` (loads items, blocks, armors) → load `.bbmodel` model files → `CustomContentRegistry.mergePack()` (generates armor shaders + HUD shaders + HUD font, merges all) → register HUD test layout → `HudManager.install(handler)` → register commands (basic, game, model, cc, cinematic, screen, armor, hud, nick) → `mode.install(handler)` → common listeners → HUD tick task (2 ticks) → `server.start()` → registration → shutdown hook.
+- **Global tasks**: All `repeat()` tasks (OnlinePlayerCache refresh, HudManager tick, ActionBarManager tick, TabListManager tick, syncConnectedPlayers) are stored in `globalTasks: MutableList<Task>` and cancelled in the shutdown hook.
+- **Graceful shutdown**: Shutdown hook cancels global tasks, calls `NickManager.uninstallListeners()`, `VanishManager.uninstallListeners()`, `StaffSpectateManager.uninstallListeners()`, kicks all connected players ("Server shutting down") before deregistering, so Velocity redirects them to a hub instead of disconnecting.
 - **Resource pack**: Pack is merged at startup but NOT sent from Orbit — pack distribution is delegated to the proxy.
-- Common listeners: `AsyncPlayerConfigurationEvent` (locale cache, set spawning instance/respawn from mode), `PlayerDisconnectEvent` (evict locale), `OnlinePlayerCache` refresh (5s).
+- Common listeners: `AsyncPlayerConfigurationEvent` (locale cache, set spawning instance/respawn from mode), `PlayerSpawnEvent` (nick application + nicked-player broadcast to joining viewer), `PlayerDisconnectEvent` (evict locale), `OnlinePlayerCache` refresh (5s).
+
+## Nick System — `nick/`
+
+### `NickManager` (`nick/NickManager.kt`)
+Packet-level disguise manager. Stores nick state as player tags (`nebula:nick_name`, `nebula:nick_skin_tex`, `nebula:nick_skin_sig`). Thread-safe `SessionDelta` uses `AtomicInteger`/`AtomicLong` for concurrent stat tracking.
+
+- **`applyNick(player, nickData)`** — sets tags, sets `displayName`, initializes `SessionDelta`, logs audit, broadcasts nicked identity to all other players in the same instance via `sendNickedInfoTo`. Vanish-aware: skips players who cannot see a vanished target.
+- **`removeNick(player)`** — clears tags, resets `displayName`, removes session delta, logs audit, broadcasts real identity to all other players via `sendRealInfoTo`. Vanish-aware: skips players who cannot see a vanished target.
+- **`sendNickedInfoTo(viewer, target, nickData)`** — per-viewer packet sequence: `PlayerInfoRemovePacket` → `PlayerInfoUpdatePacket` (ADD_PLAYER + UPDATE_LISTED with nick name/skin) → `respawnEntityFor` (destroy + spawn + head look + skin metadata + equipment).
+- **`sendRealInfoTo(viewer, target)`** — same packet sequence but with real username + real skin from `player.skin`, then `respawnEntityFor`.
+- **`respawnEntityFor(viewer, target)`** — private shared method: `DestroyEntitiesPacket` → `SpawnEntityPacket` → `EntityHeadLookPacket` → `EntityMetaDataPacket` (skin parts 0x7F) → `EntityEquipmentPacket` (all non-air equipment slots).
+- **`isNicked(player)`** / **`displayName(player)`** — tag-based queries.
+- **`installListeners()`** — registers `EventNode("nick-manager")` on global handler (stored as `eventNode` for cleanup):
+  - `PlayerDisconnectEvent`: releases pool entry via `NickPoolManager.release()`, deletes `NickStore`, removes nick, cleans up session delta.
+  - `PlayerSpawnEvent` (non-first spawn): re-broadcasts nicked info to new instance's players on instance change. Vanish-aware: skips players who cannot see a vanished target.
+- **`uninstallListeners()`** — removes the event node from the global handler.
+- **Virtual stat methods** — use `.get()` on atomic fields for reads, `.incrementAndGet()` / `.addAndGet()` for writes.
+
+### Spawn Integration
+In `PlayerSpawnEvent`: after `PlayerCache` load, if `cached.nick != null` calls `NickManager.applyNick`. Then iterates other players in the instance and sends nicked info for any that are nicked. `NickManager.installListeners()` called after `PlayerCache.installListeners()` in `Orbit.kt`.
+
+### Extension Properties (`OrbitExtensions.kt`)
+- `Player.isNicked: Boolean` — delegates to `NickManager.isNicked`.
+- `Player.displayUsername: String` — delegates to `NickManager.displayName` (nick name if nicked, real username otherwise).
+- Preference accessors from `cached.preferences`: `acceptsFriendRequests`, `acceptsPrivateMessages`, `acceptsPartyInvites`, `acceptsDuelRequests`, `acceptsTradeRequests`, `profileVisibility`, `appearsOffline`, `lastSeenVisible`, `statsVisible`, `streamerMode`, `cosmeticDisplay`.
+
+### Settings Command (`commands/SettingsCommand.kt`)
+- **`/settings`** (aliases: `/prefs`, `/preferences`) — opens a 5-row GUI for toggling all player preferences.
+  - Row 1 (Social): friend requests, private messages, party invites, duel requests, trade requests — toggle items (LIME_DYE/GRAY_DYE).
+  - Row 2 (Privacy): appear offline, last seen, stats visibility, streamer mode — toggle items.
+  - Row 3 (Visual): profile visibility (PUBLIC/FRIENDS/PRIVATE cycle), cosmetic display (FULL/REDUCED/NONE cycle) — material-based cycle items.
+- Uses `TogglePreferenceProcessor` and `SetPreferenceProcessor` from Gravity for atomic updates. Reopens GUI after each click to reflect new state.
+
+### Nick Commands (`nick/NickCommand.kt`)
+`fun nickCommands(): List<Command>` returns all nick-related commands, registered in `Orbit.kt`.
+
+- **`/nick`** (no args) — permission `nebula.nick`. Checks double-nick (replies "orbit.nick.already_nicked"). Claims random pool entry via `NickPoolManager.claimRandom()`, saves `NickData`, applies nick. Replies "orbit.nick.pool_empty" if pool exhausted.
+- **`/nick <name>`** — permission `nebula.nick`. Checks double-nick. Validates custom name via `NickPoolManager.validateName()`. Checks `NickStore` for name uniqueness (replies "orbit.nick.name_taken"). Claims random pool entry for skin only, saves with custom name + pool skin.
+- **`/unnick`** — permission `nebula.nick`. Loads `NickData` from `NickStore`, validates pool entry exists before releasing, deletes `NickStore`, removes nick. Replies "orbit.nick.not_nicked" if not disguised.
+- **`/realnick <player>`** — permission `nebula.nick.reveal`. Resolves target by display name (nick-aware), reveals real username. Uses `playerArgument` for tab completion.
+- **`/forcenick <player>`** — permission `nebula.nick.admin`. Staff force-unnick: loads nick data, releases pool entry if exists, deletes store, removes nick. Replies "orbit.nick.force_removed".
+- **`/nickpool add <username>`** — permission `nebula.nick.admin`. Fetches skin from Mojang API via `fetchMojangSkin()` with `runCatching` error handling (replies "orbit.nick.fetch_failed" on failure), validates name, adds to `NickPoolStore`.
+- **`/nickpool remove <name>`** — permission `nebula.nick.admin`. Removes entry from pool.
+- **`/nickpool list`** — permission `nebula.nick.admin`. Lists all pool entries with available/in-use status.
+- **`/nickpool count`** — permission `nebula.nick.admin`. Shows total/available pool stats.
+
+### Nick-Aware & Vanish-Aware Tab Completion (`utils/commandbuilder/CommandHelpers.kt`)
+- **`suggestPlayers(prefix, viewer?)`** — maps real names to display names (nick names for nicked players), filters by prefix. When `viewer` is provided, excludes vanished players the viewer cannot see via `VanishManager.canSee`.
+- **`resolvePlayer(name, viewer?)`** — first checks nicked players by display name, then falls back to real username + `PlayerStore` lookup. When `viewer` is provided, excludes vanished players the viewer cannot see.
+
 - `resolveMode()` selects `ServerMode` by `gameMode` (sourced from Proton provision `metadata["game_mode"]`, NOT an env var): `null` → `HubMode()`, `"battleroyale"` → `BattleRoyaleMode()`, else → `error()`.
+
+## Staff Spectate System — `staff/`
+
+### `StaffSpectateManager` (`staff/StaffSpectateManager.kt`)
+Distributed staff spectate system. Uses two Hazelcast replicated maps: `staff-spectating` (staff UUID -> target UUID) and `pre-spectate-vanish` (staff UUID -> was-vanished-before).
+
+- **`spectate(staff, targetUuid)`** — saves pre-vanish state, vanishes staff if not already, sets spectating mapping. If target is on the same server, attaches camera directly. If on a different server, publishes `StaffSpectateFollowMessage` for cross-server transfer. If target is offline, mapping is saved for auto-follow when target comes online.
+- **`unspectate(staff)`** — removes mapping, stops spectating, sets `GameMode.ADVENTURE`, restores pre-vanish state (unvanishes only if staff was not vanished before), teleports to mode spawn.
+- **`switchTarget(staff, newTargetUuid)`** — stops current camera without unvanishing, updates mapping, same attach/transfer logic as `spectate`.
+- **`isSpectating(player)`** / **`getTarget(player)`** — query spectating state from distributed map.
+- **`attachCamera(staff, target)`** — sets spectator mode, teleports to target position, attaches spectator camera.
+- **`installListeners()`** — registers `EventNode("staff-spectate")` (stored as `eventNode` for cleanup):
+  - `PlayerSpawnEvent`: if joining player is a staff spectating someone, attaches camera after 5-tick delay. If joining player is being spectated, attaches any watching staff.
+  - `PlayerDisconnectEvent`: cleans up mappings if staff disconnects. If target disconnects, notifies watching staff with `orbit.spectate.target_offline` (does NOT remove mapping — auto-follow on reconnect).
+  - `SessionStore` entry listener: on session update, if a spectated target changes servers, publishes `StaffSpectateFollowMessage` for cross-server follow.
+- **`uninstallListeners()`** — removes the event node from the global handler.
+
+### `spectateCommand` (`staff/SpectateCommand.kt`)
+- **`/spectate [player]`** — permission `staff.spectate`. Toggle-based: running `/spectate` with no args while spectating stops spectating. Running `/spectate <name>` on the same target also stops. Resolves targets via `resolvePlayer` (nick-aware, vanish-aware). Supports offline/cross-server targets. If already spectating, switches target instead of starting fresh. Translation keys: `orbit.spectate.started`, `orbit.spectate.stopped`, `orbit.spectate.switched`, `orbit.spectate.usage`, `orbit.spectate.target_offline`.
+
+### Registration
+- Command registered in `Orbit.kt` after `settingsCommand()`.
+- `StaffSpectateManager.installListeners()` called in `Orbit.kt` after `VanishManager.installListeners()`.
 
 ## Server Mode System — `mode/`
 
@@ -73,11 +147,11 @@ Each mode owns its instance, event listeners, scheduled tasks, and shutdown. `Or
 - **Hub instance**: Validates and loads Anvil world from `config.worldPath` (requires `region/` with `.mca` files), preloads chunks with `config.preloadRadius`, verifies block data post-load. Falls back to flat grass generator if directory missing.
 - **Lobby**: Built from `config.lobby` — `GameMode.valueOf(config.lobby.gameMode)`, all protection flags from config.
 - **Scoreboard**: Built from `config.scoreboard` — title and lines support `{placeholder}` syntax, static vs dynamic determined by placeholder presence.
-- **Tab list**: Built from `config.tabList` — same placeholder resolution for header/footer.
+- **Tab list**: Built from `config.tabList` — same placeholder resolution for header/footer. Tab entries are vanish-aware: `buildTabEntries` filters players via `VanishManager.canSee` and displays `VanishManager.visiblePlayerCount(viewer)` in the header.
 - **Hotbar**: Built from `config.hotbar` — `Material.fromKey()`, maps action strings via registered actions.
 - **Server selector**: Built from `config.selector` — title, rows, border material. **Multi-queue support**: tracks queued gamemodes per player in `ConcurrentHashMap<UUID, MutableSet<String>>`. Queued modes show enchantment glow + "Click to leave queue" lore. Clicking a queued mode dequeues. Clicking an unqueued mode joins queue. Party leaders' queue actions publish `PartyQueueNotificationMessage` to notify party members.
 - No `MechanicLoader` — hub mode has no mechanics enabled.
-- `shutdown()` unsubscribes host status, queue removed, queue assignment, and queue position listeners; uninstalls scoreboard, tab list, lobby, and hotbar.
+- `shutdown()` cancels tab refresh task, calls `NameplateManager.uninstall()`, unsubscribes host status, queue removed, queue assignment, and queue position listeners; uninstalls scoreboard, tab list, lobby, and hotbar.
 
 ### Game Engine — `mode/game/`
 Abstract lifecycle framework for minigames. Concrete modes subclass `GameMode` and implement only game-specific logic; the base class owns phases, player tracking, countdowns, timers, and cleanup.
@@ -395,7 +469,7 @@ Pre-game voting during WAITING phase. Players vote on game settings via GUI hotb
   - Border: multi-phase progressive shrink with escalating damage (1→2→3 per second), speed scaled by vote multiplier. Falls back to legacy single-phase if `borderPhases` empty.
   - Border damage: 1-second tick checks all alive players outside border, applies `DamageType.OUT_OF_WORLD`.
   - Kill tracking: `EntityDamageEvent` via `EventNode.all()`. Tags target with last attacker UUID + timestamp (10s expiry). On lethal damage: cancels event, heals, credits killer, awards XP, drops golden head, sends death recap, does kill cam (spectate killer for 3s), calls `eliminate()`.
-  - Death recap: `brDeathRecapTracker` records all damage in `onPlayerDamaged()`. On lethal hit: `sendRecap(victim)` displays damage summary, then victim spectates killer for 60 ticks (kill cam). Cleared per-player on death and globally on `onGameReset()`.
+  - Death recap: `brDeathRecapTracker` records all damage in `onPlayerDamaged()`. On lethal hit: `sendRecap(victim)` displays damage summary, then victim spectates killer for 60 ticks (kill cam). Cleared per-player on death and globally on `onGameReset()`. `install(eventNode)` for `PlayerDisconnectEvent` cleanup.
   - Deathmatch: triggers when alive count ≤ `triggerAtPlayers`. Teleports all alive to center (uses generated map center when available), shrinks border to `borderDiameter`.
   - Elimination: awards survival XP to eliminated player, broadcasts translated message. Triggers deathmatch check.
   - Win condition: `tracker.aliveCount <= 1` → winner is last alive, wins XP awarded. On timer expiry: top killer wins.
@@ -981,7 +1055,7 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 - `customcontent/CustomContentRegistry.kt` — `mergePack()` merges `ArmorShaderPack` + `HudShaderPack` + `HudFontProvider` + `EffectsShaderPack` into the resource pack. HudShaderPack internally generates map_decode.glsl via MapShaderPack
 - `customcontent/CustomContentCommand.kt` — removed `PackServer` and `/cc send` (pack sending delegated to proxy)
 
-## Utility Framework — `utils/` (189 files)
+## Utility Framework — `utils/` (191 files)
 
 ### Model Engine (46)
 | Util | Summary |
@@ -1057,32 +1131,34 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `nametag/NameTag.kt` | `Player.setNameTag { prefix(); suffix(); displayName() }` DSL, `NameTagManager` per-player custom name via prefix+name+suffix Component, `Player.clearNameTag()` |
 | `playerlist/PlayerList.kt` | `playerList { header(); footer(); updateIntervalTicks }` DSL, `PlayerListManager` periodic per-player header/footer updates, MiniMessage support |
 
-### Game Framework (21)
+### Game Framework (23)
 | Util | Summary |
 |---|---|
-| `gamestate/GameState.kt` | `gameStateMachine(initialState) { allow(); onEnter(); timedTransition() }` DSL |
+| `gamestate/GameState.kt` | `gameStateMachine(initialState) { allow(); onEnter(); timedTransition(); guard(from, to) { predicate } }` DSL, `canTransition(to)` query, `stateHistory` (last 20 state+timestamp pairs) |
 | `arena/Arena.kt` | `arena(name) { instance(); region(); spawn() }` DSL, `ArenaRegistry` |
-| `queue/Queue.kt` | `gameQueue(name) { minPlayers(); maxPlayers(); onStart() }` DSL, `QueueRegistry`, `simpleQueue(name)` FIFO variant, `Player.joinQueue/leaveQueue/queuePosition` extensions |
+| `queue/Queue.kt` | `gameQueue(name) { minPlayers(); maxPlayers(); onStart() }` DSL, `QueueRegistry` with `install(eventNode)` disconnect cleanup, `simpleQueue(name)` FIFO variant (UUID-based, resolves Player on demand), `Player.joinQueue/leaveQueue/queuePosition` extensions |
 | `mappool/MapPool.kt` | `mapPool(name) { map(); strategy() }` DSL, voting, RANDOM/ROTATION/VOTE |
 | `kit/Kit.kt` | `kit(name) { item(); helmet(); chestplate() }` DSL, `KitRegistry`. String-key overloads (`helmet("ruby_helmet")`, `item(0, "ruby_sword")`) resolve via `ItemResolver` — supports both custom content IDs and `minecraft:material` keys |
 | `loot/LootTable.kt` | `lootTable(name) { entry(material, weight); entry(key, weight); rolls() }` DSL, string-key entries resolved via `ItemResolver` |
 | `vote/Vote.kt` | `poll(question) { option(); durationTicks(); onComplete() }` DSL |
 | `lobby/Lobby.kt` | `lobby { instance; spawnPoint; hotbarItem() }` DSL, protection (blocks/damage/hunger/inventory), void teleport, `lockInventory` cancels InventoryPreClickEvent/ItemDropEvent/PlayerSwapItemEvent |
-| `achievement/Achievement.kt` | `achievement(id) { name; category; maxProgress; frameType }` DSL, `AchievementRegistry` with Gravity `AchievementStore` persistence, 6 categories (GENERAL/COMBAT/SURVIVAL/SOCIAL/EXPLORATION/MASTERY), `loadPlayer/unloadPlayer` lifecycle, `progress/complete` atomic via `IncrementAchievementProcessor/SetAchievementCompletedProcessor`, vanilla advancement toast unlock via `player.sendNotification()`, `AchievementTriggerManager` stat-based auto-triggers with `bindThreshold/evaluate` |
-| `graceperiod/GracePeriod.kt` | `gracePeriod(name) { duration(); cancelOnMove(); cancelOnAttack(); onEnd {} }` DSL, `GracePeriodManager` (`@Volatile` eventNode/cleanupTask), invulnerability management |
-| `condition/Condition.kt` | `condition { hasPermission("x") and isAlive() and not(isFrozen()) }` DSL, composable `Condition<Player>` with `and`/`or`/`not`/`xor`, built-in conditions |
-| `stattracker/StatTracker.kt` | `StatTracker.increment(player, "kills")`, `statTracker { stat(); derived("kdr") {} }` DSL, ConcurrentHashMap storage, top-N leaderboard, derived stats, `renderLeaderboard()`, `Player.sendLeaderboard()`, `LeaderboardRegistry` |
+| `achievement/Achievement.kt` | `achievement(id) { name; category; maxProgress; frameType; reward(type, amount); requires(id) }` DSL, `AchievementRegistry` with Gravity `AchievementStore` persistence, 6 categories (GENERAL/COMBAT/SURVIVAL/SOCIAL/EXPLORATION/MASTERY), `loadPlayer/unloadPlayer` lifecycle, `progress/complete` atomic via `IncrementAchievementProcessor/SetAchievementCompletedProcessor`, vanilla advancement toast unlock via `player.sendNotification()`, `AchievementTriggerManager` stat-based auto-triggers with `bindThreshold/evaluate`, `AchievementReward` rewards, `prerequisites` with `canUnlock(uuid, id)`, `progressBar(current, max, length)` helper |
+| `graceperiod/GracePeriod.kt` | `gracePeriod(name) { duration(); cancelOnMove(); cancelOnAttack(); onEnd {} }` DSL, `GracePeriodManager` (`@Volatile` eventNode/cleanupTask), invulnerability management, `PlayerDisconnectEvent` cleanup in internal event node |
+| `condition/Condition.kt` | `condition { hasPermission("x") and isAlive() and not(isFrozen()) }` DSL, composable `Condition<Player>` with `and`/`or`/`not`/`xor`, built-in conditions (`isFlying`, `isDay`, `isNight`, `hasEffect`, `maxPlayers`) |
+| `stattracker/StatTracker.kt` | `StatTracker.increment(player, "kills")`, `statTracker { stat(); derived("kdr") {} }` DSL, ConcurrentHashMap storage, top-N leaderboard, derived stats, `renderLeaderboard()`, `Player.sendLeaderboard()`, `LeaderboardRegistry`, `install(eventNode)` disconnect cleanup (safety net) |
 | `roundmanager/RoundManager.kt` | `roundManager(name) { rounds(); roundDuration(); onRoundStart {}; onGameEnd {} }` DSL, round/intermission state machine, per-round scores |
-| `matchresult/MatchResult.kt` | `matchResult { winner(); losers(); stat("kills") {}; mvp() }` DSL, `MatchResultDisplay` rendered summary, `MatchResultManager` history tracking |
+| `matchresult/MatchResult.kt` | `matchResult { winner(); losers(); stat("kills") {}; mvp(); winnerTeam(); loserTeam(); teamStat(team, stat, value) }` DSL, `MatchResultDisplay` rendered summary with team winner + team stats sections, `MatchResultManager` history tracking |
 | `areaeffect/AreaEffect.kt` | `areaEffect(name) { region(); instance(); effect(); interval(); onEnter {}; onExit {} }` DSL, `AreaEffectManager`, timer-based region scanning, auto-remove on exit |
 | `combatarena/CombatArena.kt` | `combatArena(name) { instance(); spawnPoints(); maxPlayers(); kit(); duration(); onKill {}; onEnd {} }` DSL, `CombatArenaManager`, kill/death/damage tracking, `ArenaResult` |
 | `minigametimer/MinigameTimer.kt` | `minigameTimer(name) { duration(); display(BOSS_BAR/ACTION_BAR/TITLE); onTick {}; onHalf {}; onQuarter {}; onEnd {} }` DSL, start/pause/resume/stop, addTime/removeTime, milestone callbacks |
 | `taskqueue/TaskQueue.kt` | `taskQueue(name) { maxConcurrent(1); onComplete {}; onError {} }` DSL, `TaskQueue.submit {}`, sequential/limited-concurrency async execution on virtual threads, pause/resume/stop, `TaskQueueRegistry` |
 | `teambalance/TeamBalance.kt` | `TeamBalance.balance(players, teamCount, scorer)`, snake-draft distribution, `suggestSwap()` variance minimization, `autoBalance()` |
-| `knockback/Knockback.kt` | `KnockbackProfile(horizontal, vertical, extraHorizontal, extraVertical, friction)`, `KnockbackManager` per-player profile overrides, `Entity.applyKnockback(source, profile)`, `Entity.applyDirectionalKnockback()`, `knockbackProfile(name) {}` DSL |
-| `respawn/Respawn.kt` | `RespawnManager` per-player and default respawn points, `Player.setRespawnPoint()`, `Player.clearRespawnPoint()`, `Player.getCustomRespawnPoint()`, instance resolution by identity hash |
+| `knockback/Knockback.kt` | `KnockbackProfile(horizontal, vertical, extraHorizontal, extraVertical, friction)`, `KnockbackManager` per-player overrides via `Tag.String("nebula:knockback_override")`, `Entity.applyKnockback(source, profile)`, `Entity.applyDirectionalKnockback()`, `knockbackProfile(name) {}` DSL |
+| `respawn/Respawn.kt` | `RespawnManager` per-player and default respawn points with disconnect cleanup listener, `Player.setRespawnPoint()`, `Player.clearRespawnPoint()`, `Player.getCustomRespawnPoint()`, instance resolution by identity hash |
 | `instancepool/InstancePool.kt` | `instancePool(name, poolSize) { factory }`, `InstancePool` with `acquire()`/`release()`, auto-warmup pool, excess unregistration, `availableCount`/`inUseCount`/`totalCount` |
 | `timer/Timer.kt` | `gameTimer(name) { durationSeconds(); onTick {}; onComplete {}; display {} }` DSL, `GameTimer` with start/stop/reset, per-player viewer tracking, action bar display |
+| `supplydrop/SupplyDrop.kt` | `supplyDrop { origin(); target(); fallSpeed(); lootTable(); trailParticle(); landingSound(); announceRadius(); chestDuration(); onLand {} }` DSL, `ActiveSupplyDrop` falling armor stand lifecycle with trail particles, landing explosion, interactive loot chest with auto-destroy timer |
+| `jumppad/JumpPad.kt` | `jumpPad { position(); velocity(); launchForward(power, upward); sound(); cooldown() }` DSL, `JumpPadManager` singleton with register/unregister, `LaunchMode.Fixed`/`Forward` sealed interface, per-player `Cooldown<UUID>`, proximity-triggered `PlayerMoveEvent` listener |
 
 ### World (15)
 | Util | Summary |
@@ -1105,7 +1181,7 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `mapgen/MapPresets.kt` | `MapPresets[name]` → `MapGenerationConfig`. Programmatic presets bypassing Gson serialization issues. `"perfect"` / `"battleroyale"` preset with seed-based randomization: map radius (200-300), sea level (60-65), cave frequency/density (±30%), ore amounts (±20-50%), population chances (±30%), terrain parameters (±20%). Deterministic when given a seed |
 | `biome/CustomBiome.kt` | `customBiome(id) { blocks {}; terrain {}; climate {}; vegetation {}; visuals {}; modifiers {} }` DSL, scoped builders, `TerrainShape` enum (20 presets: FLAT/PLAINS/ROLLING_HILLS/ROLLING/HIGHLANDS/FOOTHILLS/PLATEAUS/MESA/MOUNTAINOUS/RIDGED/PEAKS/SPIRES/VALLEYS/BASIN/CANYON/CLIFFS/ERODED/DUNES/OCEAN_FLOOR/SHELF) via `terrain { shape(TerrainShape.X) }`, `BiomePresets` object (volcanic, mushroomFields, frozenWasteland, lushCaves, cherryGrove, deepDark), `BiomePresets.all()` |
 | `schematic/Schematic.kt` | Sponge v2 schematic loader, `schematic.paste(instance, origin)` |
-| `region/Region.kt` | Sealed `Region` (Cuboid/Sphere/Cylinder), `RegionManager`, spatial queries |
+| `region/Region.kt` | Sealed `Region` (Cuboid/Sphere/Cylinder), `RegionManager`, spatial queries, `RegionTracker` with enter/exit events (5-tick polling), `regionTracker { track("name") { onEnter {}; onExit {} } }` DSL |
 | `boundary/Boundary.kt` | `boundary(name) { cuboid(); circle(); onBlocked() }` DSL, `BoundaryManager`, invisible wall system |
 | `weathercontrol/WeatherControl.kt` | `instanceWeather(instance) { rainy(); duration() }` DSL, `WeatherController`, per-instance weather |
 | `blocksnapshot/BlockSnapshot.kt` | `Instance.captureSnapshot(region)`, `BlockSnapshot.capture/restore/restoreAsync/diff/pasteAt/createInstance`, `Instance.blockRestore {}` DSL with auto-restore timer, packed XYZ storage |
@@ -1116,16 +1192,16 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `structureblock/StructureBlock.kt` | `Structure(name, blocks)` with `paste()`, `pasteRotated90()`, `clear()`, `captureStructure(name, instance, from, to)` region capture, `StructureRegistry` CRUD |
 | `voidteleport/VoidTeleport.kt` | `voidTeleport { threshold(-64.0); destination { player -> pos }; onTeleport {} }` DSL, `VoidTeleportManager` global `PlayerMoveEvent` listener, configurable Y threshold, respawnPoint default destination |
 
-### Player (17)
+### Player (19)
 | Util | Summary |
 |---|---|
 | `snapshot/InventorySnapshot.kt` | `InventorySnapshot.capture(player)` / `snapshot.restore(player)` |
 | `combatlog/CombatLog.kt` | `CombatTracker`, `Player.isInCombat`, `tagCombat()` |
-| `afk/AfkDetector.kt` | Movement/chat tracking, configurable threshold, AFK/return callbacks |
-| `freeze/Freeze.kt` | `FreezeManager`, `Player.freeze()`, `Player.isFrozen` |
-| `vanish/Vanish.kt` | `VanishManager`, `Player.vanish()`, packet-level hiding |
+| `afk/AfkDetector.kt` | Movement/chat tracking via Player tags (`nebula:afk_last_activity`, `nebula:afk`), configurable threshold, AFK/return callbacks |
+| `freeze/Freeze.kt` | `FreezeManager`, `Player.freeze()`, `Player.isFrozen`, state via `Tag.Boolean("nebula:frozen")` |
+| `vanish/Vanish.kt` | `VanishManager`, rank-aware packet-level hiding via `DestroyEntitiesPacket` + `PlayerInfoRemovePacket`. State via `Tag.Boolean("nebula:vanished")` + Hazelcast `ReplicatedMap<UUID, Boolean>("vanished-players")` for cross-server persistence. `canSee(viewer, target)` checks `staff.vanish.see` permission + `rankWeight` comparison. `visiblePlayerCount(viewer?)`, `gameParticipantCheck` lambda (blocks vanishing during active game, default `{ false }`), `installListeners()` (spawn/disconnect/damage/pickup), `uninstallListeners()` removes event node. Nick-aware `unvanish()` sends nicked identity via `NickManager.sendNickedInfoTo` when player has active nick. Collision prevention: `EntityDamageEvent` cancelled when attacker cannot see vanished target, `PickupItemEvent` cancelled for vanished players. Extensions: `Player.isVanished`, `Player.canSee(other)`, `Player.vanish()`, `Player.unvanish()`, `Player.toggleVanish()`. `/vanish` command (`staff.vanish`, optional `<player>` with `staff.vanish.others`, blocks self-vanish when `gameParticipantCheck` returns true). Integrated into tab completion, tab list, nameplates, spectator toolkit (player selector filters vanished), combo counter (skips vanished attacker/target), kill feed (viewers filtered by vanish visibility of killer/victim), death recap (vanished attacker names hidden), and GameMode (vanished players bypass tracker, treated as spectators) |
 | `spectate/Spectate.kt` | `SpectateManager`, `Player.spectatePlayer()`, restores previous game mode |
-| `compass/CompassTracker.kt` | `CompassTracker.track()`, action bar direction/distance, `Player.trackPlayer()` |
+| `compass/CompassTracker.kt` | `CompassTracker.track()`, action bar direction/distance, `Player.trackPlayer()`, disconnect cleanup listener |
 | `trail/Trail.kt` | `TrailManager`, `TrailConfig(particle, count)`, `Player.setTrail()` |
 | `deathmessage/DeathMessage.kt` | `deathMessages { pvp(); fall(); void(); generic() }` DSL, damage type tracking via Tag, placeholder replacement, broadcast scope |
 | `warmup/Warmup.kt` | `warmup(player, "Teleporting", 5.seconds) { cancelOnMove(); cancelOnDamage(); onComplete {} }` DSL, `WarmupManager`, action bar progress, cancel triggers (MOVE, DAMAGE, COMMAND) |
@@ -1136,6 +1212,8 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `playerdata/PlayerData.kt` | `PlayerDataManager` full player state snapshots (position, health, food, gameMode, level, inventory), `Player.captureData()`, `Player.restoreData()`, `Player.restoreLatest()`, timestamped history |
 | `signprompt/SignPrompt.kt` | `SignPromptManager` sign-based text input prompts, `Player.openSignPrompt(lines) { player, lines -> }`, callback-driven response handling, cancel support |
 | `waypoint/Waypoint.kt` | `WaypointManager` global and per-player named waypoints with position/instance/icon, `Player.setWaypoint()`, `Player.removeWaypoint()`, `Player.getWaypoint()`, `Player.allWaypoints()` |
+| `combo/ComboCounter.kt` | `comboCounter { windowTicks(); display(); onCombo(); onDrop(); multiplier() }` DSL, `ComboManager` singleton with per-player state, `Player.combo`, `Player.comboMultiplier`, display modes (ACTION_BAR, TITLE, BOSS_BAR, NONE), threshold callbacks, tick-based expiry, disconnect cleanup via `PlayerDisconnectEvent` listener, vanish-aware (skips hits involving vanished players) |
+| `profilecard/ProfileCard.kt` | `profileCard { header(); separator(); stat(); footer() }` DSL, `ProfileCard.render(target): List<Component>`, `ProfileCard.sendTo(viewer, target)`, MiniMessage-based chat card renderer |
 
 ### Advanced (10)
 | Util | Summary |
@@ -1154,18 +1232,19 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 ### Infrastructure (26)
 | Util | Summary |
 |---|---|
-| `cooldown/Cooldown.kt` | Generic `Cooldown<K>` with `isReady/use/tryUse/remaining/reset/cleanup`, `NamedCooldown` (player+key with warning message), `MaterialCooldown` (player+material), `SkillCooldown` (visual indicator via BossBar/ActionBar), `Player.isOnCooldown/useCooldown/cooldownRemaining` extensions |
+| `cooldown/Cooldown.kt` | Generic `Cooldown<K>` with `isReady/use/tryUse/remaining/reset/cleanup`, `NamedCooldown` (player+key with warning message), `MaterialCooldown` (player+material), `SkillCooldown` (visual indicator via BossBar/ActionBar), `Player.isOnCooldown/useCooldown/cooldownRemaining` extensions, `install(eventNode)` disconnect cleanup on `NamedCooldown`, `MaterialCooldown`, `SkillCooldown` |
 | `spawnentity/SpawnEntity.kt` | `spawnEntity(EntityType.X) { position(); instance(); customName(); health(); onSpawn {} }` DSL, `Instance.spawnEntity()` extension |
-| `countdown/Countdown.kt` | `countdown(seconds) { onTick(); onComplete() }` DSL |
+| `countdown/Countdown.kt` | `countdown(seconds) { onTick(); onComplete(); milestone(remaining, sound) {} }` DSL, `MilestoneAction` with optional `SoundEvent`, `pause()`/`resume()`, `cancel()` (no onComplete) |
 | `scheduler/Scheduler.kt` | `delay(ticks)`, `repeat(ticks)`, `delayedRepeat()`, `repeatingTask {}` DSL |
 | `itembuilder/ItemBuilder.kt` | `itemStack(material) { name(); lore(); unbreakable(); glowing() }` DSL |
 | `itemresolver/ItemResolver.kt` | `ItemResolver.resolve(key, amount)` — checks `CustomItemRegistry` first, then `Material.fromKey()`. `resolveMaterial(key)`, `isCustom(stack)`, `customId(stack)`. Tags custom items with `ITEM_ID_TAG`. KitBuilder string overloads delegate here |
 | `itemmechanic/ItemMechanic.kt` | `ItemMechanic` interface (onUse/onAttack/onHurt/onBlockBreak), `ItemMechanicRegistry`, `ItemMechanicListener` global event node, `itemMechanic(id) { onUse {}; onAttack {} }` DSL |
 | `teleport/Teleport.kt` | `TeleportManager`, warmup teleport with move cancel |
 | `particle/Particle.kt` | `particleEffect(type, count, offset) {}` DSL, shapes (Circle, Sphere, Helix, Line, Cuboid), `Instance.spawnParticle/spawnParticleLine/spawnParticleCircle/spawnBlockBreakParticle` (uses `sendGroupedPacket` for batched delivery), `Player.showParticleShape {}` DSL |
+| `particle/AnimatedParticle.kt` | `AnimatedParticleShape` with per-tick rotation/expansion/rise. DSL builders: `animatedCircle {}`, `animatedHelix {}`, `animatedSphere {}`. `ParticleAttachment` for entity-attached auto-ticking via `Entity.attachParticle(shape)` with `detach()` cleanup. Uses `repeat(1)` scheduler |
 | `sound/Sound.kt` | `soundEffect(type, source, volume, pitch) {}` DSL |
 | `team/Team.kt` | `TeamManager.create(name) {}` DSL, `Player.joinTeam()` |
-| `npc/Npc.kt` | Packet-based fake NPCs with `NpcVisual` sealed interface: `SkinVisual` (player skin), `EntityVisual` (any EntityType + raw metadata), `ModelVisual` (model-only, invisible INTERACTION hitbox). `npc(name) { skin(); entityType(); modelOnly(); metadata(); model {} }` DSL, configurable `nameOffset`, TextDisplay name, per-player visibility, optional `StandaloneModelOwner` for Blockbench model attachment (visibility synced), `Instance.spawnNpc()`, `Player.showNpc/hideNpc()` |
+| `npc/Npc.kt` | Packet-based fake NPCs with `NpcVisual` sealed interface: `SkinVisual` (player skin), `EntityVisual` (any EntityType + raw metadata), `ModelVisual` (model-only, invisible INTERACTION hitbox). `npc(name) { skin(); entityType(); modelOnly(); metadata(); model {} }` DSL, configurable `nameOffset`, TextDisplay name, per-player visibility, optional `StandaloneModelOwner` for Blockbench model attachment (visibility synced), `Instance.spawnNpc()`, `Player.showNpc/hideNpc()` `NpcRegistry.cleanup()` cancels look-at task and removes event node. |
 | `chat/Chat.kt` | `mm(text)`, `Player.sendMM()`, `Instance.broadcastMM()`, `message {}` builder |
 | `placeholder/Placeholder.kt` | `PlaceholderRegistry`, `Player.resolvePlaceholders(text)` |
 | ~~`eventbus/EventBus.kt`~~ | Removed — redundant with Minestom's `EventNode` system |
@@ -1174,7 +1253,7 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `protection/Protection.kt` | Unified protection: sealed `ProtectionZone` (RegionZone/ChunkZone/RadiusZone), `ProtectionFlag` enum (BREAK/PLACE/INTERACT/PVP/MOB_DAMAGE), `ProtectionManager` with single EventNode, `protectRegion {}`, `protectChunk {}`, `protectSpawn {}` DSL |
 | `damage/Damage.kt` | `DamageTracker` per-player damage history, `DamageIndicator` floating TextDisplay damage numbers, `DamageMultiplierManager` per-player per-source multipliers, `Player.setDamageMultiplier/getDamageMultiplier/removeDamageMultiplier` extensions |
 | `raytrace/RayTrace.kt` | `rayTraceBlock()`, `rayTraceEntity()`, `raycast()` (entity+block in one pass with bounding box checks), `Player.lookDirection/rayTraceBlock/rayTraceEntity/lookingAt/getLookedAtEntity/getLookedAtBlock` extensions |
-| `hotbar/Hotbar.kt` | `hotbar(name) { slot(0, item) { ... } }` DSL, apply/remove/install |
+| `hotbar/Hotbar.kt` | `hotbar(name) { slot(0, item) { ... } }` DSL, apply/remove/install, `PlayerDisconnectEvent` cleans `playerOverrides` |
 | `portal/Portal.kt` | `portal(name) { region(); destination }` DSL, `PortalManager` |
 | ~~`resourcepack/`~~ | Removed — pack sending delegated to proxy |
 | `animation/Animation.kt` | `blockAnimation {}` / `entityAnimation {}` DSL, keyframes, interpolation, `packetOnly` mode for visual-only block animations via `BlockChangePacket` |
@@ -1188,7 +1267,7 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `podium/Podium.kt` | `podium(instance) { first(); second(); third(); displayDuration() }` DSL, pedestal blocks, firework, auto-cleanup |
 | `coinflip/CoinFlip.kt` | `coinFlip { onHeads {}; onTails {} }`, `diceRoll(sides) {}`, `weightedRandom<T> {}` DSL, animated reveal |
 | `spectatorcam/SpectatorCam.kt` | `spectatorCam(player) { target(); mode(FIRST_PERSON/FREE_CAM/ORBIT) }` DSL, orbit camera, player cycling |
-| `cinematic/CinematicCamera.kt` | `cinematic(player) { node(time, pos); lookAt(entity); loop(); onComplete {} }` DSL, keyframe path with catmull-rom/bezier/linear position interpolation, quaternion slerp rotation, dynamic lookAt target tracking, reuses `KeyframeInterpolator` + `quatSlerp` |
+| `cinematic/CinematicCamera.kt` | `cinematic(player) { node(time, pos); lookAt(entity); loop(); onComplete {} }` DSL, keyframe path with catmull-rom/bezier/linear position interpolation, quaternion slerp rotation, dynamic lookAt target tracking, reuses `KeyframeInterpolator` + `quatSlerp`, `install(eventNode)` disconnect cleanup |
 | `screen/Screen.kt` | `screen(player, eyePos) { cursor {}; background(color); onDraw { canvas -> }; button(id, x, y, w, h) { onClick {}; onHover {} }; panel(x, y, w, h, color) { label(); button(); progressBar(); image() } }` DSL, shader-decoded map-based renderer: MSB-split encoding into item frame map grid (640x384 default = 10x6 maps, 64x64 true-color pixels per map), GLSL palette reverse-lookup decode in `rendertype_text.fsh`+`entity.fsh`, `MapCanvas` pixel buffer with BitSet tile-level dirty tracking, `MapEncoder` tile encoding with magic signature + partial dirty-only encode, `MapDisplay` packet-based item frame grid with row-level partial `MapDataPacket` updates (diffs previous data, sends only changed row ranges), staggered initial load (20 tiles/tick), `ScreenConfig.kt` auto-depth projection with `require` validation, ITEM_DISPLAY cursor with interpolation, AABB hit-testing + widget tree hit-testing, camel mount input capture, `MapShaderPack.kt` generates 128-entry palette GLSL, `TextureLoader` (classpath/bytes/BufferedImage → `Texture` with scaling/sub-region), drawing primitives (`line`/`circle`/`filledCircle`/`roundedRect`/`stroke`/`linearGradient`/`radialGradient`/`blendPixel`), `BitmapFont` grid-atlas font system with built-in 6x8 default, `AnimationController` per-session tween system (`Easing.LINEAR/EASE_IN/EASE_OUT/EASE_IN_OUT`, `IntInterpolator`/`DoubleInterpolator`/`ColorInterpolator`), composable widget tree (`Panel`/`Label`/`Button`/`ProgressBar`/`ImageWidget`) with auto-draw and auto-hit-test |
 | `hud/Hud.kt` | Shader-based HUD system: boss bar text with bitmap font sprites repositioned by modified `rendertype_text` vertex shader. `hudLayout("id") { bar(); sprite(); text(); group(); animated() }` DSL, `player.showHud/hideHud/updateHud` extensions, per-player state via `HudManager`, 2-tick render loop with diff-only boss bar updates. See `utils/hud/hud.md` |
 | `chestloot/ChestLoot.kt` | `chestLoot(name) { tier("common") { item() }; fillChestsInRegion() }` DSL, weighted tiers, amount ranges via `LootItem(baseItem: ItemStack)`, items resolved via `ItemResolver` (custom content + vanilla), `maxPerChest` per item (caps duplicate appearances in one chest, filtered during roll with weight redistribution), `fillChestAt(table, x, y, z)`, `LootMode.GLOBAL` (shared) / `LootMode.PER_PLAYER` (lazy per-UUID generation), `getChestInventory(x, y, z, playerId)`, season-scoped via `Season.lootTables` (registered in `BattleRoyaleMode.init`, cleared on reset). **Loot zones**: `lootZone(name) { cylinder(center, radius); tier("common", 100) }` DSL, `ChestLootManager.registerZone(zone)` — region-based tier weight overrides, first matching zone wins (register inner→outer), applied at `fillChestAt`/`getChestInventory` time, cleared on `clear()`/`clearZones()` |
@@ -1197,13 +1276,14 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `customrecipe/CustomRecipe.kt` | `shapedRecipe(result) { pattern(); ingredient() }`, `shapelessRecipe {}`, `smeltingRecipe()`, `RecipeRegistry` matching, `RecipeHandle` unregistration |
 | `entityequipment/EntityEquipment.kt` | `Entity.equip { helmet(); chestplate(); mainHand() }` DSL, `Entity.clearEquipment()`, `Entity.getEquipmentSnapshot()`, `EquipmentSnapshot.apply()` |
 | `worldedit/WorldEdit.kt` | `WorldEdit.copy/paste/rotate/flip/fill/replace/undo/redo`, `ClipboardData` packed Long coords, per-player undo/redo stacks (max 50), Region-aware, `fillPattern()` weighted random block fill |
-| `commandbuilder/CommandBuilder.kt` | `command(name) { aliases(); permission(); playerOnly(); subCommand(); onPlayerExecute {}; onExecute() }` DSL, `CommandExecutionContext(player, args, locale)`, virtual-thread execution, typed arguments, tab completion, recursive sub-commands, `RankManager` permissions |
-| `commandbuilder/CommandHelpers.kt` | `OnlinePlayerCache` (5s refresh from SessionStore), `suggestPlayers(prefix)`, `resolvePlayer(name)` (online then PlayerStore) |
+| `commandbuilder/CommandBuilder.kt` | `command(name) { aliases(); permission(); playerOnly(); subCommand(); onPlayerExecute {}; onExecute() }` DSL, `CommandExecutionContext(player, args, locale)`, virtual-thread execution, typed arguments, vanish-aware `playerArgument()` tab completion (passes sender as viewer), recursive sub-commands, `RankManager` permissions |
+| `commandbuilder/CommandHelpers.kt` | `OnlinePlayerCache` (5s refresh from SessionStore), `suggestPlayers(prefix, viewer?)` vanish-aware, `resolvePlayer(name, viewer?)` vanish-aware (online then PlayerStore) |
 | `entityformation/EntityFormation.kt` | `entityFormation { circle(); line(); grid(); wedge() }` DSL, `Formation.apply(entities, center)`, `animate(speed)`, yaw rotation |
 | `musicsystem/MusicSystem.kt` | `song(name) { bpm(); note(tick, instrument, pitch) }` DSL, `Instance.playSong(pos, song)`, 16 instruments, tick-based playback, `SongManager` |
 | `broadcastscheduler/BroadcastScheduler.kt` | `broadcastScheduler { intervalSeconds(300); shuffled = true; message("<gold>Welcome!") }` DSL, `BroadcastScheduler` with `start()`/`stop()`/`isRunning`, cyclic message rotation to all online players |
 | `motd/Motd.kt` | `motd { line1 = "<gradient:gold:yellow>Nebula"; line2 = "<gray>Play now!" }` DSL, `MotdManager` singleton with `AtomicReference<MotdConfig>`, `ServerListPingEvent` listener, MiniMessage rendering |
 | `pagination/Pagination.kt` | `paginatedView<T> { items(); pageSize = 10; render { item, index -> }; header {}; footer {} }` DSL, `PaginatedView.send(player, page)`, translated header/footer, auto page clamping |
+| `dailyreward/DailyReward.kt` | Persistence-agnostic daily reward / login streak system. `dailyReward { day(1) { reward("coins", 100) }; resetAfterMiss(true); cycleDays(30) }` DSL, `DailyRewardConfig.claim(state)` returns `Pair<DailyRewardResult, DailyRewardState>`, sparse milestone resolution (highest defined day <= streak), `buildGuiItems(currentStreak)` GUI renderer (green/gold/gray glass). See `utils/dailyreward/dailyreward.md` |
 
 ## Cosmetics System — `cosmetic/`
 Player visual customization system with persistent ownership/equip state via Hazelcast stores, level progression, and GUI menus.
@@ -1279,8 +1359,8 @@ All particle methods are **per-player**: particles are sent individually to each
 ### CompanionManager (`CompanionManager.kt`)
 ModelEngine-based companion system:
 - `ConcurrentHashMap<UUID, ActiveCompanion>` tracks active companions
-- `install()` — 1-tick scheduled task for position updates (stored `Task` reference)
-- `uninstall()` — cancels task, removes all companion models
+- `install()` — 1-tick scheduled task for position updates (stored `Task` reference) + `PlayerDisconnectEvent` listener via EventNode for immediate despawn
+- `uninstall()` — cancels task, removes EventNode, removes all companion models
 - `spawn(player, cosmeticId, level)` — creates `standAloneModel` from resolved `modelId`, `scale`, `idleAnimation`
 - `despawn(playerId)` — removes model
 - Tick: builds `playersByUuid` map for O(1) owner lookup. Updates position to `playerPos.add(0.8, 2.0 + sin(tick * 0.1) * 0.15, 0.0)` (hover+bob), manages viewers within 48 blocks filtered by `CosmeticVisibility.shouldShowModel()`, hides viewers who changed preference to REDUCED/NONE, cleans disconnected players
@@ -1296,8 +1376,8 @@ Persistent ambient particle system:
 ### PetManager (`PetManager.kt`)
 Ground-following pet system with A* pathfinding:
 - `ConcurrentHashMap<UUID, ActivePet>` tracks active pets
-- `install()` — 2-tick scheduled task for pathfinding + movement (stored `Task` reference)
-- `uninstall()` — cancels task, destroys all pet models + entities
+- `install()` — 2-tick scheduled task for pathfinding + movement (stored `Task` reference) + `PlayerDisconnectEvent` listener via EventNode for immediate despawn
+- `uninstall()` — cancels task, removes EventNode, destroys all pet models + entities
 - `spawn(player, cosmeticId, level)` — creates invisible `EntityCreature` (ZOMBIE), uses non-blocking `setInstance().thenRun {}` to attach `modeledEntity()` model after instance placement. Reads `modelId`, `scale`, `walkAnimation` from resolved data.
 - `despawn(playerId)` — destroys model + removes entity
 - Tick: builds `playersByUuid` map for O(1) owner lookup. Calculates distance to owner. If >20 blocks, teleport. If >3 blocks, A* pathfind via `Pathfinder.findPath()` and move along path at 0.15 speed. If close, idle.
@@ -1310,6 +1390,8 @@ Ground-following pet system with A* pathfinding:
 ### GadgetManager (`GadgetManager.kt`)
 Usable lobby item system with cooldowns:
 - `ConcurrentHashMap<UUID, String>` tracks active gadgets (player → cosmeticId)
+- `install()` — registers `PlayerDisconnectEvent` listener via EventNode for immediate unequip
+- `uninstall()` — removes EventNode, clears active gadgets + cooldowns
 - `equip(player, cosmeticId, level)` — builds tagged item from cosmetic's material/name, places in hotbar slot 4
 - `unequip(player)` — removes gadget item, unregisters player
 - `onUse(player)` — resolves cosmetic data via `CosmeticDataCache.get()`, checks `Cooldown<UUID>` per gadget type, executes action
@@ -1329,8 +1411,8 @@ ModelEngine marker spawned at death location:
 ### CosmeticMountManager (`CosmeticMountManager.kt`)
 Rideable ModelEngine entity system:
 - `ConcurrentHashMap<UUID, ActiveMount>` tracks active mounts
-- `install()` — installs `MountManager` + 1-tick scheduled task for viewer management + animation (stored `Task` reference)
-- `uninstall()` — cancels task, evicts all mounted players, destroys all mount models + entities, calls `MountManager.uninstall()`
+- `install()` — installs `MountManager` + 1-tick scheduled task for viewer management + animation (stored `Task` reference) + `PlayerDisconnectEvent` listener via EventNode for immediate despawn
+- `uninstall()` — cancels task, removes EventNode, evicts all mounted players, destroys all mount models + entities, calls `MountManager.uninstall()`
 - `spawn(player, cosmeticId, level)` — creates invisible `EntityCreature` (ZOMBIE), uses non-blocking `setInstance().thenRun {}` to attach `modeledEntity()`, adds `MountBehavior` to seat bone at runtime, gives saddle item in slot 8
 - `despawn(playerId)` — dismounts via `MountManager.evictPlayer()`, destroys model + entity, removes saddle item
 - `toggleMount(player)` — if mounted: `MountManager.dismount()`. If not: teleports mount if >30 blocks away, then `MountManager.mount()` with `WalkingController(speed)`.
@@ -1378,8 +1460,8 @@ Hardcoded in `CosmeticDefinitions` (Gravity). 30 cosmetics across 15 categories.
 - Registry loaded after `app.start()`: `CosmeticRegistry.loadFromDefinitions()`
 - Active config wired from mode: `CosmeticListener.activeConfig = mode.cosmeticConfig`
 - Listener installed on global handler: `CosmeticListener.install(handler)`
-- Managers installed after listener: `AuraManager.install()`, `CompanionManager.install()`, `PetManager.install()`, `GravestoneManager.install()`, `CosmeticMountManager.install()`
-- **Shutdown**: all managers uninstalled in shutdown hook: `CosmeticListener.uninstall()`, `AuraManager.uninstall()`, `CompanionManager.uninstall()`, `PetManager.uninstall()`, `GravestoneManager.uninstall()`, `CosmeticMountManager.uninstall()`
+- Managers installed after listener: `AuraManager.install()`, `CompanionManager.install()`, `PetManager.install()`, `GadgetManager.install()`, `GravestoneManager.install()`, `CosmeticMountManager.install()`
+- **Shutdown**: all managers uninstalled in shutdown hook: `CosmeticListener.uninstall()`, `AuraManager.uninstall()`, `CompanionManager.uninstall()`, `PetManager.uninstall()`, `GadgetManager.uninstall()`, `GravestoneManager.uninstall()`, `CosmeticMountManager.uninstall()`
 - Command: `/cosmetics` opens `CosmeticMenu.openCategoryMenu(player)`
 - `CosmeticConfig.enabledCategories` defaults to all 15 categories via `CosmeticCategory.entries.map { it.name }`
 - `CosmeticConfig` with `enabledCategories` and `blacklist` is defined per mode: `HubDefinitions.CONFIG.cosmetics` and `Season.cosmetics` in the Season DSL. Defaults to all categories enabled with empty blacklist.
@@ -1525,7 +1607,7 @@ Permission: `orbit.customcontent`
 - Registered in `Orbit.kt` after `CustomContentRegistry.init()`. Pack sending removed — delegated to proxy.
 
 ### Basic Commands (`commands/BasicCommands.kt`)
-Installed via `installBasicCommands(commandManager)` — registers all commands + god mode listeners in `EventNode.all("basic-commands")`. `uninstallBasicCommands()` removes EventNode and clears god set.
+Installed via `installBasicCommands(commandManager)` — registers all commands + god mode damage listener in `EventNode.all("basic-commands")`. God mode uses `Tag.Boolean("nebula:god_mode")` on the Player — auto-cleaned on disconnect, no manual map tracking. `uninstallBasicCommands()` removes EventNode.
 
 | Command | Aliases | Permission | Args | Action |
 |---|---|---|---|---|

@@ -36,7 +36,7 @@ Opens a chest GUI listing all alive players with player heads. Clicking a player
 
 ### Speed Control
 
-Cycles through configured speed multipliers (default: 1x, 2x, 4x). Modifies `flyingSpeed` relative to the vanilla default (0.05).
+Cycles through configured speed multipliers (default: 1x, 2x, 4x). Modifies `flyingSpeed` relative to the vanilla default (0.05). Speed index is stored on the Player via `Tag.Integer("spectator:speed_index")` instead of a `ConcurrentHashMap`, so state is cleaned up automatically when the player entity is removed.
 
 ### Integration
 

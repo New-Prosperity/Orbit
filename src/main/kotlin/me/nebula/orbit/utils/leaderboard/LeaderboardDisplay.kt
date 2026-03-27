@@ -5,18 +5,13 @@ import me.nebula.gravity.ranking.RankedPlayer
 import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.ranking.rankingKey
 import me.nebula.orbit.translation.translate
-import me.nebula.orbit.utils.gui.GuiSlot
 import me.nebula.orbit.utils.gui.paginatedGui
+import me.nebula.orbit.utils.itembuilder.itemStack
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextDecoration
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.entity.Player
-import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import java.util.UUID
-
-private val miniMessage = MiniMessage.miniMessage()
 
 data class LeaderboardColumn(
     val statKey: String,
@@ -36,9 +31,6 @@ class LeaderboardDisplay @PublishedApi internal constructor(
 
     fun sendChat(player: Player, statKey: String, periodicity: Periodicity = defaultPeriodicity, limit: Int = 10) {
         val entries = query(statKey, periodicity)
-        val column = columns.firstOrNull { it.statKey == statKey }
-        val displayName = column?.displayKey?.let { player.translate(it) }
-            ?: Component.text(statKey)
 
         player.sendMessage(Component.empty())
         player.sendMessage(
@@ -69,21 +61,12 @@ class LeaderboardDisplay @PublishedApi internal constructor(
 
     fun openGui(player: Player, statKey: String, periodicity: Periodicity = defaultPeriodicity) {
         val entries = query(statKey, periodicity)
-        val column = columns.firstOrNull { it.statKey == statKey }
 
-        val gui = paginatedGui(
-            title = "<gold>Leaderboard - $statKey",
-            rows = 6,
-        ) {
+        val gui = paginatedGui(title = "<gold>Leaderboard - $statKey", rows = 6) {
             border(Material.BLACK_STAINED_GLASS_PANE)
 
-            for ((index, entry) in entries.withIndex()) {
+            for (entry in entries) {
                 val rank = entry.position + 1
-                val lore = buildList {
-                    add(miniMessage.deserialize("<gray>Rank: <white>#$rank"))
-                    add(miniMessage.deserialize("<gray>Score: <yellow>${formatScore(entry.score)}"))
-                }
-
                 val headMaterial = when (rank) {
                     1 -> Material.GOLD_BLOCK
                     2 -> Material.IRON_BLOCK
@@ -91,12 +74,12 @@ class LeaderboardDisplay @PublishedApi internal constructor(
                     else -> Material.PLAYER_HEAD
                 }
 
-                val itemStack = ItemStack.builder(headMaterial)
-                    .customName(miniMessage.deserialize("<white>${entry.name}"))
-                    .lore(lore)
-                    .build()
-
-                item(itemStack)
+                item(itemStack(headMaterial) {
+                    name("<white>${entry.name}")
+                    lore("<gray>Rank: <white>#$rank")
+                    lore("<gray>Score: <yellow>${formatScore(entry.score)}")
+                    clean()
+                })
             }
 
             for ((colIndex, col) in columns.withIndex()) {
@@ -104,11 +87,10 @@ class LeaderboardDisplay @PublishedApi internal constructor(
                 val slotIndex = 49 - columns.size + colIndex + 1
                 if (slotIndex !in 45..53) continue
 
-                val navItem = ItemStack.builder(col.material)
-                    .customName(miniMessage.deserialize("<yellow>${col.statKey}"))
-                    .build()
-
-                staticSlot(slotIndex, navItem) { p -> openGui(p, col.statKey, periodicity) }
+                staticSlot(slotIndex, itemStack(col.material) {
+                    name("<yellow>${col.statKey}")
+                    clean()
+                }) { p -> openGui(p, col.statKey, periodicity) }
             }
         }
 
@@ -116,10 +98,7 @@ class LeaderboardDisplay @PublishedApi internal constructor(
     }
 
     fun openCategorySelector(player: Player, periodicity: Periodicity = defaultPeriodicity) {
-        val gui = paginatedGui(
-            title = "<gold>Leaderboards",
-            rows = 3,
-        ) {
+        val gui = paginatedGui(title = "<gold>Leaderboards", rows = 3) {
             border(Material.BLACK_STAINED_GLASS_PANE)
 
             for (col in columns) {
@@ -127,18 +106,13 @@ class LeaderboardDisplay @PublishedApi internal constructor(
                 val topName = entries.firstOrNull()?.name ?: "---"
                 val topScore = entries.firstOrNull()?.let { formatScore(it.score) } ?: "0"
 
-                val lore = buildList {
-                    add(miniMessage.deserialize("<gray>Top: <gold>$topName <dark_gray>(<yellow>$topScore<dark_gray>)"))
-                    add(Component.empty())
-                    add(miniMessage.deserialize("<yellow>Click to view"))
-                }
-
-                val itemStack = ItemStack.builder(col.material)
-                    .customName(miniMessage.deserialize("<gold>${col.statKey}"))
-                    .lore(lore)
-                    .build()
-
-                item(itemStack) { p -> openGui(p, col.statKey, periodicity) }
+                item(itemStack(col.material) {
+                    name("<gold>${col.statKey}")
+                    lore("<gray>Top: <gold>$topName <dark_gray>(<yellow>$topScore<dark_gray>)")
+                    emptyLoreLine()
+                    lore("<yellow>Click to view")
+                    clean()
+                }) { p -> openGui(p, col.statKey, periodicity) }
             }
         }
 

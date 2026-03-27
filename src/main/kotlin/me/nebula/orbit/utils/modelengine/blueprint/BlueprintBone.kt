@@ -27,6 +27,5 @@ enum class BoneBehaviorType {
     GHOST,
     SEGMENT,
     SUB_HITBOX,
-    LEASH,
     PLAYER_LIMB,
 }

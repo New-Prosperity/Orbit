@@ -1,18 +1,16 @@
 package me.nebula.orbit.utils.minigametimer
 
+import me.nebula.orbit.utils.chat.miniMessage
+import me.nebula.orbit.utils.scheduler.repeat
 import net.kyori.adventure.bossbar.BossBar
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-
-private val miniMessage = MiniMessage.miniMessage()
 
 enum class DisplayMode { BOSS_BAR, ACTION_BAR, TITLE }
 
@@ -59,21 +57,18 @@ class MinigameTimer @PublishedApi internal constructor(
             )
         }
 
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask {
-                if (paused) return@buildTask
-                if (remainingTicks <= 0) {
-                    stop()
-                    onEnd()
-                    return@buildTask
-                }
-                onTick(remainingTicks)
-                checkMilestones()
-                updateDisplay()
-                remainingTicks--
+        task = repeat(1) {
+            if (paused) return@repeat
+            if (remainingTicks <= 0) {
+                stop()
+                onEnd()
+                return@repeat
             }
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+            onTick(remainingTicks)
+            checkMilestones()
+            updateDisplay()
+            remainingTicks--
+        }
     }
 
     fun pause() {

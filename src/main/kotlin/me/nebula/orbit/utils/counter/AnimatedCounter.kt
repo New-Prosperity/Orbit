@@ -1,12 +1,12 @@
 package me.nebula.orbit.utils.counter
 
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.pow
@@ -85,10 +85,7 @@ object AnimatedCounterManager {
         eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
             animations.remove(event.player.uuid)
         }
-        tickTask = MinecraftServer.getSchedulerManager()
-            .buildTask(::tick)
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+        tickTask = repeat(1) { tick() }
     }
 
     private fun tick() {

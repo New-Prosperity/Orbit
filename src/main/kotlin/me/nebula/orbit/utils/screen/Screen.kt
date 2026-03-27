@@ -5,6 +5,8 @@ import me.nebula.orbit.utils.screen.canvas.MapCanvas
 import me.nebula.orbit.utils.screen.display.MapDisplay
 import me.nebula.orbit.utils.screen.encoder.MapEncoder
 import me.nebula.orbit.utils.screen.widget.Widget
+import me.nebula.orbit.utils.scheduler.delay
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -33,7 +35,6 @@ import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
 import net.minestom.server.network.packet.server.play.EntityHeadLookPacket
 import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -116,21 +117,18 @@ object Screen {
 
     init {
         MinecraftServer.getGlobalEventHandler().addChild(globalNode)
-        MinecraftServer.getSchedulerManager()
-            .buildTask {
-                for ((uuid, session) in sessions) {
-                    val player = MinecraftServer.getConnectionManager()
-                        .onlinePlayers.firstOrNull { it.uuid == uuid } ?: continue
-                    if (player.vehicle?.entityId != session.anchorEntity.entityId) {
-                        session.anchorEntity.addPassenger(player)
-                        if (session.cameraApplied) {
-                            player.sendPacket(CameraPacket(session.viewpointEntityId))
-                        }
+        repeat(REMOUNT_CHECK_TICKS) {
+            for ((uuid, session) in sessions) {
+                val player = MinecraftServer.getConnectionManager()
+                    .onlinePlayers.firstOrNull { it.uuid == uuid } ?: continue
+                if (player.vehicle?.entityId != session.anchorEntity.entityId) {
+                    session.anchorEntity.addPassenger(player)
+                    if (session.cameraApplied) {
+                        player.sendPacket(CameraPacket(session.viewpointEntityId))
                     }
                 }
             }
-            .repeat(TaskSchedule.tick(REMOUNT_CHECK_TICKS))
-            .schedule()
+        }
     }
 
     fun open(player: Player, config: ScreenConfig, builder: ScreenBuilder) {
@@ -187,10 +185,7 @@ object Screen {
             if (index == 0) {
                 display.update(player, batch)
             } else {
-                MinecraftServer.getSchedulerManager()
-                    .buildTask { display.update(player, batch) }
-                    .delay(TaskSchedule.tick(index))
-                    .schedule()
+                delay(index) { display.update(player, batch) }
             }
         }
 
@@ -220,15 +215,12 @@ object Screen {
 
         sessions[player.uuid] = session
 
-        MinecraftServer.getSchedulerManager()
-            .buildTask {
-                val s = sessions[player.uuid] ?: return@buildTask
-                player.sendPacket(CameraPacket(viewpointEntityId))
-                s.cameraApplied = true
-                s.calibrated = false
-            }
-            .delay(TaskSchedule.tick(CAMERA_DELAY_TICKS))
-            .schedule()
+        delay(CAMERA_DELAY_TICKS) {
+            val s = sessions[player.uuid] ?: return@delay
+            player.sendPacket(CameraPacket(viewpointEntityId))
+            s.cameraApplied = true
+            s.calibrated = false
+        }
     }
 
     fun close(player: Player) {
@@ -242,10 +234,7 @@ object Screen {
         session.anchorEntity.remove()
         player.sendPacket(DestroyEntitiesPacket(listOf(session.viewpointEntityId, session.cursor.entityId)))
 
-        MinecraftServer.getSchedulerManager()
-            .buildTask { player.teleport(session.previousPosition) }
-            .delay(TaskSchedule.tick(1))
-            .schedule()
+        delay(1) { player.teleport(session.previousPosition) }
         session.onClose?.invoke()
     }
 

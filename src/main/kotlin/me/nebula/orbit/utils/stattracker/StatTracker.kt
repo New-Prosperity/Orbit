@@ -3,6 +3,9 @@ package me.nebula.orbit.utils.stattracker
 import me.nebula.orbit.translation.translateDefault
 import net.kyori.adventure.text.Component
 import net.minestom.server.entity.Player
+import net.minestom.server.event.Event
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -73,6 +76,12 @@ object StatTracker {
     fun clear() {
         stats.clear()
         derivedStats.clear()
+    }
+
+    fun install(eventNode: EventNode<Event>) {
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            resetAll(event.player.uuid)
+        }
     }
 
     fun top(stat: String, limit: Int = 10): List<Pair<UUID, Long>> {

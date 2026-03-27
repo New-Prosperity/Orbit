@@ -1,19 +1,17 @@
 package me.nebula.orbit.utils.notification
 
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.bossbar.BossBar
 import net.kyori.adventure.sound.Sound
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.title.Title
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 import net.minestom.server.sound.SoundEvent
-import net.minestom.server.timer.TaskSchedule
 import java.time.Duration
 import java.util.EnumSet
-
-private val miniMessage = MiniMessage.miniMessage()
 
 enum class NotificationChannel {
     CHAT,
@@ -69,7 +67,7 @@ data class Notification(
                     val intervalMs = 50L
                     val totalTicks = (durationMs / intervalMs).toInt().coerceAtLeast(1)
                     var ticksElapsed = 0
-                    MinecraftServer.getSchedulerManager().buildTask {
+                    repeat(Duration.ofMillis(intervalMs)) {
                         ticksElapsed++
                         val progress = 1f - (ticksElapsed.toFloat() / totalTicks)
                         if (progress <= 0f) {
@@ -77,7 +75,7 @@ data class Notification(
                         } else {
                             bar.progress(progress.coerceIn(0f, 1f))
                         }
-                    }.repeat(TaskSchedule.millis(intervalMs)).schedule()
+                    }
                 }
                 NotificationChannel.SOUND -> {
                     player.playSound(Sound.sound(soundEvent.key(), Sound.Source.MASTER, soundVolume, soundPitch))

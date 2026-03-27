@@ -10,9 +10,11 @@ import net.minestom.server.event.inventory.InventoryPreClickEvent
 import net.minestom.server.event.item.ItemDropEvent
 import net.minestom.server.event.player.PlayerBlockBreakEvent
 import net.minestom.server.event.player.PlayerBlockPlaceEvent
+import net.minestom.server.event.player.PlayerBlockInteractEvent
 import net.minestom.server.event.player.PlayerMoveEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.event.player.PlayerSwapItemEvent
+import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.instance.Instance
 import net.minestom.server.item.ItemStack
 
@@ -56,6 +58,18 @@ class Lobby(
 
             hotbarItems.forEach { (slot, entry) ->
                 player.inventory.setItemStack(slot, entry.item)
+            }
+        }
+
+        if (hotbarItems.isNotEmpty()) {
+            eventNode.addListener(PlayerUseItemEvent::class.java) { event ->
+                hotbarItems[event.player.heldSlot.toInt()]?.onClick?.invoke(event.player)
+            }
+            eventNode.addListener(PlayerBlockInteractEvent::class.java) { event ->
+                if (hotbarItems.containsKey(event.player.heldSlot.toInt())) {
+                    event.isCancelled = true
+                    event.isBlockingItemUse = true
+                }
             }
         }
 

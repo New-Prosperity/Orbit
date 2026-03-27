@@ -1,6 +1,6 @@
 # Region
 
-Sealed region types (cuboid, sphere, cylinder) with a global `RegionManager` registry.
+Sealed region types (cuboid, sphere, cylinder) with a global `RegionManager` registry and `RegionTracker` for enter/exit events.
 
 ## Key Classes
 
@@ -9,6 +9,7 @@ Sealed region types (cuboid, sphere, cylinder) with a global `RegionManager` reg
 - **`SphereRegion`** — sphere defined by center + radius
 - **`CylinderRegion`** — vertical cylinder defined by center + radius + height
 - **`RegionManager`** — singleton registry with spatial queries
+- **`RegionTracker`** — per-instance enter/exit event tracker (5-tick polling)
 
 ## Usage
 
@@ -28,5 +29,41 @@ RegionManager.isInAnyRegion(player.position)
 RegionManager.playersInRegion(spawn, instance)
 RegionManager.entitiesInRegion(spawn, instance)
 ```
+
+## RegionTracker
+
+Tracks player positions every 5 ticks and fires enter/exit handlers when players cross region boundaries.
+
+### DSL
+
+```kotlin
+val tracker = regionTracker {
+    track("spawn") {
+        onEnter { player -> player.sendMessage("Entered spawn") }
+        onExit { player -> player.sendMessage("Left spawn") }
+    }
+    track("arena") {
+        onEnter { player -> player.setGameMode(GameMode.ADVENTURE) }
+    }
+}
+tracker.install(instance)
+```
+
+### Manual API
+
+```kotlin
+val tracker = RegionTracker()
+tracker.onEnter("spawn") { player -> ... }
+tracker.onExit("spawn") { player -> ... }
+tracker.install(instance)
+```
+
+| Method | Description |
+|---|---|
+| `onEnter(regionName, handler)` | Register enter handler for a region |
+| `onExit(regionName, handler)` | Register exit handler for a region |
+| `install(instance)` | Start polling on the instance scheduler (5 ticks) |
+| `uninstall()` | Cancel the polling task |
+| `destroy()` | Cancel task and clear all state |
 
 Factory functions auto-normalize min/max for cuboid regions. Sphere uses squared-distance for efficient checks.

@@ -29,6 +29,9 @@ import me.nebula.orbit.mode.config.placeholderResolver
 import me.nebula.orbit.progression.BattlePassMenu
 import me.nebula.orbit.progression.achievement.AchievementMenu
 import me.nebula.orbit.progression.mission.MissionMenu
+import me.nebula.orbit.utils.scheduler.delay
+import me.nebula.orbit.utils.scheduler.repeat
+import me.nebula.orbit.utils.scheduler.runAsync
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
 import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.hotbar.hotbar
@@ -49,17 +52,19 @@ import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
-import net.minestom.server.timer.TaskSchedule
 import me.nebula.gravity.cache.PlayerCache
 import me.nebula.gravity.leveling.LevelFormula
 import me.nebula.orbit.cached
+import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.counter.AnimatedCounterManager
 import me.nebula.orbit.utils.counter.Easing
 import me.nebula.orbit.utils.nameplate.NameplateManager
 import me.nebula.orbit.utils.nameplate.nameplateLayout
 import me.nebula.orbit.utils.sound.playSound
+import me.nebula.orbit.utils.vanish.VanishManager
 import me.nebula.orbit.utils.world.configureWorld
 import net.minestom.server.entity.Player
+import net.minestom.server.timer.Task
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
@@ -93,9 +98,10 @@ class HubMode : ServerMode {
     private var queueProvisioningSubscription: UUID? = null
     private var partyQueueSubscription: UUID? = null
     private var gameEndSubscription: UUID? = null
+    private var tabRefreshTask: Task? = null
 
     private fun scheduleSync(block: () -> Unit) {
-        MinecraftServer.getSchedulerManager().buildTask(block).schedule()
+        runAsync(block)
     }
 
     private inline fun <reified T : me.nebula.gravity.messaging.NetworkMessage> subscribeSync(
@@ -294,7 +300,6 @@ class HubMode : ServerMode {
     }
 
     private val tabFakeUuids = Array(TAB_TOTAL) { UUID.nameUUIDFromBytes("hubtab:$it".toByteArray()) }
-    private val tabMm = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage()
     private val tabSentTo = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
     private val blankSkin = listOf(PlayerInfoUpdatePacket.Property(
         "textures",
@@ -306,22 +311,15 @@ class HubMode : ServerMode {
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
             if (!event.isFirstSpawn) return@addListener
             sendFullTabList(event.player)
-            MinecraftServer.getSchedulerManager().buildTask {
-                broadcastTabUpdate()
-            }.delay(TaskSchedule.tick(2)).schedule()
+            delay(2) { broadcastTabUpdate() }
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             tabSentTo.remove(event.player.uuid)
-            MinecraftServer.getSchedulerManager().buildTask {
-                broadcastTabUpdate()
-            }.delay(TaskSchedule.tick(2)).schedule()
+            delay(2) { broadcastTabUpdate() }
         }
 
-        MinecraftServer.getSchedulerManager()
-            .buildTask { broadcastTabUpdate() }
-            .repeat(TaskSchedule.seconds(5))
-            .schedule()
+        tabRefreshTask = repeat(java.time.Duration.ofSeconds(5)) { broadcastTabUpdate() }
     }
 
     private fun sendFullTabList(viewer: net.minestom.server.entity.Player) {
@@ -355,6 +353,7 @@ class HubMode : ServerMode {
 
     private fun buildTabEntries(viewer: net.minestom.server.entity.Player): List<PlayerInfoUpdatePacket.Entry> {
         val sorted = MinecraftServer.getConnectionManager().onlinePlayers
+            .filter { VanishManager.canSee(viewer, it) }
             .sortedWith(
                 compareBy<net.minestom.server.entity.Player> { it.rankWeight }
                     .thenBy { it.username.lowercase() }
@@ -370,12 +369,13 @@ class HubMode : ServerMode {
             entries += fakeEntry(tabFakeUuids[i], i, net.kyori.adventure.text.Component.text(" "))
         }
 
-        val headerText = viewer.translateRaw("orbit.tab.players_header", "count" to sorted.size.toString())
-        entries += fakeEntry(tabFakeUuids[HEADER_SLOT], HEADER_SLOT, tabMm.deserialize(headerText))
+        val visibleCount = VanishManager.visiblePlayerCount(viewer)
+        val headerText = viewer.translateRaw("orbit.tab.players_header", "count" to visibleCount.toString())
+        entries += fakeEntry(tabFakeUuids[HEADER_SLOT], HEADER_SLOT, miniMessage.deserialize(headerText))
 
         for (i in 0 until displayCount) {
             val player = sorted[i]
-            val name = tabMm.deserialize("${player.rankPrefix}<${player.rankColor}>${player.username}")
+            val name = miniMessage.deserialize("${player.rankPrefix}<${player.rankColor}>${player.username}")
             entries += fakeEntry(tabFakeUuids[PLAYER_START + i], PLAYER_START + i, name)
         }
 
@@ -383,7 +383,7 @@ class HubMode : ServerMode {
 
         if (hasOverflow) {
             val text = viewer.translateRaw("orbit.tab.overflow", "count" to overflowCount.toString())
-            entries += fakeEntry(tabFakeUuids[nextSlot], nextSlot, tabMm.deserialize(text))
+            entries += fakeEntry(tabFakeUuids[nextSlot], nextSlot, miniMessage.deserialize(text))
             nextSlot++
         }
 
@@ -439,14 +439,17 @@ class HubMode : ServerMode {
         val ticksBetweenSounds = 6
         val totalSoundTicks = 40
         var soundTick = 0
-        MinecraftServer.getSchedulerManager().buildTask {
-            if (soundTick >= totalSoundTicks) return@buildTask
+        repeat(ticksBetweenSounds) {
+            if (soundTick >= totalSoundTicks) return@repeat
             soundTick += ticksBetweenSounds
             player.playSound(SoundEvent.ENTITY_EXPERIENCE_ORB_PICKUP, 0.3f, 0.8f + (soundTick.toFloat() / totalSoundTicks) * 0.8f)
-        }.repeat(TaskSchedule.tick(ticksBetweenSounds)).schedule()
+        }
     }
 
     override fun shutdown() {
+        tabRefreshTask?.cancel()
+        tabRefreshTask = null
+        NameplateManager.uninstall()
         hostStatusSubscription?.let { NetworkMessenger.unsubscribe<HostProvisionStatusMessage>(it) }
         queueRemovedSubscription?.let { NetworkMessenger.unsubscribe<QueueRemovedMessage>(it) }
         queueAssignmentSubscription?.let { NetworkMessenger.unsubscribe<QueueAssignmentMessage>(it) }

@@ -1,13 +1,11 @@
 package me.nebula.orbit.utils.autorestart
 
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.chat.miniMessage
+import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
-
-private val miniMessage = MiniMessage.miniMessage()
 
 class AutoRestartConfig @PublishedApi internal constructor() {
 
@@ -51,17 +49,11 @@ object AutoRestartManager {
             .filter { it < config.delay }
             .forEach { interval ->
                 val fireAt = config.delay.minus(interval)
-                val warningTask = MinecraftServer.getSchedulerManager()
-                    .buildTask { broadcastWarning(interval) }
-                    .delay(TaskSchedule.duration(fireAt))
-                    .schedule()
+                val warningTask = delay(fireAt) { broadcastWarning(interval) }
                 warningTasks.add(warningTask)
             }
 
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask { executeRestart() }
-            .delay(TaskSchedule.duration(config.delay))
-            .schedule()
+        task = delay(config.delay) { executeRestart() }
     }
 
     fun scheduleRestart(delay: Duration) {

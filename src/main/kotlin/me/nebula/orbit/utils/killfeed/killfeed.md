@@ -35,6 +35,7 @@ val feed = killFeed {
 
 ```kotlin
 feed.reportKill(KillEvent(killer = attacker, victim = target))
+feed.removePlayer(uuid)
 feed.clear()
 ```
 
@@ -51,4 +52,4 @@ feed.clear()
 
 ### Integration
 
-Game modes create a `KillFeed` and call `reportKill()` in their damage/death handlers.
+Game modes create a `KillFeed` and call `reportKill()` in their damage/death handlers. `removePlayer(uuid)` is called from `GameMode.handlePlayerDisconnect()` to clean up multi-kill tracking state on disconnect.

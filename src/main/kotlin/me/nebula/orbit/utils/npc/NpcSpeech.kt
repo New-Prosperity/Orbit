@@ -3,7 +3,8 @@ package me.nebula.orbit.utils.npc
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.localeCode
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.chat.miniMessage
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -15,13 +16,11 @@ import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
 import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
-private val mm = MiniMessage.miniMessage()
 private val bubbleEntityIds = AtomicInteger(-6_000_000)
 
 private const val META_NO_GRAVITY = 5
@@ -129,7 +128,7 @@ class NpcSpeechManager(
 
     fun showBubbleTo(player: Player, bubble: ActiveBubble, line: SpeechLine) {
         val text = resolveText(player, line)
-        val bubbleText = mm.deserialize("<white>\u2709 $text")
+        val bubbleText = miniMessage.deserialize("<white>\u2709 $text")
         val pos = npc.position.add(0.0, config.bubbleYOffset.toDouble(), 0.0)
 
         player.sendPacket(SpawnEntityPacket(
@@ -212,10 +211,7 @@ object NpcSpeechTicker {
     fun register(npc: Npc, manager: NpcSpeechManager) {
         managers[npc.entityId] = manager
         if (task == null) {
-            task = MinecraftServer.getSchedulerManager()
-                .buildTask { managers.values.forEach { it.tick() } }
-                .repeat(TaskSchedule.tick(5))
-                .schedule()
+            task = repeat(5) { managers.values.forEach { it.tick() } }
         }
     }
 

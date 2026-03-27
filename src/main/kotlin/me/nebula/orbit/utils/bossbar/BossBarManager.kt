@@ -1,10 +1,8 @@
 package me.nebula.orbit.utils.bossbar
 
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.bossbar.BossBar
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.minestom.server.entity.Player
-
-private val miniMessage = MiniMessage.miniMessage()
 
 class BossBarBuilder @PublishedApi internal constructor(private val title: String) {
 

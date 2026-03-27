@@ -5,6 +5,9 @@ import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
+import net.minestom.server.timer.Task
+import net.minestom.server.timer.TaskSchedule
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 sealed interface Region {
@@ -116,3 +119,77 @@ fun sphereRegion(name: String, center: Pos, radius: Double): SphereRegion =
 
 fun cylinderRegion(name: String, center: Pos, radius: Double, height: Double): CylinderRegion =
     CylinderRegion(name, center, radius, height)
+
+class RegionTracker {
+
+    private val playerRegions = ConcurrentHashMap<UUID, MutableSet<String>>()
+    private val enterHandlers = ConcurrentHashMap<String, MutableList<(Player) -> Unit>>()
+    private val exitHandlers = ConcurrentHashMap<String, MutableList<(Player) -> Unit>>()
+    private var task: Task? = null
+
+    fun onEnter(regionName: String, handler: (Player) -> Unit) {
+        enterHandlers.getOrPut(regionName) { mutableListOf() }.add(handler)
+    }
+
+    fun onExit(regionName: String, handler: (Player) -> Unit) {
+        exitHandlers.getOrPut(regionName) { mutableListOf() }.add(handler)
+    }
+
+    fun install(instance: Instance) {
+        task = instance.scheduler().buildTask {
+            for (player in instance.players) {
+                val current = RegionManager.regionsAt(player.position).map { it.name }.toSet()
+                val previous = playerRegions.getOrPut(player.uuid) { mutableSetOf() }
+                val entered = current - previous
+                val exited = previous - current
+
+                for (name in entered) {
+                    enterHandlers[name]?.forEach { it(player) }
+                }
+                for (name in exited) {
+                    exitHandlers[name]?.forEach { it(player) }
+                }
+
+                previous.clear()
+                previous.addAll(current)
+            }
+        }.repeat(TaskSchedule.tick(5)).schedule()
+    }
+
+    fun uninstall() {
+        task?.cancel()
+        task = null
+    }
+
+    fun destroy() {
+        uninstall()
+        playerRegions.clear()
+        enterHandlers.clear()
+        exitHandlers.clear()
+    }
+}
+
+class RegionTrackerEntryBuilder @PublishedApi internal constructor(
+    private val regionName: String,
+    private val tracker: RegionTracker,
+) {
+    fun onEnter(handler: (Player) -> Unit) {
+        tracker.onEnter(regionName, handler)
+    }
+
+    fun onExit(handler: (Player) -> Unit) {
+        tracker.onExit(regionName, handler)
+    }
+}
+
+class RegionTrackerBuilder @PublishedApi internal constructor() {
+
+    @PublishedApi internal val tracker = RegionTracker()
+
+    inline fun track(regionName: String, block: RegionTrackerEntryBuilder.() -> Unit) {
+        RegionTrackerEntryBuilder(regionName, tracker).apply(block)
+    }
+}
+
+inline fun regionTracker(block: RegionTrackerBuilder.() -> Unit): RegionTracker =
+    RegionTrackerBuilder().apply(block).tracker

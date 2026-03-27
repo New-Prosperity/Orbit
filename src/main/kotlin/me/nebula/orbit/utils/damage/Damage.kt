@@ -1,6 +1,6 @@
 package me.nebula.orbit.utils.damage
 
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Entity
@@ -63,8 +63,6 @@ object DamageTracker {
 fun Player.damageHistory(): List<DamageRecord> = DamageTracker.getHistory(this)
 fun Player.lastDamager(): UUID? = DamageTracker.getLastDamager(this)
 fun Player.recentDamage(withinMs: Long = 5000L): List<DamageRecord> = DamageTracker.getRecentDamage(this, withinMs)
-
-private val miniMessage = MiniMessage.miniMessage()
 
 object DamageIndicator {
 

@@ -160,6 +160,7 @@ object BattleRoyaleKitManager {
         itemStack(Material.NETHER_STAR) {
             name(player.translateRaw("orbit.game.br.kit.selector"))
             glowing()
+            clean()
         }
 
 }

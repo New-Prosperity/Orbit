@@ -53,11 +53,6 @@ object BoneBehaviorFactory {
             damageMultiplier = (config["damageMultiplier"] as? Number)?.toFloat() ?: 1f,
         )
 
-        BoneBehaviorType.LEASH -> LeashBehavior(
-            bone = bone,
-            maxDistance = (config["maxDistance"] as? Number)?.toDouble() ?: 10.0,
-        )
-
         BoneBehaviorType.PLAYER_LIMB -> {
             val skinTextures = config["skinTextures"] as? String
             val skinSignature = config["skinSignature"] as? String

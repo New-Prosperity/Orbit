@@ -5,15 +5,12 @@ import me.nebula.orbit.translation.translateDefault
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
-import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.title.Title
 import net.minestom.server.entity.Player
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-
-private val miniMessage = MiniMessage.miniMessage()
 
 data class PlayerStat(val uuid: UUID, val name: String, val value: Double)
 
@@ -26,6 +23,9 @@ data class MatchResult(
     val duration: Duration,
     val timestamp: Long,
     val metadata: Map<String, String>,
+    val winnerTeam: String? = null,
+    val loserTeams: List<String> = emptyList(),
+    val teamStats: Map<String, Map<String, Double>> = emptyMap(),
 )
 
 class StatEntryBuilder @PublishedApi internal constructor(private val statName: String) {
@@ -50,6 +50,9 @@ class MatchResultBuilder @PublishedApi internal constructor() {
     @PublishedApi internal val stats = mutableMapOf<String, List<PlayerStat>>()
     @PublishedApi internal var duration: Duration = Duration.ZERO
     @PublishedApi internal val metadata = mutableMapOf<String, String>()
+    @PublishedApi internal var winnerTeam: String? = null
+    @PublishedApi internal val loserTeams = mutableListOf<String>()
+    @PublishedApi internal val teamStats = mutableMapOf<String, MutableMap<String, Double>>()
 
     fun winner(player: Player) { winner = player.uuid to player.username }
     fun winner(uuid: UUID, name: String) { winner = uuid to name }
@@ -61,6 +64,11 @@ class MatchResultBuilder @PublishedApi internal constructor() {
     fun mvp(uuid: UUID, name: String) { mvp = uuid to name }
     fun duration(dur: Duration) { duration = dur }
     fun metadata(key: String, value: String) { metadata[key] = value }
+    fun winnerTeam(name: String) { winnerTeam = name }
+    fun loserTeam(name: String) { loserTeams.add(name) }
+    fun teamStat(team: String, statName: String, value: Double) {
+        teamStats.getOrPut(team) { mutableMapOf() }[statName] = value
+    }
 
     inline fun stat(name: String, block: StatEntryBuilder.() -> Unit) {
         stats[name] = StatEntryBuilder(name).apply(block).entries.toList()
@@ -75,6 +83,9 @@ class MatchResultBuilder @PublishedApi internal constructor() {
         duration = duration,
         timestamp = System.currentTimeMillis(),
         metadata = metadata.toMap(),
+        winnerTeam = winnerTeam,
+        loserTeams = loserTeams.toList(),
+        teamStats = teamStats.mapValues { (_, v) -> v.toMap() },
     )
 }
 
@@ -94,6 +105,11 @@ object MatchResultDisplay {
             result.winner?.let { (_, name) ->
                 add(translateDefault("orbit.util.match_result.winner", "name" to name).color(NamedTextColor.GRAY))
             }
+        }
+
+        result.winnerTeam?.let { team ->
+            add(Component.empty())
+            add(translateDefault("orbit.util.match_result.team_winner", "team" to team).color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD))
         }
 
         add(Component.empty())
@@ -127,6 +143,21 @@ object MatchResultDisplay {
                             .append(Component.text(stat.name, NamedTextColor.WHITE))
                             .append(Component.text(" - ", NamedTextColor.DARK_GRAY))
                             .append(Component.text(formatValue(stat.value), NamedTextColor.YELLOW))
+                    )
+                }
+            }
+        }
+
+        if (result.teamStats.isNotEmpty()) {
+            add(Component.empty())
+            add(translateDefault("orbit.util.match_result.team_stats").color(NamedTextColor.WHITE).decorate(TextDecoration.BOLD))
+            result.teamStats.forEach { (team, stats) ->
+                add(Component.empty())
+                add(Component.text("  $team:", NamedTextColor.AQUA))
+                stats.forEach { (statName, value) ->
+                    add(
+                        Component.text("    $statName: ", NamedTextColor.GRAY)
+                            .append(Component.text(formatValue(value), NamedTextColor.YELLOW))
                     )
                 }
             }

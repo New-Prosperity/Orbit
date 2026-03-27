@@ -4,6 +4,7 @@ import me.nebula.gravity.mission.MissionData
 import me.nebula.gravity.mission.MissionStore
 import me.nebula.gravity.mission.ActiveMission
 import me.nebula.orbit.translation.translateRaw
+import me.nebula.orbit.utils.gui.GuiBuilder
 import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.gui.openGui
 import me.nebula.orbit.utils.itembuilder.itemStack
@@ -20,7 +21,7 @@ object MissionMenu {
                 name(player.translateRaw("orbit.mission.daily_header"))
                 val resetIn = formatDuration(data.dailyResetAt - System.currentTimeMillis())
                 lore(player.translateRaw("orbit.mission.reset_timer", "time" to resetIn))
-                    clean()
+                clean()
             })
 
             buildMissionSlots(player, data.dailyMissions, intArrayOf(10, 12, 14))
@@ -29,17 +30,17 @@ object MissionMenu {
                 name(player.translateRaw("orbit.mission.weekly_header"))
                 val resetIn = formatDuration(data.weeklyResetAt - System.currentTimeMillis())
                 lore(player.translateRaw("orbit.mission.reset_timer", "time" to resetIn))
-                    clean()
+                clean()
             })
 
             buildMissionSlots(player, data.weeklyMissions, intArrayOf(19, 21, 23))
 
-            fill(Material.GRAY_STAINED_GLASS_PANE)
+            fillDefault()
         }
         player.openGui(missionGui)
     }
 
-    private fun me.nebula.orbit.utils.gui.GuiBuilder.buildMissionSlots(
+    private fun GuiBuilder.buildMissionSlots(
         player: Player,
         missions: List<ActiveMission>,
         slots: IntArray,
@@ -62,7 +63,7 @@ object MissionMenu {
                     "coins" to mission.coinReward.toString(),
                 ))
                 if (mission.completed) glowing()
-                    clean()
+                clean()
             })
         }
     }

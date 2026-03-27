@@ -7,11 +7,9 @@ import net.kyori.adventure.sound.Sound
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.JoinConfiguration
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.minimessage.MiniMessage
+import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.entity.Player
 import net.minestom.server.sound.SoundEvent
-
-private val mm = MiniMessage.miniMessage()
 
 data class SummaryLine(
     val icon: String,
@@ -66,12 +64,12 @@ fun Player.showRewardSummary(block: RewardSummaryBuilder.() -> Unit) {
 
     val chatParts = builder.lines.map { entry ->
         val display = if (entry.animate) "+${entry.amount}" else "${entry.amount}"
-        mm.deserialize("<${entry.color.toString().lowercase()}>${entry.icon} $display ${entry.label}")
+        miniMessage.deserialize("<${entry.color.toString().lowercase()}>${entry.icon} $display ${entry.label}")
     }
 
-    val headerLine = mm.deserialize(builder.header)
+    val headerLine = miniMessage.deserialize(builder.header)
     val rewardLine = Component.join(
-        JoinConfiguration.separator(mm.deserialize(" <dark_gray>\u2502 ")),
+        JoinConfiguration.separator(miniMessage.deserialize(" <dark_gray>\u2502 ")),
         chatParts,
     )
 
@@ -84,7 +82,7 @@ fun Player.showRewardSummary(block: RewardSummaryBuilder.() -> Unit) {
     }
 
     val slotId = builder.actionBarSlot ?: return
-    val animatable = builder.lines.firstOrNull { it.animate && it.previousAmount != it.previousAmount + it.amount } ?: return
+    val animatable = builder.lines.firstOrNull { it.animate && it.amount != 0L } ?: return
 
     AnimatedCounterManager.start(
         player = this,
@@ -96,11 +94,11 @@ fun Player.showRewardSummary(block: RewardSummaryBuilder.() -> Unit) {
         onTick = { value ->
             val parts = builder.lines.map { e ->
                 val v = if (e === animatable) value else if (e.animate) e.previousAmount + e.amount else e.amount
-                mm.deserialize("<${e.color.toString().lowercase()}>${e.icon} $v")
+                miniMessage.deserialize("<${e.color.toString().lowercase()}>${e.icon} $v")
             }
             ActionBarManager.set(
                 this, slotId, builder.actionBarPriority,
-                Component.join(JoinConfiguration.separator(mm.deserialize(" <dark_gray>\u2502 ")), parts),
+                Component.join(JoinConfiguration.separator(miniMessage.deserialize(" <dark_gray>\u2502 ")), parts),
                 durationMs = (builder.durationTicks * 50 + 2000).toLong(),
             )
         },

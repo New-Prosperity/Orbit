@@ -1,6 +1,6 @@
 # Achievement
 
-Network-wide achievement system with persistent progress (Gravity `AchievementStore`), categories, stat-based triggers, and vanilla advancement toast UI.
+Network-wide achievement system with persistent progress (Gravity `AchievementStore`), categories, stat-based triggers, rewards, prerequisites, and vanilla advancement toast UI.
 
 ## DSL
 
@@ -12,8 +12,40 @@ val ach = achievement("first-kill") {
     icon = Material.DIAMOND_SWORD
     maxProgress = 1
     frameType = FrameType.TASK
+    reward("coins", 500)
+    reward("xp", 100)
+    requires("tutorial-complete")
 }
 AchievementRegistry.register(ach)
+```
+
+## Rewards
+
+`AchievementReward(type: String, amount: Int)` — attached to achievements via the builder.
+
+```kotlin
+achievement("master-slayer") {
+    reward("coins", 1000)
+    reward("xp", 250)
+}
+```
+
+Access via `achievement.rewards` after registration.
+
+## Prerequisites
+
+Achievements can require other achievements to be completed before they can be unlocked.
+
+```kotlin
+achievement("advanced-combat") {
+    requires("first-kill")
+    requires("ten-kills")
+}
+```
+
+Check eligibility:
+```kotlin
+AchievementRegistry.canUnlock(playerUuid, "advanced-combat") // true if all prerequisites completed
 ```
 
 ## Categories
@@ -67,7 +99,17 @@ AchievementTriggerManager.bind("first-win", "wins") { uuid, _, value -> value >=
 | `completedCount(player/uuid)` | Count completed |
 | `completedInCategory(uuid, cat)` | Count in category |
 | `totalInCategory(cat)` | Total in category |
+| `canUnlock(uuid, id)` | Check all prerequisites are completed |
 | `onUnlock(handler)` | Custom unlock handler |
+
+## Progress Bar
+
+Standalone helper for rendering text-based progress bars:
+
+```kotlin
+progressBar(7, 10)       // [██████████████░░░░░░]
+progressBar(3, 10, 10)   // [███░░░░░░░]
+```
 
 ## Unlock Notification
 

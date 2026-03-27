@@ -1,14 +1,18 @@
 package me.nebula.orbit.utils.compass
 
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.item.Material
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.atan2
+import kotlin.math.sqrt
 
 sealed interface CompassTarget {
     data class PlayerTarget(val uuid: UUID) : CompassTarget
@@ -19,6 +23,7 @@ object CompassTracker {
 
     private val targets = ConcurrentHashMap<UUID, CompassTarget>()
     private var tickTask: Task? = null
+    private var eventNode: EventNode<*>? = null
 
     fun track(player: Player, target: Player) {
         targets[player.uuid] = CompassTarget.PlayerTarget(target.uuid)
@@ -38,15 +43,20 @@ object CompassTracker {
 
     fun start(updateIntervalTicks: Int = 10) {
         stop()
-        tickTask = MinecraftServer.getSchedulerManager()
-            .buildTask(::tick)
-            .repeat(TaskSchedule.tick(updateIntervalTicks))
-            .schedule()
+        val node = EventNode.all("compass-tracker")
+        node.addListener(PlayerDisconnectEvent::class.java) { event ->
+            targets.remove(event.player.uuid)
+        }
+        MinecraftServer.getGlobalEventHandler().addChild(node)
+        eventNode = node
+        tickTask = repeat(updateIntervalTicks) { tick() }
     }
 
     fun stop() {
         tickTask?.cancel()
         tickTask = null
+        eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        eventNode = null
     }
 
     fun clear() {
@@ -73,12 +83,12 @@ object CompassTracker {
 
             val dx = targetPos.x() - tracker.position.x()
             val dz = targetPos.z() - tracker.position.z()
-            val distance = kotlin.math.sqrt(dx * dx + dz * dz)
+            val distance = sqrt(dx * dx + dz * dz)
 
             val direction = when {
                 distance < 5 -> "HERE"
                 else -> {
-                    val angle = Math.toDegrees(kotlin.math.atan2(-dx, dz)).let { if (it < 0) it + 360 else it }
+                    val angle = Math.toDegrees(atan2(-dx, dz)).let { if (it < 0) it + 360 else it }
                     when {
                         angle < 22.5 || angle >= 337.5 -> "N"
                         angle < 67.5 -> "NE"

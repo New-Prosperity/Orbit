@@ -1,6 +1,6 @@
 # Knockback
 
-Configurable knockback profiles with per-player overrides and directional application.
+Configurable knockback profiles with per-player overrides via `Tag.String("nebula:knockback_override")` and directional application.
 
 ## Usage
 
@@ -20,11 +20,11 @@ target.applyDirectionalKnockback(attacker.position.yaw(), profile)
 
 ## Key API
 
-- `knockbackProfile(name) { }` — DSL to build a `KnockbackProfile`
-- `KnockbackManager.register(profile)` — register a named profile
-- `KnockbackManager.get(name)` — get a profile by name
-- `KnockbackManager.setPlayerProfile(player, profileName)` — override profile for a player
-- `KnockbackManager.clearPlayerProfile(player)` — remove player override
-- `KnockbackManager.getEffectiveProfile(player)` — resolve active profile (override or default)
-- `Entity.applyKnockback(source, profile)` — apply knockback away from source entity
-- `Entity.applyDirectionalKnockback(yawDegrees, profile)` — apply knockback in a specific direction
+- `knockbackProfile(name) { }` -- DSL to build a `KnockbackProfile`
+- `KnockbackManager.register(profile)` -- register a named profile
+- `KnockbackManager.get(name)` -- get a profile by name
+- `KnockbackManager.setPlayerProfile(player, profileName)` -- override profile for a player (stored as player tag)
+- `KnockbackManager.clearPlayerProfile(player)` -- remove player override tag
+- `KnockbackManager.getEffectiveProfile(player)` -- resolve active profile (override tag or default)
+- `Entity.applyKnockback(source, profile)` -- apply knockback away from source entity
+- `Entity.applyDirectionalKnockback(yawDegrees, profile)` -- apply knockback in a specific direction

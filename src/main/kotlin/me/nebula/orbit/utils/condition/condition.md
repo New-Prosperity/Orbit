@@ -36,9 +36,14 @@ noneOf(a, b)  // none pass
 - `isOnGround()` - Player on ground
 - `isSneaking()` - Player sneaking
 - `isSprinting()` - Player sprinting
+- `isFlying()` - Player is flying
 - `hasMinPlayers(count)` - Instance has >= count players
+- `maxPlayers(count)` - Instance has <= count players
 - `isInInstance(instance)` - Player in specific instance
 - `hasExperience(min)` - Player level >= min
+- `isDay()` - Instance time < 12000 (daytime)
+- `isNight()` - Instance time >= 12000 (nighttime)
+- `hasEffect(effect)` - Player has active potion effect
 
 ## Custom Conditions
 

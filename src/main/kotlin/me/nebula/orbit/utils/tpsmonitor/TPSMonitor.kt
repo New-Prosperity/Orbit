@@ -1,8 +1,7 @@
 package me.nebula.orbit.utils.tpsmonitor
 
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 
 object TPSMonitor {
 
@@ -59,10 +58,7 @@ object TPSMonitor {
         lastTickNanos = System.nanoTime()
         sampleCount = 0
         writeIndex = 0
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask(::recordTick)
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
+        task = repeat(1) { recordTick() }
     }
 
     fun stop() {

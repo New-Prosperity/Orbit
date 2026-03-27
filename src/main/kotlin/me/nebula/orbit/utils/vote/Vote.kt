@@ -1,9 +1,8 @@
 package me.nebula.orbit.utils.vote
 
-import net.minestom.server.MinecraftServer
+import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.entity.Player
 import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -32,13 +31,10 @@ class Poll<T>(
         ticksRemaining = durationTicks
         votes.clear()
 
-        task = MinecraftServer.getSchedulerManager()
-            .buildTask {
+        task = repeat(1) {
                 ticksRemaining--
                 if (ticksRemaining <= 0) end()
             }
-            .repeat(TaskSchedule.tick(1))
-            .schedule()
     }
 
     fun vote(player: Player, optionIndex: Int): Boolean {
