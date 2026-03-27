@@ -1,5 +1,7 @@
 package me.nebula.orbit.mode.game
 
+import me.nebula.orbit.utils.vanish.VanishManager
+import net.minestom.server.MinecraftServer
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -35,6 +37,11 @@ class PlayerTracker {
 
     val aliveCount: Int get() = players.values.count { it is PlayerState.Alive }
     val effectiveAliveCount: Int get() = players.values.count { it !is PlayerState.Spectating }
+
+    fun visibleAliveCount(): Int = alive.count { uuid ->
+        val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: return@count true
+        !VanishManager.isVanished(player)
+    }
     val size: Int get() = players.size
 
     fun join(uuid: UUID) {

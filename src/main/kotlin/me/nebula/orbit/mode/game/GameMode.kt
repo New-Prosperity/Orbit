@@ -10,17 +10,24 @@ import me.nebula.gravity.rank.RankManager
 import me.nebula.gravity.reconnection.ReconnectionData
 import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.orbit.Orbit
+import me.nebula.orbit.displayUsername
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.PlaceholderResolver
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
 import me.nebula.orbit.utils.maploader.MapLoader
+import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.orbit.utils.ceremony.Ceremony
+import me.nebula.orbit.utils.combo.ComboConfig
+import me.nebula.orbit.utils.combo.install
+import me.nebula.orbit.utils.combo.uninstall
+import me.nebula.orbit.utils.deathrecap.DamageEntry
 import me.nebula.orbit.utils.deathrecap.DeathRecapTracker
 import me.nebula.orbit.utils.gamechat.GameChatPipeline
 import me.nebula.orbit.utils.replay.ReplayMetadata
 import me.nebula.orbit.utils.replay.ReplayRecorder
 import me.nebula.orbit.utils.replay.ReplayStorage
+import me.nebula.orbit.utils.killfeed.KillEvent
 import me.nebula.orbit.utils.killfeed.KillFeed
 import me.nebula.orbit.utils.rewards.RewardDistributor
 import me.nebula.orbit.utils.spectatortoolkit.SpectatorToolkit
@@ -46,6 +53,7 @@ import me.nebula.orbit.utils.scoreboard.LiveScoreboard
 import me.nebula.orbit.utils.scoreboard.liveScoreboard
 import me.nebula.orbit.utils.tablist.LiveTabList
 import me.nebula.orbit.utils.tablist.liveTabList
+import me.nebula.orbit.utils.teambalance.TeamBalance
 import me.nebula.orbit.translation.resolveTranslated
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.itembuilder.itemStack
@@ -125,6 +133,7 @@ abstract class GameMode : ServerMode {
     open fun buildDeathRecapTracker(): DeathRecapTracker? = null
     open fun buildRewardDistributor(): RewardDistributor? = null
     open fun buildCeremony(result: MatchResult): Ceremony? = null
+    protected open fun buildComboCounter(): ComboConfig? = null
 
     open fun resolveGameDuration(): Int = settings.timing.gameDurationSeconds
 
@@ -191,6 +200,7 @@ abstract class GameMode : ServerMode {
     @Volatile private var deathRecapTracker: DeathRecapTracker? = null
     @Volatile private var rewardDistributor: RewardDistributor? = null
     @Volatile private var ceremony: Ceremony? = null
+    @Volatile protected var comboCounter: ComboConfig? = null
     private val replayRecorder = ReplayRecorder()
 
     override val spawnPoint: Pos by lazy { settings.spawn.toPos() }
@@ -323,6 +333,8 @@ abstract class GameMode : ServerMode {
         GracePeriodManager.uninstall()
         chatPipeline?.uninstall()
         spectatorToolkit?.uninstall()
+        comboCounter?.uninstall()
+        comboCounter = null
         cleanupReconnectionState()
         cleanupRespawnTimers()
         cleanupLateJoinState()
@@ -376,13 +388,15 @@ abstract class GameMode : ServerMode {
         if (!tracker.isAlive(player.uuid)) return
 
         tracker.recordDeath(player.uuid)
+        runCatching { AchievementRegistry.progress(player, "deaths", 1) }
 
         if (killer != null && killer.uuid != player.uuid) {
             tracker.recordKill(killer.uuid)
+            runCatching { AchievementRegistry.progress(killer, "kills", 1) }
             totalKillCount++
             if (totalKillCount == 1) {
                 broadcastAll { p ->
-                    p.sendMessage(p.translate("orbit.game.first_blood", "player" to killer.username))
+                    p.sendMessage(p.translate("orbit.game.first_blood", "player" to killer.displayUsername))
                 }
             }
             val streak = tracker.streakOf(killer.uuid)
@@ -391,7 +405,7 @@ abstract class GameMode : ServerMode {
 
         creditAssists(player.uuid, killer?.uuid)
 
-        killFeed?.reportKill(me.nebula.orbit.utils.killfeed.KillEvent(killer = killer, victim = player))
+        killFeed?.reportKill(KillEvent(killer = killer, victim = player))
         deathRecapTracker?.sendRecap(player)
 
         onPlayerDeath(player, killer)
@@ -875,9 +889,9 @@ abstract class GameMode : ServerMode {
                     tracker.recordDamage(attacker.uuid, victim.uuid)
                 }
 
-                deathRecapTracker?.recordDamage(victim.uuid, me.nebula.orbit.utils.deathrecap.DamageEntry(
+                deathRecapTracker?.recordDamage(victim.uuid, DamageEntry(
                     attackerUuid = attacker?.uuid,
-                    attackerName = attacker?.username ?: damage.type.key().value(),
+                    attackerName = attacker?.displayUsername ?: damage.type.key().value(),
                     amount = damage.amount,
                     source = if (attacker != null) "PLAYER" else damage.type.key().value(),
                 ))
@@ -991,6 +1005,8 @@ abstract class GameMode : ServerMode {
         rewardDistributor = null
         ceremony?.stop()
         ceremony = null
+        comboCounter?.uninstall()
+        comboCounter = null
         spectatorTargets.clear()
         tracker.clear()
         lastEndResult = null
@@ -1140,6 +1156,13 @@ abstract class GameMode : ServerMode {
 
         onGameSetup(alivePlayers)
 
+        for (player in alivePlayers) {
+            runCatching { AchievementRegistry.progress(player, "games_played", 1) }
+        }
+
+        comboCounter = buildComboCounter()
+        comboCounter?.install()
+
         if (settings.timing.gracePeriodSeconds > 0) {
             val config = gracePeriod("game-grace") {
                 duration(settings.timing.gracePeriodSeconds.seconds)
@@ -1235,6 +1258,14 @@ abstract class GameMode : ServerMode {
         val result = lastEndResult ?: matchResult { draw() }
 
         MatchResultManager.store(result)
+
+        result.winner?.first?.let { winnerUuid ->
+            val winnerPlayer = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(winnerUuid)
+            if (winnerPlayer != null) {
+                runCatching { AchievementRegistry.progress(winnerPlayer, "wins", 1) }
+            }
+        }
+
         persistGameStats(result)
 
         val replayData = replayRecorder.stop()
@@ -1303,6 +1334,19 @@ abstract class GameMode : ServerMode {
         refreshEvery(cfg.refreshSeconds.seconds)
         header { player -> resolver.resolveTranslated(cfg.header, player) }
         footer { player -> resolver.resolveTranslated(cfg.footer, player) }
+    }
+
+    protected fun autoBalanceTeams(teamNames: List<String>) {
+        val alivePlayers = tracker.alive.mapNotNull { uuid ->
+            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+        }
+        val balanced = TeamBalance.balance(alivePlayers, teamNames.size)
+        for ((teamIndex, players) in balanced) {
+            val teamName = teamNames[teamIndex]
+            for (player in players) {
+                tracker.assignTeam(player.uuid, teamName)
+            }
+        }
     }
 
     private companion object {

@@ -7,6 +7,7 @@ import me.nebula.gravity.session.SessionStore
 import me.nebula.gravity.stats.IncrementStatsProcessor
 import me.nebula.gravity.stats.StatsStore
 import me.nebula.orbit.Orbit
+import me.nebula.orbit.displayUsername
 import me.nebula.orbit.mode.config.PlaceholderResolver
 import me.nebula.orbit.mode.config.placeholderResolver
 import me.nebula.orbit.progression.BattlePassManager
@@ -227,12 +228,12 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
 
         val killerUuid = resolveKiller(player)
         val killer = killerUuid?.let { MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(it) }
-        val killerName = killer?.username ?: "?"
+        val killerName = killer?.displayUsername ?: "?"
 
         broadcastAll { p ->
             p.sendMessage(p.translate(
                 "orbit.game.br.elimination",
-                "victim" to player.username,
+                "victim" to player.displayUsername,
                 "killer" to killerName,
             ))
         }
@@ -252,7 +253,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
 
         brDeathRecapTracker.recordDamage(victim.uuid, DamageEntry(
             attackerUuid = attacker?.uuid,
-            attackerName = attacker?.username ?: event.damage.type.key().value(),
+            attackerName = attacker?.displayUsername ?: event.damage.type.key().value(),
             amount = amount,
             source = if (attacker != null) "PLAYER" else event.damage.type.key().value(),
         ))
@@ -350,7 +351,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
 
         for (uuid in StatTracker.players()) {
             val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
-            val playerName = player?.username ?: uuid.toString().take(8)
+            val playerName = player?.displayUsername ?: uuid.toString().take(8)
             val kills = StatTracker.get(uuid, "kills").toInt()
             val isWinner = result.winner?.first == uuid
 
@@ -545,7 +546,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
                 StatTracker.players().forEach { uuid ->
                     val kills = StatTracker.get(uuid, "kills")
                     if (kills > 0) {
-                        val name = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.username
+                        val name = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.displayUsername
                             ?: uuid.toString().take(8)
                         player(uuid, name, kills.toDouble())
                     }
