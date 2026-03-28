@@ -334,6 +334,7 @@ object Screen {
                     close(player)
                 }
             }
+            else -> {}
         }
     }
 

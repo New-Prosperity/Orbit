@@ -227,8 +227,6 @@ class WorldBuilder @PublishedApi internal constructor() {
     @PublishedApi internal fun apply(instance: InstanceContainer) {
         generator?.let { instance.setGenerator(it) }
         time?.let { instance.time = it }
-        if (freezeTime) instance.timeRate = 0
-        timeRate?.let { instance.timeRate = it }
         weather?.let { instance.setWeather(it, weatherTransitionTicks) }
 
         if (gameRules.isNotEmpty()) {
