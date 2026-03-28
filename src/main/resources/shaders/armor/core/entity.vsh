@@ -8,6 +8,7 @@
 #moj_import <minecraft:fog.glsl>
 #moj_import <minecraft:dynamictransforms.glsl>
 #moj_import <minecraft:projection.glsl>
+#moj_import <minecraft:sample_lightmap.glsl>
 
 #moj_import <emissive_utils.glsl>
 #moj_import <mods/armor/armorparts.glsl>
@@ -114,7 +115,7 @@ void main() {
 
     
     #ifndef EMISSIVE
-        lightMapColor = texelFetch(Sampler2, UV2 / 16, 0);
+        lightMapColor = sample_lightmap(Sampler2, UV2);
     #endif
         overlayColor = texelFetch(Sampler1, UV1, 0);
 
@@ -143,7 +144,7 @@ void main() {
     cem_pos1 = cem_pos2 = cem_pos3 = cem_pos4 = vec4(0);
     cem_uv1 = cem_uv2 = vec3(0);
     cem = cem_reverse = 0;
-    cem_light = texelFetch(Sampler2, UV2 / 16, 0);
+    cem_light = sample_lightmap(Sampler2, UV2);
     cem_size = 1.0;
     cems = ivec4(-1);
     bodypart = -1;
