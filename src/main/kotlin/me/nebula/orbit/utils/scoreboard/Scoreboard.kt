@@ -10,6 +10,7 @@ import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.scoreboard.Sidebar
+import net.minestom.server.scoreboard.Sidebar.NumberFormat
 import net.minestom.server.timer.Task
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -69,7 +70,7 @@ class ScoreboardBuilder @PublishedApi internal constructor(private val title: St
                 is ScoreboardLine.Animated -> line.frames.firstOrNull() ?: ""
                 is ScoreboardLine.Dynamic -> line.provider()
             }
-            sidebar.createLine(Sidebar.ScoreboardLine(id, miniMessage.deserialize(content), lines.size - index))
+            sidebar.createLine(Sidebar.ScoreboardLine(id, miniMessage.deserialize(content), lines.size - index, NumberFormat.blank()))
             id
         }
         return ManagedScoreboard(sidebar, ids)
@@ -97,7 +98,7 @@ class PerPlayerScoreboard @PublishedApi internal constructor(
 
         lineTemplates.forEachIndexed { index, template ->
             val content = resolvePlaceholders(template, placeholders)
-            sidebar.createLine(Sidebar.ScoreboardLine(lineIds[index], miniMessage.deserialize(content), lineTemplates.size - index))
+            sidebar.createLine(Sidebar.ScoreboardLine(lineIds[index], miniMessage.deserialize(content), lineTemplates.size - index, NumberFormat.blank()))
         }
 
         sidebar.addViewer(player)
@@ -191,6 +192,7 @@ class AnimatedScoreboard(
                 "line-$line",
                 miniMessage.deserialize(text),
                 lines.size - index,
+                NumberFormat.blank(),
             ))
         }
         sidebar = sb
@@ -273,6 +275,7 @@ class TeamScoreboard @PublishedApi internal constructor(
                     lineIds[index],
                     miniMessage.deserialize(provider()),
                     lineProviders.size - index,
+                    NumberFormat.blank(),
                 )
             )
         }
@@ -443,6 +446,7 @@ object ObjectiveTracker {
                     "obj_$index",
                     miniMessage.deserialize("<gray>$name: <white>$score"),
                     entries.size - index,
+                    NumberFormat.blank(),
                 )
             )
         }
@@ -599,7 +603,7 @@ class LiveScoreboard @PublishedApi internal constructor(
                 is LiveLine.Dynamic -> line.provider(player)
             }
             sidebar.createLine(
-                Sidebar.ScoreboardLine("line_$displayIndex", miniMessage.deserialize(content), visible.size - displayIndex)
+                Sidebar.ScoreboardLine("line_$displayIndex", miniMessage.deserialize(content), visible.size - displayIndex, NumberFormat.blank())
             )
         }
         return sidebar

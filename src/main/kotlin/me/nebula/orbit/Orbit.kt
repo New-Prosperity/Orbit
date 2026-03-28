@@ -316,13 +316,13 @@ object Orbit {
         HudManager.register(hudLayout("test-hud") {
             bar("health") {
                 anchor(HudAnchor.BOTTOM_LEFT)
-                offset(0.02f, 0.88f)
+                offset(0.02f, -0.12f)
                 sprites(bg = "bar_bg", fill = "bar_fill_red", empty = "bar_empty")
                 segments(10)
             }
             bar("mana") {
                 anchor(HudAnchor.BOTTOM_LEFT)
-                offset(0.02f, 0.84f)
+                offset(0.02f, -0.16f)
                 sprites(bg = "bar_bg", fill = "bar_fill_blue", empty = "bar_empty")
                 segments(10)
             }
