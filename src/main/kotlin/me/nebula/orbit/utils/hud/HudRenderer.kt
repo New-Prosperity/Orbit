@@ -9,7 +9,7 @@ import net.kyori.adventure.text.format.TextColor
 object HudRenderer {
 
     val HUD_FONT: Key = Key.key("minecraft", "hud")
-    private const val CHAR_STEP = 3f / 255f
+    private const val CHAR_STEP = 5f / 255f
 
     fun render(hud: PlayerHud): Component {
         val parts = mutableListOf<Component>()
