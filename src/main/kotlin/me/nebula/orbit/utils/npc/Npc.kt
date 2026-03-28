@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger
 private val nextEntityId = AtomicInteger(-2_000_000)
 
 private const val META_NO_GRAVITY = 5
-private const val META_SKIN_PARTS = 17
+private const val META_SKIN_PARTS = 16
 private const val META_DISPLAY_SCALE = 12
 private const val META_DISPLAY_BILLBOARD = 15
 private const val META_DISPLAY_TEXT = 23

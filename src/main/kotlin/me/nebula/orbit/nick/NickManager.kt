@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
-private const val META_SKIN_PARTS = 17
+private const val META_SKIN_PARTS = 16
 
 class SessionDelta(
     val kills: AtomicInteger = AtomicInteger(0),
