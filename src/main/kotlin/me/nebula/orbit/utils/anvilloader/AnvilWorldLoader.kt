@@ -21,10 +21,17 @@ object AnvilWorldLoader {
     private val logger = logger("AnvilWorldLoader")
     private val loaded = ConcurrentHashMap<String, InstanceContainer>()
 
+    fun resolveRegionDir(worldPath: Path): Path {
+        val legacy = worldPath.resolve("region")
+        if (Files.isDirectory(legacy)) return legacy
+        val modern = worldPath.resolve("dimensions/minecraft/overworld/region")
+        if (Files.isDirectory(modern)) return modern
+        throw IllegalArgumentException("No region directory found in ${worldPath.toAbsolutePath()} (checked region/ and dimensions/minecraft/overworld/region/)")
+    }
+
     fun validate(worldPath: Path) {
         require(Files.isDirectory(worldPath)) { "World path does not exist: ${worldPath.toAbsolutePath()}" }
-        val regionDir = worldPath.resolve("region")
-        require(Files.isDirectory(regionDir)) { "Missing region/ directory in ${worldPath.toAbsolutePath()}" }
+        val regionDir = resolveRegionDir(worldPath)
         val regionFiles = regionDir.listDirectoryEntries("*.mca")
         require(regionFiles.isNotEmpty()) { "No .mca region files in ${regionDir.toAbsolutePath()}" }
         regionFiles.forEach { file ->
@@ -41,7 +48,7 @@ object AnvilWorldLoader {
         } else {
             logger.warn { "No level.dat in world — cannot verify MC version" }
         }
-        val regionDir = worldPath.resolve("region")
+        val regionDir = resolveRegionDir(worldPath)
         val firstRegion = regionDir.listDirectoryEntries("*.mca").firstOrNull() ?: return
         try {
             RandomAccessFile(firstRegion.toFile(), "r").use { raf ->
