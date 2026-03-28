@@ -39,6 +39,16 @@ val msg = message {
 }
 ```
 
+## Sprite Tag
+
+The shared `miniMessage` instance includes a `<sprite:id>` tag resolver that maps HudSpriteRegistry entries to PUA characters rendered with the `minecraft:hud` font. Works everywhere `miniMessage` is used (chat, scoreboards, broadcasts, etc.).
+
+```kotlin
+player.sendMM("<sprite:icon_health> Health: <red>7/10")
+```
+
+Player chat input is escaped via `escapeTags()` in `GameChatPipeline`, preventing sprite tag injection.
+
 ## Example
 
 ```kotlin

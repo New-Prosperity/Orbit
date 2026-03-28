@@ -45,6 +45,9 @@ In `PlayerSpawnEvent`: after `PlayerCache` load, if `cached.nick != null` calls 
 ### Extension Properties (`OrbitExtensions.kt`)
 - `Player.isNicked: Boolean` — delegates to `NickManager.isNicked`.
 - `Player.displayUsername: String` — delegates to `NickManager.displayName` (nick name if nicked, real username otherwise).
+- `Player.rankDisplayName: String` — resolves `rank.<name>.display_name` translation key for the player's locale.
+- `Player.rankPrefix: String` — resolves `rank.<name>.prefix` translation key for the player's locale.
+- `Player.rankSuffix: String` — resolves `rank.<name>.suffix` translation key for the player's locale.
 - Preference accessors from `cached.preferences`: `acceptsFriendRequests`, `acceptsPrivateMessages`, `acceptsPartyInvites`, `acceptsDuelRequests`, `acceptsTradeRequests`, `profileVisibility`, `appearsOffline`, `lastSeenVisible`, `statsVisible`, `streamerMode`, `cosmeticDisplay`.
 
 ### Settings Command (`commands/SettingsCommand.kt`)
@@ -1255,7 +1258,7 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `sound/Sound.kt` | `soundEffect(type, source, volume, pitch) {}` DSL |
 | `team/Team.kt` | `TeamManager.create(name) {}` DSL, `Player.joinTeam()` |
 | `npc/Npc.kt` | Packet-based fake NPCs with `NpcVisual` sealed interface: `SkinVisual` (player skin), `EntityVisual` (any EntityType + raw metadata), `ModelVisual` (model-only, invisible INTERACTION hitbox). `npc(name) { skin(); entityType(); modelOnly(); metadata(); model {} }` DSL, configurable `nameOffset`, TextDisplay name, per-player visibility, optional `StandaloneModelOwner` for Blockbench model attachment (visibility synced), `Instance.spawnNpc()`, `Player.showNpc/hideNpc()` `NpcRegistry.cleanup()` cancels look-at task and removes event node. |
-| `chat/Chat.kt` | `mm(text)`, `Player.sendMM()`, `Instance.broadcastMM()`, `message {}` builder |
+| `chat/Chat.kt` | `mm(text)`, `Player.sendMM()`, `Instance.broadcastMM()`, `message {}` builder. MiniMessage instance includes `<sprite:id>` tag resolver — resolves HudSpriteRegistry entries to PUA characters with `minecraft:hud` font. Available everywhere that uses `miniMessage`. Player chat input is escaped via `escapeTags()` so players cannot inject sprite tags. |
 | `placeholder/Placeholder.kt` | `PlaceholderRegistry`, `Player.resolvePlaceholders(text)` |
 | ~~`eventbus/EventBus.kt`~~ | Removed — redundant with Minestom's `EventNode` system |
 | `metadata/EntityMetadata.kt` | `Entity.setString/getInt/setFloat/...` Tag shortcut extensions, `EntityPropertyRegistry` typed property system, `Entity.setProperty<T>/getProperty<T>/removeProperty/hasProperty/propertyKeys` |

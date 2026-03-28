@@ -1,14 +1,30 @@
 package me.nebula.orbit.utils.chat
 
+import me.nebula.orbit.utils.hud.font.HudSpriteRegistry
+import net.kyori.adventure.key.Key
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
+import net.kyori.adventure.text.minimessage.tag.Tag
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 
-val miniMessage: MiniMessage = MiniMessage.miniMessage()
+private val HUD_FONT: Key = Key.key("minecraft", "hud")
+
+private val spriteTagResolver = TagResolver.resolver("sprite") { args, _ ->
+    val id = args.popOr("sprite tag requires an id").value()
+    val sprite = HudSpriteRegistry.getOrNull(id) ?: return@resolver null
+    Tag.inserting(Component.text(sprite.char.toString()).font(HUD_FONT))
+}
+
+val miniMessage: MiniMessage = MiniMessage.builder()
+    .tags(TagResolver.builder()
+        .resolver(TagResolver.standard())
+        .resolver(spriteTagResolver)
+        .build())
+    .build()
 
 fun mm(text: String, vararg resolvers: TagResolver): Component =
     miniMessage.deserialize(text, *resolvers)

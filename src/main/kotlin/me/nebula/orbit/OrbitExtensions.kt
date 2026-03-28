@@ -30,8 +30,14 @@ val Player.rank: RankData?
 val Player.rankName: String
     get() = rank?.name ?: "Member"
 
+val Player.rankDisplayName: String
+    get() = rank?.let { Orbit.translations.get("rank.${it.name}.display_name", localeCode) } ?: ""
+
 val Player.rankPrefix: String
-    get() = rank?.prefix ?: ""
+    get() = rank?.let { Orbit.translations.get("rank.${it.name}.prefix", localeCode) } ?: ""
+
+val Player.rankSuffix: String
+    get() = rank?.let { Orbit.translations.get("rank.${it.name}.suffix", localeCode) } ?: ""
 
 val Player.rankColor: String
     get() = rank?.color ?: "white"
