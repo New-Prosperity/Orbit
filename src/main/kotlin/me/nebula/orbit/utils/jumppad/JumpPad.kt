@@ -1,6 +1,6 @@
 package me.nebula.orbit.utils.jumppad
 
-import me.nebula.orbit.utils.cooldown.Cooldown
+import me.nebula.ether.utils.ratelimit.Cooldown
 import me.nebula.orbit.utils.sound.playSound
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos

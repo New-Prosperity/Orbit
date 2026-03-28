@@ -17,45 +17,6 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration as KDuration
 import kotlin.time.Duration.Companion.seconds
 
-class Cooldown<K : Any>(private val duration: Duration) {
-
-    private val cooldowns = ConcurrentHashMap<K, Long>()
-
-    fun isReady(key: K): Boolean {
-        val expiry = cooldowns[key] ?: return true
-        if (System.currentTimeMillis() >= expiry) {
-            cooldowns.remove(key)
-            return true
-        }
-        return false
-    }
-
-    fun use(key: K) {
-        cooldowns[key] = System.currentTimeMillis() + duration.toMillis()
-    }
-
-    fun tryUse(key: K): Boolean {
-        if (!isReady(key)) return false
-        use(key)
-        return true
-    }
-
-    fun remaining(key: K): Duration {
-        val expiry = cooldowns[key] ?: return Duration.ZERO
-        val remaining = expiry - System.currentTimeMillis()
-        return if (remaining > 0) Duration.ofMillis(remaining) else Duration.ZERO
-    }
-
-    fun reset(key: K) { cooldowns.remove(key) }
-
-    fun resetAll() = cooldowns.clear()
-
-    fun cleanup() {
-        val now = System.currentTimeMillis()
-        cooldowns.entries.removeIf { it.value <= now }
-    }
-}
-
 private data class NamedKey(val uuid: UUID, val name: String)
 
 object NamedCooldown {

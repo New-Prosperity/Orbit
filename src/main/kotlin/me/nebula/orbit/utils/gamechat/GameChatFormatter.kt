@@ -5,7 +5,7 @@ import me.nebula.orbit.rankColor
 import me.nebula.orbit.rankPrefix
 import me.nebula.orbit.mode.game.PlayerTracker
 import me.nebula.orbit.utils.chat.miniMessage
-import me.nebula.orbit.utils.cooldown.Cooldown
+import me.nebula.ether.utils.ratelimit.Cooldown
 import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player

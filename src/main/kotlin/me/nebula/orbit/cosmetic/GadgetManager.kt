@@ -1,7 +1,7 @@
 package me.nebula.orbit.cosmetic
 
 import me.nebula.orbit.translation.translateRaw
-import me.nebula.orbit.utils.cooldown.Cooldown
+import me.nebula.ether.utils.ratelimit.Cooldown
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.particle.ParticleShape
 import net.minestom.server.MinecraftServer

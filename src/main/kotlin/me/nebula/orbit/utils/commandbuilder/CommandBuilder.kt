@@ -13,7 +13,7 @@ import net.minestom.server.command.builder.CommandContext
 import net.minestom.server.command.builder.arguments.Argument
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.command.builder.suggestion.SuggestionEntry
-import me.nebula.orbit.utils.cooldown.Cooldown
+import me.nebula.ether.utils.ratelimit.Cooldown
 import net.minestom.server.entity.Player
 import java.time.Duration
 import java.util.UUID
@@ -191,7 +191,7 @@ class CommandBuilderDsl @PublishedApi internal constructor(
                 val player = sender as Player
                 val cd = cooldown
                 if (cd != null && !cd.tryUse(player.uuid)) {
-                    val remaining = cd.remaining(player.uuid).toMillis() / 1000.0
+                    val remaining = cd.remainingMs(player.uuid) / 1000.0
                     player.sendMessage(player.translate("orbit.command.cooldown", "seconds" to "%.1f".format(remaining)))
                     return@handler
                 }
