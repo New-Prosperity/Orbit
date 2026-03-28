@@ -71,11 +71,19 @@ object AnvilWorldLoader {
         }
     }
 
+    fun resolveAnvilRoot(worldPath: Path): Path {
+        val modernDim = worldPath.resolve("dimensions/minecraft/overworld")
+        if (Files.isDirectory(modernDim.resolve("region"))) return modernDim
+        if (Files.isDirectory(worldPath.resolve("region"))) return worldPath
+        throw IllegalArgumentException("No region directory found in ${worldPath.toAbsolutePath()}")
+    }
+
     fun load(name: String, worldPath: Path): InstanceContainer {
         require(!loaded.containsKey(name)) { "Anvil world '$name' already loaded" }
         validate(worldPath)
+        val anvilRoot = resolveAnvilRoot(worldPath)
         val instance = MinecraftServer.getInstanceManager().createInstanceContainer()
-        instance.chunkLoader = AnvilLoader(worldPath)
+        instance.chunkLoader = AnvilLoader(anvilRoot)
         loaded[name] = instance
         return instance
     }
