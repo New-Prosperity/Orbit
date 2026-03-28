@@ -22,11 +22,9 @@ object AnvilWorldLoader {
     private val loaded = ConcurrentHashMap<String, InstanceContainer>()
 
     fun resolveRegionDir(worldPath: Path): Path {
-        val legacy = worldPath.resolve("region")
-        if (Files.isDirectory(legacy)) return legacy
-        val modern = worldPath.resolve("dimensions/minecraft/overworld/region")
-        if (Files.isDirectory(modern)) return modern
-        throw IllegalArgumentException("No region directory found in ${worldPath.toAbsolutePath()} (checked region/ and dimensions/minecraft/overworld/region/)")
+        val regionDir = worldPath.resolve("dimensions/minecraft/overworld/region")
+        require(Files.isDirectory(regionDir)) { "Missing dimensions/minecraft/overworld/region/ in ${worldPath.toAbsolutePath()}" }
+        return regionDir
     }
 
     fun validate(worldPath: Path) {
@@ -71,12 +69,8 @@ object AnvilWorldLoader {
         }
     }
 
-    fun resolveAnvilRoot(worldPath: Path): Path {
-        val modernDim = worldPath.resolve("dimensions/minecraft/overworld")
-        if (Files.isDirectory(modernDim.resolve("region"))) return modernDim
-        if (Files.isDirectory(worldPath.resolve("region"))) return worldPath
-        throw IllegalArgumentException("No region directory found in ${worldPath.toAbsolutePath()}")
-    }
+    fun resolveAnvilRoot(worldPath: Path): Path =
+        worldPath.resolve("dimensions/minecraft/overworld")
 
     fun load(name: String, worldPath: Path): InstanceContainer {
         require(!loaded.containsKey(name)) { "Anvil world '$name' already loaded" }
