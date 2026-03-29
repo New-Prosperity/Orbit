@@ -1205,7 +1205,7 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `structureblock/StructureBlock.kt` | `Structure(name, blocks)` with `paste()`, `pasteRotated90()`, `clear()`, `captureStructure(name, instance, from, to)` region capture, `StructureRegistry` CRUD |
 | `voidteleport/VoidTeleport.kt` | `voidTeleport { threshold(-64.0); destination { player -> pos }; onTeleport {} }` DSL, `VoidTeleportManager` global `PlayerMoveEvent` listener, configurable Y threshold, respawnPoint default destination |
 
-### Player (19)
+### Player (20)
 | Util | Summary |
 |---|---|
 | `snapshot/InventorySnapshot.kt` | `InventorySnapshot.capture(player)` / `snapshot.restore(player)` |
@@ -1227,6 +1227,7 @@ Boss bar text with custom bitmap font sprites repositioned by modified `renderty
 | `waypoint/Waypoint.kt` | `WaypointManager` global and per-player named waypoints with position/instance/icon, `Player.setWaypoint()`, `Player.removeWaypoint()`, `Player.getWaypoint()`, `Player.allWaypoints()` |
 | `combo/ComboCounter.kt` | `comboCounter { windowTicks(); display(); onCombo(); onDrop(); multiplier() }` DSL, `ComboManager` singleton with per-player state, `Player.combo`, `Player.comboMultiplier`, display modes (ACTION_BAR, TITLE, BOSS_BAR, NONE), threshold callbacks, tick-based expiry, disconnect cleanup via `PlayerDisconnectEvent` listener, vanish-aware (skips hits involving vanished players) |
 | `profilecard/ProfileCard.kt` | `profileCard { header(); separator(); stat(); footer() }` DSL, `ProfileCard.render(target): List<Component>`, `ProfileCard.sendTo(viewer, target)`, MiniMessage-based chat card renderer |
+| `anticheat/AntiCheat.kt` | `AntiCheat.install(eventNode)` / `uninstall()`, lightweight server-side anti-cheat. `MovementCheck` (fly: Y>0.5/tick airborne, speed: horizontal>0.65/tick, nofall: 4+ block fall with ground spoof; weight 1, kick at 20/30s). `CombatCheck` (reach: >4.5 blocks, attack rate: >20 CPS; weight 2, kick at 15/30s). `ViolationTracker` sliding-window per player, `RankManager` bypass via `orbit.anticheat.bypass`, creative/spectator exempt, 20-tick teleport grace, `PlayerDisconnectEvent` cleanup |
 
 ### Advanced (10)
 | Util | Summary |

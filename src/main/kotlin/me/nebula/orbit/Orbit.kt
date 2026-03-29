@@ -11,6 +11,7 @@ import me.nebula.ether.utils.storage.StorageClient
 import me.nebula.ether.utils.storage.storageClient
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
+import me.nebula.orbit.utils.anticheat.AntiCheat
 import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.gravity.achievement.AchievementStore
@@ -403,6 +404,7 @@ object Orbit {
         NickManager.installListeners()
         VanishManager.installListeners()
         StaffSpectateManager.installListeners()
+        AntiCheat.install(handler)
 
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
             event.spawningInstance = mode.activeInstance
@@ -548,6 +550,7 @@ object Orbit {
             }
             globalTasks.forEach { it.cancel() }
             globalTasks.clear()
+            AntiCheat.uninstall()
             NickManager.uninstallListeners()
             VanishManager.uninstallListeners()
             StaffSpectateManager.uninstallListeners()
