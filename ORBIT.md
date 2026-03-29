@@ -1657,3 +1657,13 @@ Installed via `installGameCommands(commandManager)` — game engine admin comman
 | `/alive` | `orbit.command.alive` | — | Show alive/disconnected/spectating counts and player names |
 
 All commands validate phase and player state before execution. `/reconnect` requires the target player to be online on the server AND in `Disconnected` state in the tracker.
+
+## Metrics Publisher — `utils/metrics/MetricsPublisher.kt`
+Publishes `ServerMetrics` to Hazelcast `ReplicatedMap("metrics")` every 10 seconds.
+
+- Collects: TPS (from `TPSMonitor.averageTPS`), player count, entity count (sum across all instances), memory usage, uptime
+- Key: `Orbit.serverName`
+- Requires `TPSMonitor.install()` to be called before initialization
+- `MetricsPublisher.initialize()` — starts the scheduled publisher
+- `MetricsPublisher.shutdown()` — stops publishing and removes the entry from the metrics map
+- Uses `ScheduledExecutorService` with daemon thread (same pattern as `ProxyHeartbeat`)
