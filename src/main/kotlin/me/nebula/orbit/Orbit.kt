@@ -515,6 +515,11 @@ object Orbit {
         Runtime.getRuntime().addShutdownHook(Thread {
             if (!shuttingDown.compareAndSet(false, true)) return@Thread
 
+            if (serverUuid.isNotEmpty()) {
+                logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
+                runCatching { NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid)) }
+            }
+
             val players = MinecraftServer.getConnectionManager().onlinePlayers.toList()
             if (players.isNotEmpty()) {
                 val hub = runCatching {
@@ -540,11 +545,6 @@ object Orbit {
                 for (player in MinecraftServer.getConnectionManager().onlinePlayers.toList()) {
                     runCatching { player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid))) }
                 }
-            }
-
-            if (serverUuid.isNotEmpty()) {
-                logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
-                runCatching { NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid)) }
             }
             globalTasks.forEach { it.cancel() }
             globalTasks.clear()
