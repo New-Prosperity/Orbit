@@ -22,6 +22,7 @@ import net.minestom.server.tag.Tag
 import net.minestom.server.timer.Task
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.sqrt
 
 private val MOUNT_TAG = Tag.String("cosmetic:mount")
 private const val MOVE_THRESHOLD = 0.05
@@ -121,8 +122,8 @@ object CosmeticMountManager {
         MountManager.evictPlayer(playerId)
         mount.modeled.destroy()
         mount.entity.remove()
-        val player = MinecraftServer.getConnectionManager().onlinePlayers.firstOrNull { it.uuid == playerId }
-        player?.inventory?.setItemStack(MOUNT_SLOT, ItemStack.AIR)
+        MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(playerId)
+            ?.inventory?.setItemStack(MOUNT_SLOT, ItemStack.AIR)
     }
 
     fun toggleMount(player: Player) {
@@ -143,13 +144,12 @@ object CosmeticMountManager {
     fun isActive(playerId: UUID): Boolean = mounts.containsKey(playerId)
 
     private fun tick() {
-        val onlinePlayers = MinecraftServer.getConnectionManager().onlinePlayers
-        val playersByUuid = onlinePlayers.associateBy { it.uuid }
+        val connectionManager = MinecraftServer.getConnectionManager()
 
         val iterator = mounts.entries.iterator()
         while (iterator.hasNext()) {
             val (uuid, mount) = iterator.next()
-            val player = playersByUuid[uuid]
+            val player = connectionManager.getOnlinePlayerByUuid(uuid)
             if (player == null) {
                 MountManager.evictPlayer(uuid)
                 mount.modeled.destroy()
@@ -167,19 +167,12 @@ object CosmeticMountManager {
 
             updateAnimation(mount)
 
-            if (player.uuid !in mount.modeled.viewers) {
-                mount.modeled.show(player)
-            }
-            for (nearby in player.instance?.players ?: emptyList()) {
-                if (nearby.uuid == uuid) continue
-                val inRange = nearby.position.distance(mount.entity.position) < 48.0
-                val shouldShow = inRange && CosmeticVisibility.shouldShowModel(nearby, uuid)
-                if (shouldShow && nearby.uuid !in mount.modeled.viewers) {
-                    mount.modeled.show(nearby)
-                } else if (!shouldShow && nearby.uuid in mount.modeled.viewers) {
-                    mount.modeled.hide(nearby)
-                }
-            }
+            CosmeticVisibility.updateViewers(
+                mount.modeled,
+                player.instance?.players ?: emptyList(),
+                uuid,
+                mount.entity.position,
+            )
         }
     }
 
@@ -189,7 +182,7 @@ object CosmeticMountManager {
         val walkAnim = resolved["walkAnimation"] ?: return
         val model = mount.modeled.models.values.firstOrNull() ?: return
         val velocity = mount.entity.velocity
-        val speed = kotlin.math.sqrt(velocity.x() * velocity.x() + velocity.z() * velocity.z())
+        val speed = sqrt(velocity.x() * velocity.x() + velocity.z() * velocity.z())
 
         if (speed > MOVE_THRESHOLD) {
             if (!model.isPlayingAnimation(walkAnim)) {

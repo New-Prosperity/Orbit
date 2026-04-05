@@ -30,6 +30,7 @@ object MetricsPublisher {
 
     fun shutdown() {
         executor?.shutdown()
+        executor?.awaitTermination(5, TimeUnit.SECONDS)
         runCatching { metricsMap.remove(Orbit.serverName) }
         logger.info { "MetricsPublisher shut down" }
     }

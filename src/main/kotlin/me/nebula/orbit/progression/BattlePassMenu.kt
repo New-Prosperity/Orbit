@@ -6,6 +6,7 @@ import me.nebula.gravity.battlepass.BattlePassProgress
 import me.nebula.gravity.battlepass.BattlePassStore
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
+import me.nebula.orbit.utils.gui.confirmGui
 import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.gui.openGui
 import me.nebula.orbit.utils.gui.paginatedGui
@@ -57,8 +58,6 @@ object BattlePassMenu {
         val definition = BattlePassRegistry[passId] ?: return
         val data = BattlePassStore.load(player.uuid) ?: BattlePassData()
         val progress = data.passes[passId] ?: BattlePassProgress()
-        val tiersPerPage = 7
-
         val tierGui = paginatedGui(player.translateRaw(definition.nameKey), rows = 6) {
             border(Material.GRAY_STAINED_GLASS_PANE)
 
@@ -132,29 +131,28 @@ object BattlePassMenu {
     private fun openPremiumConfirmation(player: Player, passId: String) {
         val definition = BattlePassRegistry[passId] ?: return
 
-        val confirmGui = gui(player.translateRaw("orbit.battlepass.premium_confirm_title"), rows = 3) {
-            slot(11, itemStack(Material.GREEN_WOOL) {
+        val confirm = confirmGui(
+            title = player.translateRaw("orbit.battlepass.premium_confirm_title"),
+            confirmItem = itemStack(Material.GREEN_WOOL) {
                 name("<green>${player.translateRaw("orbit.battlepass.premium_confirm")}")
                 lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
                 clean()
-            }) { p ->
-                BattlePassManager.purchasePremium(p, passId)
-                openTierView(p, passId)
-            }
-
-            slot(13, itemStack(Material.GOLD_INGOT) {
+            },
+            cancelItem = itemStack(Material.RED_WOOL) {
+                name("<red>${player.translateRaw("orbit.battlepass.premium_cancel")}")
+                clean()
+            },
+            previewItem = itemStack(Material.GOLD_INGOT) {
                 name("<gold>${player.translateRaw("orbit.battlepass.unlock_premium")}")
                 lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
                 clean()
-            })
-
-            slot(15, itemStack(Material.RED_WOOL) {
-                name("<red>${player.translateRaw("orbit.battlepass.premium_cancel")}")
-                clean()
-            }) { p -> openTierView(p, passId) }
-
-            fillDefault()
-        }
-        player.openGui(confirmGui)
+            },
+            onConfirm = { p ->
+                BattlePassManager.purchasePremium(p, passId)
+                openTierView(p, passId)
+            },
+            onCancel = { p -> openTierView(p, passId) },
+        )
+        player.openGui(confirm)
     }
 }

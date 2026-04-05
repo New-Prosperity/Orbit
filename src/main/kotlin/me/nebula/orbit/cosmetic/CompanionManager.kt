@@ -82,13 +82,12 @@ object CompanionManager {
 
     private fun tick() {
         val tick = tickCounter.incrementAndGet()
-        val onlinePlayers = MinecraftServer.getConnectionManager().onlinePlayers
-        val playersByUuid = onlinePlayers.associateBy { it.uuid }
+        val connectionManager = MinecraftServer.getConnectionManager()
 
         val iterator = companions.entries.iterator()
         while (iterator.hasNext()) {
             val (uuid, companion) = iterator.next()
-            val player = playersByUuid[uuid]
+            val player = connectionManager.getOnlinePlayerByUuid(uuid)
             if (player == null) {
                 companion.owner.remove()
                 iterator.remove()
@@ -98,19 +97,12 @@ object CompanionManager {
             companion.owner.position = companionPosition(player.position, tick)
 
             val modeled = ModelEngine.modeledEntity(companion.owner) ?: continue
-            if (player.uuid !in modeled.viewers) {
-                modeled.show(player)
-            }
-            for (nearby in player.instance?.players ?: emptyList()) {
-                if (nearby.uuid == uuid) continue
-                val inRange = nearby.position.distance(player.position) < 48.0
-                val shouldShow = inRange && CosmeticVisibility.shouldShowModel(nearby, uuid)
-                if (shouldShow && nearby.uuid !in modeled.viewers) {
-                    modeled.show(nearby)
-                } else if (!shouldShow && nearby.uuid in modeled.viewers) {
-                    modeled.hide(nearby)
-                }
-            }
+            CosmeticVisibility.updateViewers(
+                modeled,
+                player.instance?.players ?: emptyList(),
+                uuid,
+                player.position,
+            )
         }
     }
 

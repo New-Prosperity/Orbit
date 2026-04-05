@@ -198,6 +198,10 @@ val lod = lodConfig {
 }
 val lodHandler = LODHandler(lod)
 lodHandler.evaluate(modeledEntity)
+
+// Cleanup is automatic: LODHandler.cleanupAll(uuid) is called from
+// ModelEngine.onPlayerDisconnect. Call dispose() when the handler is no longer needed:
+lodHandler.dispose()
 ```
 
 ## Root Motion
@@ -290,7 +294,7 @@ utils/modelengine/
 │   └── VFXRegistry.kt             # Lifecycle management
 ├── lod/
 │   ├── LODLevel.kt                # Distance config + DSL
-│   └── LODHandler.kt              # Per-player distance evaluation
+│   └── LODHandler.kt              # Per-player distance evaluation, companion auto-cleanup on disconnect
 ├── advanced/
 │   ├── RootMotion.kt              # Root bone delta → entity position
 │   └── ModelSerializer.kt         # Save/load as ByteArray

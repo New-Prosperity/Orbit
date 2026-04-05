@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.hologram
 
 import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.Component
+import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
@@ -152,8 +153,8 @@ class PlayerHologram internal constructor(
 
     private inline fun forEachViewer(action: (Player) -> Unit) {
         _viewers.forEach { uuid ->
-            net.minestom.server.MinecraftServer.getConnectionManager()
-                .onlinePlayers.firstOrNull { it.uuid == uuid }?.let(action)
+            MinecraftServer.getConnectionManager()
+                .getOnlinePlayerByUuid(uuid)?.let(action)
         }
     }
 }

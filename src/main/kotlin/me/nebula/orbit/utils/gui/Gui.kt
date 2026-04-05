@@ -249,6 +249,14 @@ class PaginatedGuiBuilder @PublishedApi internal constructor(private val title: 
     fun contentSlots(range: IntRange) { contentRange = range }
     fun clickSound(sound: SoundEvent) { clickSound = sound }
 
+    fun backButton(slot: Int, onClick: (Player) -> Unit) {
+        staticSlots[slot] = GuiSlot(
+            itemStack(Material.ARROW) { name("<gray>Back"); clean() },
+            onClick,
+            SoundEvent.UI_BUTTON_CLICK,
+        )
+    }
+
     @PublishedApi internal fun build(): PaginatedGui =
         PaginatedGui(title, rows, items.toList(), staticSlots.toMap(), fillItem, borderItem, contentRange, clickSound)
 }
@@ -266,4 +274,19 @@ fun confirmGui(
     clickSound(SoundEvent.UI_BUTTON_CLICK)
     slot(11, itemStack(Material.LIME_STAINED_GLASS_PANE) { name("<green><bold>Confirm"); lore(message); clean() }) { onConfirm(it) }
     slot(15, itemStack(Material.RED_STAINED_GLASS_PANE) { name("<red><bold>Cancel"); lore(message); clean() }) { onCancel(it) }
+}
+
+fun confirmGui(
+    title: String,
+    confirmItem: ItemStack,
+    cancelItem: ItemStack,
+    previewItem: ItemStack? = null,
+    onConfirm: (Player) -> Unit,
+    onCancel: (Player) -> Unit = { it.closeInventory() },
+): Gui = gui(title, 3) {
+    fillDefault()
+    clickSound(SoundEvent.UI_BUTTON_CLICK)
+    slot(11, confirmItem) { onConfirm(it) }
+    previewItem?.let { slot(13, it) }
+    slot(15, cancelItem) { onCancel(it) }
 }

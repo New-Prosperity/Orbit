@@ -2,6 +2,8 @@ package me.nebula.orbit.utils.anvilloader
 
 import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.translation.translateDefault
+import me.nebula.orbit.utils.maploader.MapLoader
+import me.nebula.orbit.utils.nebulaworld.NebulaWorldLoader
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.instance.anvil.AnvilLoader
@@ -73,7 +75,12 @@ object AnvilWorldLoader {
         worldPath.resolve("dimensions/minecraft/overworld")
 
     fun load(name: String, worldPath: Path): InstanceContainer {
-        require(!loaded.containsKey(name)) { "Anvil world '$name' already loaded" }
+        require(!loaded.containsKey(name)) { "World '$name' already loaded" }
+        if (MapLoader.isNebulaFile(worldPath)) {
+            val instance = NebulaWorldLoader.load(name, worldPath)
+            loaded[name] = instance
+            return instance
+        }
         validate(worldPath)
         val anvilRoot = resolveAnvilRoot(worldPath)
         val instance = MinecraftServer.getInstanceManager().createInstanceContainer()
@@ -92,6 +99,9 @@ object AnvilWorldLoader {
         centerChunkZ: Int = 0,
         radius: Int = 4,
     ): Pair<InstanceContainer, CompletableFuture<Void>> {
+        if (MapLoader.isNebulaFile(worldPath)) {
+            return NebulaWorldLoader.loadAndPreload(name, worldPath, centerChunkX, centerChunkZ, radius)
+        }
         val instance = load(name, worldPath)
         val futures = mutableListOf<CompletableFuture<*>>()
         for (x in (centerChunkX - radius)..(centerChunkX + radius)) {

@@ -25,6 +25,7 @@ DamageTracker.clear(player)
 | `getRecentDamage(player, withinMs)` | Records within time window (default 5s) |
 | `getTotalDamage(player, withinMs)` | Sum of recent damage amounts |
 | `clear(player)` | Clear player history |
+| `install(eventNode)` | Register disconnect cleanup (clears history + damage multipliers) |
 
 ### Player Extensions
 

@@ -64,6 +64,8 @@ class LeaderboardTextDisplay @PublishedApi internal constructor(
     private enum class DisplayMode { TOP_LIST, PERSONAL }
 
     fun spawn() {
+        despawn()
+
         val interaction = Entity(EntityType.INTERACTION)
         val meta = interaction.entityMeta as InteractionMeta
         meta.width = 2.5f

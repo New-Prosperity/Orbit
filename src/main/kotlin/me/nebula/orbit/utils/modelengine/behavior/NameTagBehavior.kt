@@ -10,7 +10,10 @@ import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.Metadata
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.metadata.display.AbstractDisplayMeta
-import net.minestom.server.network.packet.server.play.*
+import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
+import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
+import net.minestom.server.network.packet.server.play.EntityTeleportPacket
+import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -113,5 +116,5 @@ class NameTagBehavior(
     }
 
     private fun findPlayer(uuid: UUID): Player? =
-        MinecraftServer.getConnectionManager().onlinePlayers.firstOrNull { it.uuid == uuid }
+        MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
 }

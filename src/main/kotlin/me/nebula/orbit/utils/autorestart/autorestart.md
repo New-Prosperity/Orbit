@@ -33,6 +33,7 @@ AutoRestartManager.isScheduled
 
 ## Behavior
 
+- Warning intervals are sorted descending so the longest fires first and the shortest fires last.
 - Broadcasts MiniMessage-formatted warnings at each configured interval before restart.
 - `{time}` placeholder in warning template resolves to human-readable duration (e.g., `5m 30s`).
 - Kicks all online players with configurable kick message before executing restart action.

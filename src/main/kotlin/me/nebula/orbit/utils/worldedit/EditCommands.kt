@@ -1,0 +1,276 @@
+package me.nebula.orbit.utils.worldedit
+
+import me.nebula.orbit.translation.translate
+import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.orbit.utils.schematic.MirrorAxis
+import me.nebula.orbit.utils.schematic.Rotation
+import me.nebula.orbit.utils.schematic.SchematicIO
+import net.minestom.server.command.CommandManager
+import net.minestom.server.coordinate.Pos
+import net.minestom.server.coordinate.Vec
+import net.minestom.server.entity.GameMode
+import net.minestom.server.entity.Player
+import net.minestom.server.entity.PlayerHand
+import net.minestom.server.event.Event
+import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerBlockBreakEvent
+import net.minestom.server.event.player.PlayerBlockInteractEvent
+import net.minestom.server.event.player.PlayerDisconnectEvent
+import net.minestom.server.event.player.PlayerUseItemEvent
+import net.minestom.server.instance.block.Block
+import net.minestom.server.item.ItemStack
+import net.minestom.server.item.Material
+import java.nio.file.Path
+
+private const val WAND_TAG = "nebula:wand"
+
+fun installEditCommands(commandManager: CommandManager) {
+    commandManager.register(command("/wand") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val wand = ItemStack.of(Material.WOODEN_AXE)
+            player.inventory.addItemStack(wand)
+            player.sendMessage(player.translate("orbit.build.wand_given"))
+        }
+    })
+
+    commandManager.register(command("/pos1") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val session = EditSessionManager.get(player)
+            session.pos1 = player.position
+            SelectionRenderer.update(player, session.selection())
+            player.sendMessage(player.translate("orbit.build.pos1_set", "x" to player.position.blockX().toString(), "y" to player.position.blockY().toString(), "z" to player.position.blockZ().toString()))
+        }
+    })
+
+    commandManager.register(command("/pos2") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val session = EditSessionManager.get(player)
+            session.pos2 = player.position
+            SelectionRenderer.update(player, session.selection())
+            player.sendMessage(player.translate("orbit.build.pos2_set", "x" to player.position.blockX().toString(), "y" to player.position.blockY().toString(), "z" to player.position.blockZ().toString()))
+        }
+    })
+
+    commandManager.register(command("/set") {
+        permission("nebula.worldedit")
+        wordArgument("pattern")
+        onPlayerExecute {
+            val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.set(player.instance!!, sel, pattern, player)
+                EditSessionManager.get(player).pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
+            }
+        }
+    })
+
+    commandManager.register(command("/replace") {
+        permission("nebula.worldedit")
+        wordArgument("mask")
+        wordArgument("pattern")
+        onPlayerExecute {
+            val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            val mask = Masks.parse(requireArg("mask") ?: return@onPlayerExecute)
+            val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.replace(player.instance!!, sel, mask, pattern, player)
+                EditSessionManager.get(player).pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.blocks_replaced", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
+            }
+        }
+    })
+
+    commandManager.register(command("/copy") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val session = EditSessionManager.get(player)
+            val sel = session.selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            session.clipboard = EditOperations.copy(player.instance!!, sel, player.position)
+            session.clipboardOrigin = player.position
+            player.sendMessage(player.translate("orbit.build.copied", "volume" to sel.volume.toString()))
+        }
+    })
+
+    commandManager.register(command("/cut") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val session = EditSessionManager.get(player)
+            val sel = session.selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            session.clipboard = EditOperations.copy(player.instance!!, sel, player.position)
+            session.clipboardOrigin = player.position
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.set(player.instance!!, sel, Patterns.single(Block.AIR), player)
+                session.pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.copied", "volume" to sel.volume.toString()))
+            }
+        }
+    })
+
+    commandManager.register(command("/paste") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val session = EditSessionManager.get(player)
+            val clipboard = session.clipboard ?: run { player.sendMessage(player.translate("orbit.build.no_clipboard")); return@onPlayerExecute }
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.paste(player.instance!!, clipboard, player.position)
+                session.pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.pasted", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
+            }
+        }
+    })
+
+    commandManager.register(command("/undo") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val session = EditSessionManager.get(player)
+            if (session.undo(player.instance!!)) player.sendMessage(player.translate("orbit.build.undone"))
+            else player.sendMessage(player.translate("orbit.build.nothing_to_undo"))
+        }
+    })
+
+    commandManager.register(command("/redo") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val session = EditSessionManager.get(player)
+            if (session.redo(player.instance!!)) player.sendMessage(player.translate("orbit.build.redone"))
+            else player.sendMessage(player.translate("orbit.build.nothing_to_redo"))
+        }
+    })
+
+    commandManager.register(command("/walls") {
+        permission("nebula.worldedit")
+        wordArgument("pattern")
+        onPlayerExecute {
+            val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.walls(player.instance!!, sel, pattern, player)
+                EditSessionManager.get(player).pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to "0"))
+            }
+        }
+    })
+
+    commandManager.register(command("/outline") {
+        permission("nebula.worldedit")
+        wordArgument("pattern")
+        onPlayerExecute {
+            val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.outline(player.instance!!, sel, pattern, player)
+                EditSessionManager.get(player).pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to "0"))
+            }
+        }
+    })
+
+    commandManager.register(command("/drain") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.drain(player.instance!!, sel, player)
+                EditSessionManager.get(player).pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.drained", "count" to result.blocksChanged.toString()))
+            }
+        }
+    })
+
+    commandManager.register(command("/smooth") {
+        permission("nebula.worldedit")
+        intArgument("iterations")
+        onPlayerExecute {
+            val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            val iterations = argOrNull("iterations")?.toIntOrNull() ?: 1
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.smooth(player.instance!!, sel, iterations, player)
+                EditSessionManager.get(player).pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.smoothed", "count" to result.blocksChanged.toString(), "iterations" to iterations.toString()))
+            }
+        }
+    })
+
+    commandManager.register(command("/naturalize") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.naturalize(player.instance!!, sel, player)
+                EditSessionManager.get(player).pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.naturalized", "count" to result.blocksChanged.toString()))
+            }
+        }
+    })
+
+    commandManager.register(command("/sphere") {
+        permission("nebula.worldedit")
+        wordArgument("pattern")
+        intArgument("radius")
+        onPlayerExecute {
+            val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
+            val radius = requireArg("radius")?.toDoubleOrNull() ?: return@onPlayerExecute
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.sphere(player.instance!!, player.position, radius, pattern, false, player)
+                EditSessionManager.get(player).pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
+            }
+        }
+    })
+
+    commandManager.register(command("/hsphere") {
+        permission("nebula.worldedit")
+        wordArgument("pattern")
+        intArgument("radius")
+        onPlayerExecute {
+            val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
+            val radius = requireArg("radius")?.toDoubleOrNull() ?: return@onPlayerExecute
+            Thread.startVirtualThread {
+                val (result, cs) = EditOperations.sphere(player.instance!!, player.position, radius, pattern, true, player)
+                EditSessionManager.get(player).pushHistory(cs)
+                player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
+            }
+        }
+    })
+
+    commandManager.register(command("/size") {
+        permission("nebula.worldedit")
+        onPlayerExecute {
+            val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
+            player.sendMessage(player.translate("orbit.build.selection_size", "w" to sel.width.toString(), "h" to sel.height.toString(), "l" to sel.length.toString(), "volume" to sel.volume.toString()))
+        }
+    })
+}
+
+fun installWandListeners(eventNode: EventNode<Event>) {
+    eventNode.addListener(PlayerBlockBreakEvent::class.java) { event ->
+        if (event.player.gameMode != GameMode.CREATIVE) return@addListener
+        val heldItem = event.player.itemInMainHand
+        if (heldItem.material() != Material.WOODEN_AXE) return@addListener
+        event.isCancelled = true
+        val session = EditSessionManager.get(event.player)
+        session.pos1 = Pos(event.blockPosition.blockX().toDouble(), event.blockPosition.blockY().toDouble(), event.blockPosition.blockZ().toDouble())
+        SelectionRenderer.update(event.player, session.selection())
+        event.player.sendMessage(event.player.translate("orbit.build.pos1_set", "x" to event.blockPosition.blockX().toString(), "y" to event.blockPosition.blockY().toString(), "z" to event.blockPosition.blockZ().toString()))
+    }
+
+    eventNode.addListener(PlayerBlockInteractEvent::class.java) { event ->
+        if (event.hand != PlayerHand.MAIN) return@addListener
+        if (event.player.gameMode != GameMode.CREATIVE) return@addListener
+        val heldItem = event.player.itemInMainHand
+        if (heldItem.material() != Material.WOODEN_AXE) return@addListener
+        val session = EditSessionManager.get(event.player)
+        session.pos2 = Pos(event.blockPosition.blockX().toDouble(), event.blockPosition.blockY().toDouble(), event.blockPosition.blockZ().toDouble())
+        SelectionRenderer.update(event.player, session.selection())
+        event.player.sendMessage(event.player.translate("orbit.build.pos2_set", "x" to event.blockPosition.blockX().toString(), "y" to event.blockPosition.blockY().toString(), "z" to event.blockPosition.blockZ().toString()))
+    }
+
+    eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+        EditSessionManager.remove(event.player)
+        SelectionRenderer.clear(event.player)
+    }
+}

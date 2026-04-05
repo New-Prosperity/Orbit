@@ -1,12 +1,16 @@
 package me.nebula.orbit.utils.blocksnapshot
 
+import me.nebula.orbit.utils.region.CuboidRegion
+import me.nebula.orbit.utils.region.CylinderRegion
 import me.nebula.orbit.utils.region.Region
+import me.nebula.orbit.utils.region.SphereRegion
 import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Point
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.InstanceContainer
+import net.minestom.server.instance.batch.AbsoluteBlockBatch
 import net.minestom.server.instance.block.Block
 import net.minestom.server.timer.Task
 import java.time.Duration
@@ -42,10 +46,12 @@ class BlockSnapshot(
     val blockCount: Int get() = blocks.size
 
     fun restore(instance: Instance) {
+        val batch = AbsoluteBlockBatch()
         blocks.forEach { (packed, block) ->
             val (x, y, z) = unpackCoords(packed)
-            instance.setBlock(x, y, z, block)
+            batch.setBlock(x, y, z, block)
         }
+        batch.apply(instance) {}
     }
 
     fun restoreAsync(instance: Instance): CompletableFuture<Void> =
@@ -62,23 +68,27 @@ class BlockSnapshot(
     }
 
     fun pasteAt(instance: Instance, offset: Point) {
+        val batch = AbsoluteBlockBatch()
         blocks.forEach { (packed, block) ->
             val (x, y, z) = unpackCoords(packed)
-            instance.setBlock(
+            batch.setBlock(
                 x + offset.blockX(),
                 y + offset.blockY(),
                 z + offset.blockZ(),
                 block,
             )
         }
+        batch.apply(instance) {}
     }
 
     fun createInstance(): InstanceContainer {
         val instance = MinecraftServer.getInstanceManager().createInstanceContainer()
+        val batch = AbsoluteBlockBatch()
         blocks.forEach { (packed, block) ->
             val (x, y, z) = unpackCoords(packed)
-            instance.setBlock(x, y, z, block)
+            batch.setBlock(x, y, z, block)
         }
+        batch.apply(instance) {}
         return instance
     }
 
@@ -133,7 +143,7 @@ class BlockSnapshot(
 
         private fun forEachBlockInRegion(region: Region, action: (Int, Int, Int) -> Unit) {
             when (region) {
-                is me.nebula.orbit.utils.region.CuboidRegion -> {
+                is CuboidRegion -> {
                     for (x in region.min.blockX()..region.max.blockX()) {
                         for (y in region.min.blockY()..region.max.blockY()) {
                             for (z in region.min.blockZ()..region.max.blockZ()) {
@@ -142,7 +152,7 @@ class BlockSnapshot(
                         }
                     }
                 }
-                is me.nebula.orbit.utils.region.SphereRegion -> {
+                is SphereRegion -> {
                     val cx = region.center.blockX(); val cy = region.center.blockY(); val cz = region.center.blockZ()
                     val r = region.radius.toInt()
                     for (x in (cx - r)..(cx + r)) {
@@ -153,7 +163,7 @@ class BlockSnapshot(
                         }
                     }
                 }
-                is me.nebula.orbit.utils.region.CylinderRegion -> {
+                is CylinderRegion -> {
                     val cx = region.center.blockX(); val cy = region.center.blockY(); val cz = region.center.blockZ()
                     val r = region.radius.toInt(); val h = region.height.toInt()
                     for (x in (cx - r)..(cx + r)) {
@@ -195,10 +205,12 @@ class BlockRestoreHandle @PublishedApi internal constructor(
         if (restored) return
         restored = true
         autoTask?.cancel()
+        val batch = AbsoluteBlockBatch()
         originals.forEach { (packed, original) ->
             val (x, y, z) = unpackCoords(packed)
-            instance.setBlock(x, y, z, original)
+            batch.setBlock(x, y, z, original)
         }
+        batch.apply(instance) {}
         originals.clear()
     }
 
@@ -207,10 +219,12 @@ class BlockRestoreHandle @PublishedApi internal constructor(
         restored = true
         autoTask?.cancel()
         Thread.startVirtualThread {
+            val batch = AbsoluteBlockBatch()
             originals.forEach { (packed, original) ->
                 val (x, y, z) = unpackCoords(packed)
-                instance.setBlock(x, y, z, original)
+                batch.setBlock(x, y, z, original)
             }
+            batch.apply(instance) {}
             originals.clear()
         }
     }
@@ -274,7 +288,7 @@ private data class UnpackedCoords(val x: Int, val y: Int, val z: Int)
 
 private fun unpackCoords(packed: Long): UnpackedCoords {
     val x = (packed shr 38).toInt()
-    val z = ((packed shr 12) and 0x3FFFFFF).toInt()
+    val z = ((packed shr 12) and 0x3FFFFFF).toInt().let { if (it >= 0x2000000) it - 0x4000000 else it }
     val y = (packed and 0xFFF).toInt().let { if (it >= 2048) it - 4096 else it }
     return UnpackedCoords(x, y, z)
 }

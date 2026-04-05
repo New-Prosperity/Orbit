@@ -22,6 +22,7 @@ object CustomArmorRegistry {
     operator fun get(id: String): RegisteredArmor? = armors[id]
 
     fun register(id: String, parsed: ParsedArmor): RegisteredArmor {
+        require(!armors.containsKey(id)) { "Duplicate armor registration: $id" }
         val colorId = ModelIdRegistry.assignId("cc:armor:$id")
         val (r, g, b) = colorIdToRgb(colorId)
 

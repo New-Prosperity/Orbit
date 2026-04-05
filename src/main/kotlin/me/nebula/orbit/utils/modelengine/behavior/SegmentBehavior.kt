@@ -1,12 +1,17 @@
 package me.nebula.orbit.utils.modelengine.behavior
 
 import me.nebula.orbit.utils.modelengine.bone.ModelBone
-import me.nebula.orbit.utils.modelengine.math.*
+import me.nebula.orbit.utils.modelengine.math.eulerToQuat
+import me.nebula.orbit.utils.modelengine.math.quatInverse
+import me.nebula.orbit.utils.modelengine.math.quatMultiply
+import me.nebula.orbit.utils.modelengine.math.quatNormalize
+import me.nebula.orbit.utils.modelengine.math.quatSlerp
+import me.nebula.orbit.utils.modelengine.math.quatToEuler
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
 import net.minestom.server.coordinate.Vec
+import kotlin.math.acos
 import kotlin.math.asin
 import kotlin.math.atan2
-import kotlin.math.sqrt
 
 class SegmentBehavior(
     override val bone: ModelBone,
@@ -22,9 +27,9 @@ class SegmentBehavior(
         val len = direction.length()
         if (len < 1e-6) return
 
-        val dir = direction.normalize()
+        val invLen = 1.0 / len
+        val dir = direction.mul(invLen)
         val targetYaw = Math.toDegrees(atan2(-dir.x(), dir.z())).toFloat()
-        val horizontal = sqrt(dir.x() * dir.x() + dir.z() * dir.z())
         val targetPitch = Math.toDegrees(-asin(dir.y().coerceIn(-1.0, 1.0))).toFloat()
 
         val targetRotation = if (rollLock) {
@@ -41,7 +46,7 @@ class SegmentBehavior(
                 bone.blueprint.rotation.z * localTarget.z +
                 bone.blueprint.rotation.w * localTarget.w)
             .coerceIn(-1f, 1f)
-        val angleDeg = Math.toDegrees(kotlin.math.acos(dot).toDouble()).toFloat() * 2f
+        val angleDeg = Math.toDegrees(acos(dot).toDouble()).toFloat() * 2f
 
         bone.localRotation = if (angleDeg > angleLimit) {
             val t = angleLimit / angleDeg

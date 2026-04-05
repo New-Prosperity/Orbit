@@ -34,8 +34,9 @@ object BlockbenchParser {
             ?: emptyList()
         val textures = root.getAsJsonArray("textures")?.mapIndexed { i, el -> parseTexture(i, el.asJsonObject) } ?: emptyList()
         val animations = root.getAsJsonArray("animations")?.map { parseAnimation(it.asJsonObject) } ?: emptyList()
+        val display = root.getAsJsonObject("display")?.let { parseDisplay(it) } ?: emptyMap()
 
-        return BlockbenchModel(name, meta, resolution, elements, groups, textures, animations)
+        return BlockbenchModel(name, meta, resolution, elements, groups, textures, animations, display)
     }
 
     private fun parseElement(obj: JsonObject): BbElement = BbElement(
@@ -136,6 +137,25 @@ object BlockbenchParser {
             bezierRightTime = obj.readVec("bezier_right_time"),
             bezierRightValue = obj.readVec("bezier_right_value"),
         )
+    }
+
+    private fun parseDisplay(obj: JsonObject): Map<String, BbDisplaySlot> {
+        val slots = mutableMapOf<String, BbDisplaySlot>()
+        for ((key, value) in obj.entrySet()) {
+            if (!value.isJsonObject) continue
+            val slotObj = value.asJsonObject
+            slots[key] = BbDisplaySlot(
+                rotation = slotObj.readFloatArray("rotation", 3),
+                translation = slotObj.readFloatArray("translation", 3),
+                scale = slotObj.readFloatArray("scale", 3) { 1f },
+            )
+        }
+        return slots
+    }
+
+    private fun JsonObject.readFloatArray(key: String, size: Int, default: () -> Float = { 0f }): FloatArray {
+        val arr = getAsJsonArray(key) ?: return FloatArray(size) { default() }
+        return FloatArray(size) { i -> if (i < arr.size()) arr[i].asFloat else default() }
     }
 
     private fun JsonObject.readVec(key: String): Vec {

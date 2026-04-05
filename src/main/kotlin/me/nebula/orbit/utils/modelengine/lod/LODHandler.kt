@@ -10,6 +10,18 @@ import java.util.concurrent.ConcurrentHashMap
 class LODHandler(
     private val config: LODConfig,
 ) {
+    companion object {
+        private val instances = ConcurrentHashMap.newKeySet<LODHandler>()
+
+        fun cleanupAll(uuid: UUID) {
+            instances.forEach { it.cleanup(uuid) }
+        }
+    }
+
+    init {
+        instances.add(this)
+    }
+
     private val playerLevels = ConcurrentHashMap<UUID, Int>()
 
     fun evaluate(modeledEntity: ModeledEntity) {
@@ -53,6 +65,11 @@ class LODHandler(
         playerLevels.remove(playerUuid)
     }
 
+    fun dispose() {
+        instances.remove(this)
+        playerLevels.clear()
+    }
+
     private fun applyLevel(modeledEntity: ModeledEntity, level: LODLevel) {
         modeledEntity.models.values.forEach { model ->
             applyLevelToModel(model, level)
@@ -78,5 +95,5 @@ class LODHandler(
     }
 
     private fun findPlayer(uuid: UUID): Player? =
-        MinecraftServer.getConnectionManager().onlinePlayers.firstOrNull { it.uuid == uuid }
+        MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
 }

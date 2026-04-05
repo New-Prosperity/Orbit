@@ -1,7 +1,15 @@
 package me.nebula.orbit.utils.modelengine.math
 
 import net.minestom.server.coordinate.Vec
-import kotlin.math.*
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.acos
+import kotlin.math.asin
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sign
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 data class Quat(val x: Float, val y: Float, val z: Float, val w: Float) {
     operator fun get(index: Int): Float = when (index) {

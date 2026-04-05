@@ -52,6 +52,7 @@ textLb.despawn()
 - TEXT_DISPLAY is a virtual packet entity — per-player rendering, no instance entity
 - INTERACTION is the only server-side entity — lightweight, invisible, handles click events
 - Auto-shows to players joining the instance, auto-refreshes on configured interval
+- `spawn()` is idempotent — calls `despawn()` first to prevent event handler / task leaks on repeated invocations
 
 ### Player Rank
 

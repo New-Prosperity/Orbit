@@ -12,6 +12,7 @@ import me.nebula.gravity.economy.PurchaseCosmeticProcessor
 import me.nebula.orbit.progression.mission.MissionTracker
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
+import me.nebula.orbit.utils.gui.confirmGui
 import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.gui.openGui
 import me.nebula.orbit.utils.gui.paginatedGui
@@ -83,10 +84,7 @@ object CosmeticMenu {
                 }
             }
 
-            staticSlot(49, itemStack(Material.ARROW) {
-                name("<gray>Back")
-                clean()
-            }) { p -> openCategoryMenu(p) }
+            backButton(49) { p -> openCategoryMenu(p) }
         }
         gui.open(player)
     }
@@ -94,43 +92,42 @@ object CosmeticMenu {
     private fun openConfirmation(player: Player, definition: CosmeticDefinition, category: CosmeticCategory, cost: Int) {
         val material = Material.fromKey(definition.material) ?: Material.BARRIER
 
-        val confirmGui = gui(player.translateRaw("orbit.cosmetic.confirm.title"), rows = 3) {
-            slot(11, itemStack(Material.GREEN_WOOL) {
+        val confirm = confirmGui(
+            title = player.translateRaw("orbit.cosmetic.confirm.title"),
+            confirmItem = itemStack(Material.GREEN_WOOL) {
                 name("<green>${player.translateRaw("orbit.cosmetic.confirm.accept")}")
                 lore(player.translateRaw("orbit.cosmetic.confirm.cost", "price" to cost.toString()))
                 clean()
-            }) { p ->
+            },
+            cancelItem = itemStack(Material.RED_WOOL) {
+                name("<red>${player.translateRaw("orbit.cosmetic.confirm.cancel")}")
+                clean()
+            },
+            previewItem = itemStack(material) {
+                name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
+                lore(player.translateRaw("orbit.cosmetic.confirm.cost", "price" to cost.toString()))
+                clean()
+            },
+            onConfirm = confirm@{ p ->
                 val purchased = EconomyStore.executeOnKey(p.uuid, PurchaseCosmeticProcessor("coins", cost.toDouble()))
                 if (!purchased) {
                     p.sendMessage(p.translate("orbit.cosmetic.insufficient_funds"))
                     openCosmeticList(p, category)
-                    return@slot
+                    return@confirm
                 }
                 val unlocked = CosmeticStore.executeOnKey(p.uuid, UnlockCosmeticProcessor(definition.id, definition.maxLevel))
                 if (!unlocked) {
                     EconomyStore.executeOnKey(p.uuid, AddBalanceProcessor("coins", cost.toDouble()))
                     openCosmeticList(p, category)
-                    return@slot
+                    return@confirm
                 }
                 CosmeticDataCache.invalidate(p.uuid)
                 p.sendMessage(p.translate("orbit.cosmetic.purchased", "cosmetic" to p.translateRaw(definition.nameKey)))
                 openCosmeticList(p, category)
-            }
-
-            slot(13, itemStack(material) {
-                name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
-                lore(player.translateRaw("orbit.cosmetic.confirm.cost", "price" to cost.toString()))
-                clean()
-            })
-
-            slot(15, itemStack(Material.RED_WOOL) {
-                name("<red>${player.translateRaw("orbit.cosmetic.confirm.cancel")}")
-                clean()
-            }) { p -> openCosmeticList(p, category) }
-
-            fillDefault()
-        }
-        player.openGui(confirmGui)
+            },
+            onCancel = { p -> openCosmeticList(p, category) },
+        )
+        player.openGui(confirm)
     }
 
     private fun purchaseCost(definition: CosmeticDefinition, currentLevel: Int): Int =

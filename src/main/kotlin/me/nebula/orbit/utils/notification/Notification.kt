@@ -10,6 +10,7 @@ import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 import net.minestom.server.sound.SoundEvent
+import net.minestom.server.timer.Task
 import java.time.Duration
 import java.util.EnumSet
 
@@ -67,11 +68,13 @@ data class Notification(
                     val intervalMs = 50L
                     val totalTicks = (durationMs / intervalMs).toInt().coerceAtLeast(1)
                     var ticksElapsed = 0
-                    repeat(Duration.ofMillis(intervalMs)) {
+                    val taskHolder = arrayOfNulls<Task>(1)
+                    taskHolder[0] = repeat(Duration.ofMillis(intervalMs)) {
                         ticksElapsed++
                         val progress = 1f - (ticksElapsed.toFloat() / totalTicks)
                         if (progress <= 0f) {
                             player.hideBossBar(bar)
+                            taskHolder[0]?.cancel()
                         } else {
                             bar.progress(progress.coerceIn(0f, 1f))
                         }

@@ -109,7 +109,7 @@ nameplateLayout("styled") {
 | `refresh(player)` | Force re-render for all viewers of this player |
 | `refreshAll()` | Re-render all nameplates |
 | `showTo(target, viewer)` | Show target's nameplate to specific viewer |
-| `hideTo(target, viewer)` | Hide target's nameplate from specific viewer |
+| `hideTo(target, viewer)` | Hide target's nameplate from specific viewer (also clears cached render state) |
 | `install(eventNode)` | Register spawn/disconnect listeners + refresh task |
 | `uninstall()` | Remove all nameplates and listeners |
 

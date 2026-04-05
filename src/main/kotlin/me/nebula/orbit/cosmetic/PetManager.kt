@@ -3,14 +3,12 @@ package me.nebula.orbit.cosmetic
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
 import me.nebula.orbit.utils.modelengine.modeledEntity
-import me.nebula.orbit.utils.pathfinding.Pathfinder
 import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
-import net.minestom.server.coordinate.Pos
-import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.EntityCreature
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.Player
+import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.timer.Task
@@ -26,8 +24,6 @@ data class ActivePet(
     val modeled: ModeledEntity,
     val cosmeticId: String,
     val level: Int,
-    var path: List<Vec>? = null,
-    var pathIndex: Int = 0,
 )
 
 object PetManager {
@@ -72,12 +68,14 @@ object PetManager {
         val creature = EntityCreature(EntityType.ZOMBIE)
         creature.isInvisible = true
         creature.isSilent = true
+        creature.getAttribute(Attribute.MOVEMENT_SPEED).baseValue = MOVE_SPEED
         creature.setInstance(instance, player.position.add(1.0, 0.0, 1.0)).thenRun {
+            if (creature.isRemoved) return@thenRun
+
             val modeled = modeledEntity(creature) {
                 model(modelId, autoPlayIdle = true) { scale(scale) }
             }
 
-            val walkAnim = resolved["walkAnimation"]
             modeled.show(player)
 
             pets[player.uuid] = ActivePet(creature, modeled, cosmeticId, level)
@@ -93,13 +91,12 @@ object PetManager {
     fun isActive(playerId: UUID): Boolean = pets.containsKey(playerId)
 
     private fun tick() {
-        val onlinePlayers = MinecraftServer.getConnectionManager().onlinePlayers
-        val playersByUuid = onlinePlayers.associateBy { it.uuid }
+        val connectionManager = MinecraftServer.getConnectionManager()
 
         val iterator = pets.entries.iterator()
         while (iterator.hasNext()) {
             val (uuid, pet) = iterator.next()
-            val player = playersByUuid[uuid]
+            val player = connectionManager.getOnlinePlayerByUuid(uuid)
             if (player == null) {
                 pet.modeled.destroy()
                 pet.entity.remove()
@@ -110,76 +107,30 @@ object PetManager {
             if (pet.entity.instance != player.instance) {
                 val inst = player.instance ?: continue
                 pet.entity.setInstance(inst, player.position.add(1.0, 0.0, 1.0))
-                pet.path = null
-                pet.pathIndex = 0
                 continue
             }
 
+            val navigator = pet.entity.navigator
             val distance = pet.entity.position.distance(player.position)
 
             if (distance > TELEPORT_THRESHOLD) {
+                navigator.reset()
                 pet.entity.teleport(player.position.add(1.0, 0.0, 1.0))
-                pet.path = null
-                pet.pathIndex = 0
                 playIdleAnimation(pet)
             } else if (distance > FOLLOW_THRESHOLD) {
-                followPlayer(pet, player)
+                navigator.setPathTo(player.position, FOLLOW_THRESHOLD, 50.0, 20.0, null)
+                playWalkAnimation(pet)
             } else {
-                pet.path = null
-                pet.pathIndex = 0
+                navigator.reset()
                 playIdleAnimation(pet)
             }
 
-            for (nearby in player.instance?.players ?: emptyList()) {
-                if (nearby.uuid == uuid) continue
-                val inRange = nearby.position.distance(pet.entity.position) < 48.0
-                val shouldShow = inRange && CosmeticVisibility.shouldShowModel(nearby, uuid)
-                if (shouldShow && nearby.uuid !in pet.modeled.viewers) {
-                    pet.modeled.show(nearby)
-                } else if (!shouldShow && nearby.uuid in pet.modeled.viewers) {
-                    pet.modeled.hide(nearby)
-                }
-            }
-            if (player.uuid !in pet.modeled.viewers) {
-                pet.modeled.show(player)
-            }
-        }
-    }
-
-    private fun followPlayer(pet: ActivePet, player: Player) {
-        val instance = pet.entity.instance ?: return
-
-        if (pet.path == null || pet.pathIndex >= (pet.path?.size ?: 0)) {
-            pet.path = Pathfinder.findPath(instance, pet.entity.position, player.position, maxIterations = 200)
-            pet.pathIndex = 0
-            if (pet.path == null) {
-                val direction = player.position.sub(pet.entity.position.x(), pet.entity.position.y(), pet.entity.position.z())
-                val dist = direction.distance(Pos.ZERO)
-                if (dist > 0.1) {
-                    val normalized = Vec(direction.x() / dist, 0.0, direction.z() / dist)
-                    pet.entity.velocity = normalized.mul(MOVE_SPEED * 20.0)
-                }
-                playWalkAnimation(pet)
-                return
-            }
-        }
-
-        val path = pet.path ?: return
-        if (pet.pathIndex < path.size) {
-            val target = path[pet.pathIndex]
-            val current = pet.entity.position
-            val dx = target.x() + 0.5 - current.x()
-            val dz = target.z() + 0.5 - current.z()
-            val horizontalDist = kotlin.math.sqrt(dx * dx + dz * dz)
-
-            if (horizontalDist < 0.5) {
-                pet.pathIndex++
-            } else {
-                val yaw = (-kotlin.math.atan2(dx, dz) * (180.0 / Math.PI)).toFloat()
-                pet.entity.velocity = Vec(dx / horizontalDist * MOVE_SPEED * 20.0, 0.0, dz / horizontalDist * MOVE_SPEED * 20.0)
-                pet.entity.setView(yaw, 0f)
-            }
-            playWalkAnimation(pet)
+            CosmeticVisibility.updateViewers(
+                pet.modeled,
+                player.instance?.players ?: emptyList(),
+                uuid,
+                pet.entity.position,
+            )
         }
     }
 

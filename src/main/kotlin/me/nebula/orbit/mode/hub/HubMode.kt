@@ -65,8 +65,11 @@ import me.nebula.orbit.utils.vanish.VanishManager
 import me.nebula.orbit.utils.world.configureWorld
 import net.minestom.server.entity.Player
 import net.minestom.server.timer.Task
+import java.util.EnumSet
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
+import net.kyori.adventure.text.Component
 
 class HubMode : ServerMode {
 
@@ -110,7 +113,7 @@ class HubMode : ServerMode {
 
     private inline fun <reified T : me.nebula.gravity.messaging.NetworkMessage> subscribeSyncForPlayer(
         crossinline extractId: (T) -> UUID,
-        crossinline handler: (T, net.minestom.server.entity.Player) -> Unit
+        crossinline handler: (T, Player) -> Unit
     ): UUID = NetworkMessenger.subscribe<T> { msg ->
         scheduleSync {
             val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(extractId(msg)) ?: return@scheduleSync
@@ -120,7 +123,7 @@ class HubMode : ServerMode {
 
     private inline fun <reified T : me.nebula.gravity.messaging.NetworkMessage> subscribeSyncForPlayers(
         crossinline extractIds: (T) -> List<UUID>,
-        crossinline handler: (T, net.minestom.server.entity.Player) -> Unit
+        crossinline handler: (T, Player) -> Unit
     ): UUID = NetworkMessenger.subscribe<T> { msg ->
         scheduleSync {
             for (playerId in extractIds(msg)) {
@@ -148,7 +151,7 @@ class HubMode : ServerMode {
     override fun install(handler: GlobalEventHandler) {
         logger.info { "Installing hub mode (spawn=$spawnPoint)" }
 
-        val actions = mapOf<String, (net.minestom.server.entity.Player) -> Unit>(
+        val actions = mapOf<String, (Player) -> Unit>(
             "open_selector" to { player -> SelectorMenu.open(player) },
             "open_host" to { player -> HostMenu.openGameModeMenu(player) },
             "open_cosmetics" to { player -> CosmeticMenu.openCategoryMenu(player) },
@@ -300,12 +303,8 @@ class HubMode : ServerMode {
     }
 
     private val tabFakeUuids = Array(TAB_TOTAL) { UUID.nameUUIDFromBytes("hubtab:$it".toByteArray()) }
-    private val tabSentTo = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
-    private val blankSkin = listOf(PlayerInfoUpdatePacket.Property(
-        "textures",
-        "ewogICJ0aW1lc3RhbXAiIDogMTcxMTM5NjcwMjc0NCwKICAicHJvZmlsZUlkIiA6ICIxMjNlNDU2Ny1lODliLTEyZDMtYTQ1Ni00MjY2MTQxNzQwMDAiLAogICJwcm9maWxlTmFtZSIgOiAiYmxhbmsiLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjFhZGUxOTUwYTliNjExOTFjNWM4ZDU1NDFkZmI4ZWMwMTQyOGIxMGY1NThhOGRhMmQ1YzliMWMyNWFiOCIKICAgIH0KICB9Cn0=",
-        null,
-    ))
+    private val tabSentTo = ConcurrentHashMap.newKeySet<UUID>()
+    private val blankSkin = emptyList<PlayerInfoUpdatePacket.Property>()
 
     private fun setupHubTabEntries(handler: GlobalEventHandler) {
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
@@ -322,21 +321,22 @@ class HubMode : ServerMode {
         tabRefreshTask = repeat(java.time.Duration.ofSeconds(5)) { broadcastTabUpdate() }
     }
 
-    private fun sendFullTabList(viewer: net.minestom.server.entity.Player) {
+    private fun sendFullTabList(viewer: Player) {
         val entries = buildTabEntries(viewer)
         if (tabSentTo.add(viewer.uuid)) {
             viewer.sendPacket(PlayerInfoUpdatePacket(
-                java.util.EnumSet.of(
+                EnumSet.of(
                     PlayerInfoUpdatePacket.Action.ADD_PLAYER,
                     PlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME,
                     PlayerInfoUpdatePacket.Action.UPDATE_LISTED,
                     PlayerInfoUpdatePacket.Action.UPDATE_LIST_ORDER,
+                    PlayerInfoUpdatePacket.Action.UPDATE_LATENCY,
                 ),
                 entries,
             ))
         } else {
             viewer.sendPacket(PlayerInfoUpdatePacket(
-                java.util.EnumSet.of(
+                EnumSet.of(
                     PlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME,
                     PlayerInfoUpdatePacket.Action.UPDATE_LIST_ORDER,
                 ),
@@ -351,11 +351,11 @@ class HubMode : ServerMode {
         }
     }
 
-    private fun buildTabEntries(viewer: net.minestom.server.entity.Player): List<PlayerInfoUpdatePacket.Entry> {
+    private fun buildTabEntries(viewer: Player): List<PlayerInfoUpdatePacket.Entry> {
         val sorted = MinecraftServer.getConnectionManager().onlinePlayers
             .filter { VanishManager.canSee(viewer, it) }
             .sortedWith(
-                compareBy<net.minestom.server.entity.Player> { it.rankWeight }
+                compareBy<Player> { it.rankWeight }
                     .thenBy { it.username.lowercase() }
             )
 
@@ -366,7 +366,7 @@ class HubMode : ServerMode {
         val entries = mutableListOf<PlayerInfoUpdatePacket.Entry>()
 
         for (i in 0 until COLUMN1) {
-            entries += fakeEntry(tabFakeUuids[i], i, net.kyori.adventure.text.Component.text(" "))
+            entries += fakeEntry(tabFakeUuids[i], i, Component.text(" "))
         }
 
         val visibleCount = VanishManager.visiblePlayerCount(viewer)
@@ -388,7 +388,7 @@ class HubMode : ServerMode {
         }
 
         while (nextSlot < TAB_TOTAL) {
-            entries += fakeEntry(tabFakeUuids[nextSlot], nextSlot, net.kyori.adventure.text.Component.text(" "))
+            entries += fakeEntry(tabFakeUuids[nextSlot], nextSlot, Component.text(" "))
             nextSlot++
         }
 
@@ -403,7 +403,7 @@ class HubMode : ServerMode {
     ): PlayerInfoUpdatePacket.Entry =
         PlayerInfoUpdatePacket.Entry(
             uuid, "!tab_%03d".format(slot), properties,
-            true, -1, GameMode.SURVIVAL,
+            true, 1000, GameMode.SURVIVAL,
             displayName, null, TAB_TOTAL - 1 - slot, false,
         )
 
@@ -449,6 +449,7 @@ class HubMode : ServerMode {
     override fun shutdown() {
         tabRefreshTask?.cancel()
         tabRefreshTask = null
+        tabSentTo.clear()
         NameplateManager.uninstall()
         hostStatusSubscription?.let { NetworkMessenger.unsubscribe<HostProvisionStatusMessage>(it) }
         queueRemovedSubscription?.let { NetworkMessenger.unsubscribe<QueueRemovedMessage>(it) }

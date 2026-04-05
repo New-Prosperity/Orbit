@@ -1,7 +1,11 @@
 package me.nebula.orbit.utils.modelengine.behavior
 
 import me.nebula.orbit.utils.modelengine.bone.ModelBone
-import me.nebula.orbit.utils.modelengine.math.*
+import me.nebula.orbit.utils.modelengine.math.eulerToQuat
+import me.nebula.orbit.utils.modelengine.math.lerp
+import me.nebula.orbit.utils.modelengine.math.quatMultiply
+import me.nebula.orbit.utils.modelengine.math.quatNormalize
+import me.nebula.orbit.utils.modelengine.math.wrapDegrees
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
 
 class HeadBehavior(

@@ -243,10 +243,13 @@ object SkillCooldown {
     }
 
     fun clearPlayer(player: Player) {
-        cooldowns.keys.filter { it.uuid == player.uuid }.forEach { key ->
-            cooldowns.remove(key)?.let { entry ->
+        cooldowns.entries.removeIf { (key, entry) ->
+            if (key.uuid == player.uuid) {
                 entry.displayTask?.cancel()
                 entry.bossBar?.let { bar -> player.hideBossBar(bar) }
+                true
+            } else {
+                false
             }
         }
     }

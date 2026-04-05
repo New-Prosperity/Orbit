@@ -8,9 +8,9 @@ import net.kyori.adventure.text.format.TextDecoration
 import net.kyori.adventure.title.Title
 import net.minestom.server.entity.Player
 import java.time.Duration
+import java.util.ArrayDeque
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
 
 data class PlayerStat(val uuid: UUID, val name: String, val value: Double)
 
@@ -210,13 +210,13 @@ object MatchResultDisplay {
 
 object MatchResultManager {
 
-    private val history = CopyOnWriteArrayList<MatchResult>()
-    private val playerHistory = ConcurrentHashMap<UUID, MutableList<MatchResult>>()
+    private val history = ArrayDeque<MatchResult>()
+    private val playerHistory = ConcurrentHashMap<UUID, ArrayDeque<MatchResult>>()
     private val maxHistory = 100
 
     fun store(result: MatchResult) {
-        history.add(result)
-        if (history.size > maxHistory) history.removeAt(0)
+        history.addLast(result)
+        if (history.size > maxHistory) history.removeFirst()
 
         val allPlayers = buildList {
             result.winner?.first?.let { add(it) }
@@ -225,9 +225,9 @@ object MatchResultManager {
         }.distinct()
 
         allPlayers.forEach { uuid ->
-            playerHistory.getOrPut(uuid) { mutableListOf() }.let { list ->
-                list.add(result)
-                if (list.size > maxHistory) list.removeAt(0)
+            playerHistory.getOrPut(uuid) { ArrayDeque() }.let { deque ->
+                deque.addLast(result)
+                if (deque.size > maxHistory) deque.removeFirst()
             }
         }
     }
@@ -238,24 +238,24 @@ object MatchResultManager {
     }
 
     fun recentMatches(limit: Int = 10): List<MatchResult> =
-        history.takeLast(limit).reversed()
+        history.toList().takeLast(limit).reversed()
 
     fun playerMatches(uuid: UUID, limit: Int = 10): List<MatchResult> =
-        (playerHistory[uuid] ?: emptyList()).takeLast(limit).reversed()
+        (playerHistory[uuid]?.toList() ?: emptyList()).takeLast(limit).reversed()
 
     fun playerWins(uuid: UUID): Int =
-        (playerHistory[uuid] ?: emptyList()).count { it.winner?.first == uuid }
+        (playerHistory[uuid]?.count { it.winner?.first == uuid }) ?: 0
 
     fun playerLosses(uuid: UUID): Int =
-        (playerHistory[uuid] ?: emptyList()).count {
+        (playerHistory[uuid]?.count {
             !it.isDraw && it.winner?.first != uuid && it.losers.any { l -> l.first == uuid }
-        }
+        }) ?: 0
 
     fun playerDraws(uuid: UUID): Int =
-        (playerHistory[uuid] ?: emptyList()).count { it.isDraw }
+        (playerHistory[uuid]?.count { it.isDraw }) ?: 0
 
     fun playerMvps(uuid: UUID): Int =
-        (playerHistory[uuid] ?: emptyList()).count { it.mvp?.first == uuid }
+        (playerHistory[uuid]?.count { it.mvp?.first == uuid }) ?: 0
 
     fun clear() {
         history.clear()

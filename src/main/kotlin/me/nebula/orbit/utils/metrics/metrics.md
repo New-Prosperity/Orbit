@@ -6,7 +6,7 @@ Publishes `ServerMetrics` to the shared Hazelcast `ReplicatedMap("metrics")` eve
 
 ```kotlin
 MetricsPublisher.initialize()  // start publishing
-MetricsPublisher.shutdown()    // stop publishing and remove entry
+MetricsPublisher.shutdown()    // stop publishing, await termination (5s), remove entry
 ```
 
 ## Metrics Collected

@@ -72,6 +72,13 @@ fun rayTraceEntity(
     return null
 }
 
+private fun entityAABB(entity: Entity): Pair<Vec, Vec> {
+    val bb = entity.boundingBox
+    val pos = entity.position
+    return Vec(pos.x() - bb.width() / 2, pos.y(), pos.z() - bb.depth() / 2) to
+        Vec(pos.x() + bb.width() / 2, pos.y() + bb.height(), pos.z() + bb.depth() / 2)
+}
+
 fun raycast(
     instance: Instance,
     origin: Pos,
@@ -106,15 +113,8 @@ fun raycast(
 
         if (closestEntity == null) {
             for (entity in instance.entities) {
-                val bb = entity.boundingBox
-                val ePos = entity.position
-                val minX = ePos.x() - bb.width() / 2
-                val minY = ePos.y()
-                val minZ = ePos.z() - bb.depth() / 2
-                val maxX = ePos.x() + bb.width() / 2
-                val maxY = ePos.y() + bb.height()
-                val maxZ = ePos.z() + bb.depth() / 2
-                if (x in minX..maxX && y in minY..maxY && z in minZ..maxZ) {
+                val (min, max) = entityAABB(entity)
+                if (x in min.x()..max.x() && y in min.y()..max.y() && z in min.z()..max.z()) {
                     closestEntity = entity
                     if (dist < closestDist) {
                         closestDist = dist
@@ -180,15 +180,9 @@ fun Player.getLookedAtEntity(
         for (entity in inst.entities) {
             if (entity === this) continue
             if (!entityFilter(entity)) continue
-            val bb = entity.boundingBox
-            val ePos = entity.position
-            val minX = ePos.x() - bb.width() / 2
-            val minY = ePos.y()
-            val minZ = ePos.z() - bb.depth() / 2
-            val maxX = ePos.x() + bb.width() / 2
-            val maxY = ePos.y() + bb.height()
-            val maxZ = ePos.z() + bb.depth() / 2
-            if (x in minX..maxX && y in minY..maxY && z in minZ..maxZ) {
+            val (min, max) = entityAABB(entity)
+            if (x in min.x()..max.x() && y in min.y()..max.y() && z in min.z()..max.z()) {
+                val ePos = entity.position
                 val dx = ePos.x() - eyePos.x()
                 val dy = ePos.y() - eyePos.y()
                 val dz = ePos.z() - eyePos.z()

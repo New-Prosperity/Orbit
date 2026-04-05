@@ -2,7 +2,13 @@ package me.nebula.orbit.utils.modelengine.generator
 
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.modelengine.ModelEngine
-import me.nebula.orbit.utils.modelengine.blueprint.*
+import me.nebula.orbit.utils.modelengine.blueprint.AnimationBlueprint
+import me.nebula.orbit.utils.modelengine.blueprint.BlueprintBone
+import me.nebula.orbit.utils.modelengine.blueprint.BoneKeyframes
+import me.nebula.orbit.utils.modelengine.blueprint.InterpolationType
+import me.nebula.orbit.utils.modelengine.blueprint.Keyframe
+import me.nebula.orbit.utils.modelengine.blueprint.LoopMode
+import me.nebula.orbit.utils.modelengine.blueprint.ModelBlueprint
 import net.minestom.server.component.DataComponents
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.item.ItemStack
@@ -62,6 +68,7 @@ object ModelGenerator {
                 boneModels[boneKey] = GeneratedBoneModel(
                     textures = listOf(texturePath),
                     elements = boneElements,
+                    display = model.display,
                 )
                 val itemModelValue = "minecraft:$boneKey"
                 ItemStack.of(Material.PAPER).with(DataComponents.ITEM_MODEL, itemModelValue)
@@ -214,6 +221,7 @@ object ModelGenerator {
         val boneModel = GeneratedBoneModel(
             textures = listOf(texturePath),
             elements = allElements,
+            display = model.display,
         )
         return boneModel to atlasBytes
     }

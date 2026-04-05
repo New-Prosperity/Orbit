@@ -10,6 +10,7 @@ import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.LivingEntity
 import net.minestom.server.entity.Player
 import net.minestom.server.event.player.PlayerChatEvent
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -47,6 +48,7 @@ object DialogManager {
     private val conversations = ConcurrentHashMap<UUID, ActiveConversation>()
     private val entityBindings = ConcurrentHashMap<Int, String>()
     private val commandHandlers = ConcurrentHashMap<String, (Player) -> Unit>()
+    private val playerCommands = ConcurrentHashMap<UUID, MutableSet<String>>()
     @Volatile private var installed = false
 
     fun register(dialog: DialogTree) {
@@ -82,6 +84,10 @@ object DialogManager {
         conversations.remove(player.uuid)
     }
 
+    fun endConversation(uuid: UUID) {
+        conversations.remove(uuid)
+    }
+
     fun isInConversation(player: Player): Boolean = conversations.containsKey(player.uuid)
 
     fun activeConversation(player: Player): ActiveConversation? = conversations[player.uuid]
@@ -104,6 +110,7 @@ object DialogManager {
     fun clear() {
         conversations.clear()
         commandHandlers.clear()
+        playerCommands.clear()
         dialogs.clear()
         entityBindings.clear()
     }
@@ -111,13 +118,19 @@ object DialogManager {
     private fun displayPage(player: Player, conversation: ActiveConversation) {
         val page = conversation.dialogTree.pages[conversation.currentPage] ?: return
 
+        val previousCommands = playerCommands.remove(player.uuid)
+        previousCommands?.forEach { commandHandlers.remove(it) }
+
         player.sendMessage(Component.empty())
         player.sendMessage(mm("<gold><bold>${conversation.npcName}"))
         player.sendMessage(mm("<gray>${page.text}"))
         player.sendMessage(Component.empty())
 
+        val currentCommands = ConcurrentHashMap.newKeySet<String>()
+
         page.options.forEach { option ->
             val commandId = "dialog_${commandCounter.incrementAndGet()}"
+            currentCommands.add(commandId)
 
             val handler: (Player) -> Unit = handler@{ p ->
                 option.onSelect?.invoke(p)
@@ -144,6 +157,8 @@ object DialogManager {
                 .hoverEvent(HoverEvent.showText(mm("<gray>Click to select")))
             player.sendMessage(optionComponent)
         }
+
+        playerCommands[player.uuid] = currentCommands
     }
 
     private fun installIfNeeded() {
@@ -159,6 +174,12 @@ object DialogManager {
                 }, net.minestom.server.command.builder.arguments.ArgumentType.Word("id"))
             }
         })
+
+        MinecraftServer.getGlobalEventHandler().addListener(PlayerDisconnectEvent::class.java) { event ->
+            val uuid = event.player.uuid
+            endConversation(uuid)
+            playerCommands.remove(uuid)?.forEach { commandHandlers.remove(it) }
+        }
     }
 }
 

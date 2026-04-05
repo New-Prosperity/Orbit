@@ -50,18 +50,42 @@ class ReplayRecorder {
     private var startTimeMillis = 0L
     @Volatile private var recording = false
     private val playerNames = ConcurrentHashMap<UUID, String>()
+    private val playerSkins = ConcurrentHashMap<UUID, Pair<String?, String?>>()
+    @Volatile var worldSnapshot: me.nebula.orbit.utils.nebulaworld.NebulaWorld? = null
+        private set
 
-    fun start() {
+    fun start(instance: net.minestom.server.instance.Instance? = null) {
         startTimeMillis = System.currentTimeMillis()
-        synchronized(frames) { frames.clear() }
+        frames.clear()
         playerNames.clear()
+        playerSkins.clear()
+        if (instance != null) {
+            Thread.startVirtualThread {
+                worldSnapshot = ReplayWorldCapture.capture(instance)
+            }
+        }
         recording = true
     }
 
     fun stop(): ReplayData {
         recording = false
-        val snapshot = synchronized(frames) { frames.toList() }
-        return ReplayData(snapshot, playerNames.toMap())
+        val snapshot = frames.toList()
+        val names = playerNames.toMap()
+        playerNames.clear()
+        playerSkins.clear()
+        return ReplayData(snapshot, names)
+    }
+
+    fun buildReplayFile(matchId: String, gameMode: String, mapName: String): ReplayFile {
+        val data = stop()
+        val players = playerNames.map { (uuid, name) ->
+            val (skinValue, skinSig) = playerSkins[uuid] ?: (null to null)
+            ReplayPlayerEntry(uuid, name, skinValue, skinSig)
+        }
+        val header = ReplayFileHeader(matchId, gameMode, mapName, System.currentTimeMillis(), data.durationTicks, players)
+        val worldSource = worldSnapshot?.let { ReplayWorldSource.Embedded(it) }
+            ?: ReplayWorldSource.Reference(mapName)
+        return ReplayFile(header, worldSource, data)
     }
 
     private fun offset(): Int = ((System.currentTimeMillis() - startTimeMillis) / 50).toInt()
@@ -90,6 +114,7 @@ class ReplayRecorder {
         if (!recording) return
         playerNames[player.uuid] = player.username
         val skin = player.skin
+        playerSkins[player.uuid] = skin?.textures() to skin?.signature()
         frames.add(ReplayFrame.EntitySpawn(
             offset(), player.uuid, player.username,
             skin?.textures(), skin?.signature(),
@@ -271,7 +296,25 @@ object ReplayStorage {
 
     fun exists(name: String): Boolean {
         val s = scope ?: return false
-        return s.exists("$name.replay.gz")
+        return s.exists("$name.replay.gz") || s.exists("$name.nebr")
+    }
+
+    fun saveBinary(name: String, replayFile: ReplayFile) {
+        val s = scope ?: error("ReplayStorage not initialized")
+        val bytes = ReplayFormat.write(replayFile)
+        s.upload("$name.nebr", bytes)
+    }
+
+    fun loadBinary(name: String): ReplayFile? {
+        val s = scope ?: error("ReplayStorage not initialized")
+        if (!s.exists("$name.nebr")) return null
+        val bytes = s.download("$name.nebr")
+        return ReplayFormat.read(bytes)
+    }
+
+    fun existsBinary(name: String): Boolean {
+        val s = scope ?: return false
+        return s.exists("$name.nebr")
     }
 
     private fun compress(data: ByteArray): ByteArray {

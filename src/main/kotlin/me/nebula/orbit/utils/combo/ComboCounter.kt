@@ -115,20 +115,17 @@ object ComboManager {
     private fun tick() {
         tickCounter++
         val cfg = config ?: return
-        val expired = mutableListOf<UUID>()
 
-        for ((uuid, state) in combos) {
+        combos.entries.removeIf { (uuid, state) ->
             if (tickCounter - state.lastHitTick >= cfg.windowTicks && state.count > 0) {
-                expired += uuid
-            }
-        }
-
-        for (uuid in expired) {
-            val state = combos.remove(uuid) ?: continue
-            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
-            if (player != null) {
-                cfg.onDrop?.invoke(player, state.count)
-                clearDisplay(player, state)
+                val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+                if (player != null) {
+                    cfg.onDrop?.invoke(player, state.count)
+                    clearDisplay(player, state)
+                }
+                true
+            } else {
+                false
             }
         }
     }

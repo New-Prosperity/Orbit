@@ -46,4 +46,4 @@ val assignedTeam = TeamBalance.autoBalance(mutableTeams, newPlayer)
 | `balance(players, teamCount)` | Even distribution across teams |
 | `balance(players, teamCount, scorer)` | Snake-draft by score descending |
 | `suggestSwap(teams, scorer)` | Find swap that minimizes score variance |
-| `autoBalance(teams, newPlayer)` | Add player to smallest team, returns team index |
+| `autoBalance(teams, newPlayer)` | Add player to smallest team, returns team index (-1 if teams empty despite require guard) |

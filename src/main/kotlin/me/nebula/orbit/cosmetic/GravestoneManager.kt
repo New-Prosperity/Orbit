@@ -4,7 +4,6 @@ import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.model.StandaloneModelOwner
 import me.nebula.orbit.utils.modelengine.model.standAloneModel
 import me.nebula.orbit.utils.scheduler.repeat
-import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.instance.Instance
 import net.minestom.server.timer.Task
@@ -17,6 +16,7 @@ data class ActiveGravestone(
     val owner: StandaloneModelOwner,
     val playerUuid: UUID,
     val expiresAt: Long,
+    val instance: Instance,
 )
 
 object GravestoneManager {
@@ -51,15 +51,17 @@ object GravestoneManager {
             model(modelId, autoPlayIdle = true) { scale(scale) }
         }
 
-        val modeled = ModelEngine.modeledEntity(model)
-        instance.players.forEach { player ->
-            if (player.position.distance(position) < 48.0 && CosmeticVisibility.shouldShowModel(player, playerUuid)) {
-                modeled?.show(player)
-            }
-        }
+        val modeled = ModelEngine.modeledEntity(model) ?: return
+        CosmeticVisibility.updateViewers(
+            modeled,
+            instance.players,
+            playerUuid,
+            position,
+            ensureOwnerVisible = false,
+        )
 
         val id = UUID.randomUUID()
-        gravestones[id] = ActiveGravestone(model, playerUuid, System.currentTimeMillis() + duration * 1000L)
+        gravestones[id] = ActiveGravestone(model, playerUuid, System.currentTimeMillis() + duration * 1000L, instance)
     }
 
     private fun tick() {
@@ -73,18 +75,18 @@ object GravestoneManager {
                 continue
             }
 
-            val modeled = ModelEngine.modeledEntity(gravestone.owner) ?: continue
-            for (instance in MinecraftServer.getInstanceManager().instances) {
-                for (player in instance.players) {
-                    val inRange = player.position.distance(gravestone.owner.position) < 48.0
-                    val shouldShow = inRange && CosmeticVisibility.shouldShowModel(player, gravestone.playerUuid)
-                    if (shouldShow && player.uuid !in modeled.viewers) {
-                        modeled.show(player)
-                    } else if (!shouldShow && player.uuid in modeled.viewers) {
-                        modeled.hide(player)
-                    }
-                }
+            val modeled = ModelEngine.modeledEntity(gravestone.owner) ?: run {
+                gravestone.owner.remove()
+                iterator.remove()
+                continue
             }
+            CosmeticVisibility.updateViewers(
+                modeled,
+                gravestone.instance.players,
+                gravestone.playerUuid,
+                gravestone.owner.position,
+                ensureOwnerVisible = false,
+            )
         }
     }
 }

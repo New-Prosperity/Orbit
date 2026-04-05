@@ -90,12 +90,7 @@ object PackWriter {
             }
         })
 
-        add("display", JsonObject().apply {
-            add("thirdperson_righthand", JsonObject().apply {
-                add("translation", JsonArray().apply { add(0); add(0); add(0) })
-                add("scale", JsonArray().apply { add(1); add(1); add(1) })
-            })
-        })
+        add("display", buildDisplayJson(model.display))
 
         add("elements", JsonArray().apply {
             model.elements.forEach { element ->
@@ -125,12 +120,30 @@ object PackWriter {
         })
     }
 
+    private fun buildDisplayJson(display: Map<String, BbDisplaySlot>): JsonObject = JsonObject().apply {
+        if (display.isEmpty()) {
+            add("thirdperson_righthand", JsonObject().apply {
+                add("translation", JsonArray().apply { add(0); add(0); add(0) })
+                add("scale", JsonArray().apply { add(1); add(1); add(1) })
+            })
+            return@apply
+        }
+        for ((slot, data) in display) {
+            add(slot, JsonObject().apply {
+                add("rotation", data.rotation.toJsonArray())
+                add("translation", data.translation.toJsonArray())
+                add("scale", data.scale.toJsonArray())
+            })
+        }
+    }
+
     private fun FloatArray.toJsonArray(): JsonArray = JsonArray().also { arr -> forEach { arr.add(it) } }
 }
 
 data class GeneratedBoneModel(
     val textures: List<String>,
     val elements: List<GeneratedElement>,
+    val display: Map<String, BbDisplaySlot> = emptyMap(),
 )
 
 data class GeneratedElement(

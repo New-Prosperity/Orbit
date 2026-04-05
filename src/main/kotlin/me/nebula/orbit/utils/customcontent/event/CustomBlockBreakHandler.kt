@@ -23,7 +23,7 @@ object CustomBlockBreakHandler {
             val center = Pos(pos.x() + 0.5, pos.y() + 0.25, pos.z() + 0.5)
 
             val drops: List<ItemStack> = when (val d = customBlock.drops) {
-                is CustomBlockDrops.SelfDrop -> listOf(customBlock.item().createStack())
+                is CustomBlockDrops.SelfDrop -> customBlock.item()?.let { listOf(it.createStack()) } ?: emptyList()
                 is CustomBlockDrops.LootTableDrop -> d.lootTable.roll()
             }
 

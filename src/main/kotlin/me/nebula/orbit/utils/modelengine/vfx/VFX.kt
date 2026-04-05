@@ -69,7 +69,11 @@ class VFX(
     }
 
     fun evictViewer(uuid: UUID) {
-        viewers.remove(uuid)
+        if (viewers.remove(uuid)) {
+            MinecraftServer.getConnectionManager()
+                .getOnlinePlayerByUuid(uuid)
+                ?.sendPacket(DestroyEntitiesPacket(listOf(entityId)))
+        }
     }
 
     fun remove() {
@@ -94,7 +98,7 @@ class VFX(
     private inline fun forEachViewer(action: (Player) -> Unit) {
         viewers.forEach { uuid ->
             MinecraftServer.getConnectionManager()
-                .onlinePlayers.firstOrNull { it.uuid == uuid }?.let(action)
+                .getOnlinePlayerByUuid(uuid)?.let(action)
         }
     }
 }

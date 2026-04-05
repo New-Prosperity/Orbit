@@ -198,33 +198,32 @@ class BoneRenderer(
         rotation: Quat,
         scale: Vec,
         item: ItemStack?,
-    ): Map<Int, Metadata.Entry<*>> = buildMap {
-        var hasChange = false
+    ): Map<Int, Metadata.Entry<*>> {
+        if (position == entity.lastPosition &&
+            rotation == entity.lastRotation &&
+            scale == entity.lastScale &&
+            item == entity.lastItem
+        ) return emptyMap()
 
-        if (position != entity.lastPosition) {
-            put(META_TRANSLATION, Metadata.Vector3(position))
-            entity.lastPosition = position
-            hasChange = true
-        }
-        if (rotation != entity.lastRotation) {
-            put(META_ROTATION_RIGHT, Metadata.Quaternion(rotation.toFloatArray()))
-            entity.lastRotation = rotation
-            hasChange = true
-        }
-        if (scale != entity.lastScale) {
-            put(META_SCALE, Metadata.Vector3(scale))
-            entity.lastScale = scale
-            hasChange = true
-        }
-        if (item != entity.lastItem) {
-            if (item != null) {
-                put(META_DISPLAYED_ITEM, Metadata.ItemStack(item))
+        return buildMap {
+            if (position != entity.lastPosition) {
+                put(META_TRANSLATION, Metadata.Vector3(position))
+                entity.lastPosition = position
             }
-            entity.lastItem = item
-            hasChange = true
-        }
-
-        if (hasChange) {
+            if (rotation != entity.lastRotation) {
+                put(META_ROTATION_RIGHT, Metadata.Quaternion(rotation.toFloatArray()))
+                entity.lastRotation = rotation
+            }
+            if (scale != entity.lastScale) {
+                put(META_SCALE, Metadata.Vector3(scale))
+                entity.lastScale = scale
+            }
+            if (item != entity.lastItem) {
+                if (item != null) {
+                    put(META_DISPLAYED_ITEM, Metadata.ItemStack(item))
+                }
+                entity.lastItem = item
+            }
             put(META_INTERPOLATION_DELAY, Metadata.VarInt(0))
             put(META_TRANSFORM_DURATION, Metadata.VarInt(interpolationDuration))
         }
@@ -233,7 +232,7 @@ class BoneRenderer(
     private inline fun forEachViewer(action: (Player) -> Unit) {
         _viewers.forEach { uuid ->
             MinecraftServer.getConnectionManager()
-                .onlinePlayers.firstOrNull { it.uuid == uuid }?.let(action)
+                .getOnlinePlayerByUuid(uuid)?.let(action)
         }
     }
 

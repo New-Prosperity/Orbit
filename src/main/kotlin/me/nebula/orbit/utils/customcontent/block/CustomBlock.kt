@@ -18,7 +18,7 @@ data class CustomBlock(
     val allocatedState: Block,
 ) {
 
-    fun item(): CustomItem = CustomItemRegistry.require(itemId)
+    fun item(): CustomItem? = CustomItemRegistry[itemId]
 }
 
 sealed class CustomBlockDrops {

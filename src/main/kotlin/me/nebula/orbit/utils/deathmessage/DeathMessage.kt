@@ -52,7 +52,7 @@ class DeathMessageHandler(private val config: DeathMessageConfig) {
 
             val killerUuid = player.getTag(LAST_ATTACKER_UUID_TAG)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
             val killer = killerUuid?.let { uuid ->
-                MinecraftServer.getConnectionManager().onlinePlayers.firstOrNull { it.uuid == uuid }
+                MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
             }
             val weapon = killer?.itemInMainHand ?: ItemStack.AIR
             val weaponName = weapon.material().key().value()

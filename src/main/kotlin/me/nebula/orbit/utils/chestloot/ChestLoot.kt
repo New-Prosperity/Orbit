@@ -1,7 +1,11 @@
 package me.nebula.orbit.utils.chestloot
 
 import me.nebula.orbit.utils.itemresolver.ItemResolver
-import me.nebula.orbit.utils.region.*
+import me.nebula.orbit.utils.region.CuboidRegion
+import me.nebula.orbit.utils.region.CylinderRegion
+import me.nebula.orbit.utils.region.Region
+import me.nebula.orbit.utils.region.SphereRegion
+import me.nebula.orbit.utils.region.cuboidRegion
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.block.Block
@@ -46,6 +50,7 @@ class LootTier @PublishedApi internal constructor(
         }
         if (available.isEmpty()) return null
         val availableWeight = available.sumOf { it.weight }
+        if (availableWeight <= 0) return null
         var remaining = Random.nextInt(availableWeight)
         for (item in available) {
             remaining -= item.weight
@@ -133,6 +138,7 @@ data class ChestLootTable(
 
     private fun selectTier(dist: List<TierDistribution>, totalWeight: Int): LootTier? {
         if (dist.isEmpty()) return tiers.values.firstOrNull()
+        if (totalWeight <= 0) return null
         var remaining = Random.nextInt(totalWeight)
         for (d in dist) {
             remaining -= d.weight

@@ -6,7 +6,11 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
-import me.nebula.orbit.utils.modelengine.generator.*
+import me.nebula.orbit.utils.modelengine.generator.BbDisplaySlot
+import me.nebula.orbit.utils.modelengine.generator.BlockbenchParser
+import me.nebula.orbit.utils.modelengine.generator.GeneratedBoneModel
+import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
+import me.nebula.orbit.utils.modelengine.generator.RawGenerationResult
 import net.minestom.server.item.Material
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -182,12 +186,7 @@ object PackMerger {
             add("textures", JsonObject().apply {
                 model.textures.forEachIndexed { i, path -> addProperty(i.toString(), path) }
             })
-            add("display", JsonObject().apply {
-                add("thirdperson_righthand", JsonObject().apply {
-                    add("translation", com.google.gson.JsonArray().apply { add(0); add(0); add(0) })
-                    add("scale", com.google.gson.JsonArray().apply { add(1); add(1); add(1) })
-                })
-            })
+            add("display", buildDisplayJson(model.display))
             add("elements", com.google.gson.JsonArray().apply {
                 model.elements.forEach { element ->
                     add(JsonObject().apply {
@@ -245,6 +244,23 @@ object PackMerger {
             })
         }
         return gson.toJson(json).toByteArray(Charsets.UTF_8)
+    }
+
+    private fun buildDisplayJson(display: Map<String, BbDisplaySlot>): JsonObject = JsonObject().apply {
+        if (display.isEmpty()) {
+            add("thirdperson_righthand", JsonObject().apply {
+                add("translation", com.google.gson.JsonArray().apply { add(0); add(0); add(0) })
+                add("scale", com.google.gson.JsonArray().apply { add(1); add(1); add(1) })
+            })
+            return@apply
+        }
+        for ((slot, data) in display) {
+            add(slot, JsonObject().apply {
+                add("rotation", data.rotation.toJsonArray())
+                add("translation", data.translation.toJsonArray())
+                add("scale", data.scale.toJsonArray())
+            })
+        }
     }
 
     private fun sha1Hex(data: ByteArray): String {

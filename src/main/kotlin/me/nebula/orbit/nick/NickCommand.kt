@@ -2,6 +2,7 @@ package me.nebula.orbit.nick
 
 import com.google.gson.JsonParser
 import com.hazelcast.query.Predicates
+import me.nebula.ether.utils.http.httpClient
 import me.nebula.gravity.nick.NickData
 import me.nebula.gravity.nick.NickPoolManager
 import me.nebula.gravity.nick.NickPoolStore
@@ -9,10 +10,7 @@ import me.nebula.gravity.nick.NickStore
 import me.nebula.orbit.utils.commandbuilder.command
 import net.minestom.server.MinecraftServer
 import net.minestom.server.command.builder.Command
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
+import kotlin.time.Duration.Companion.seconds
 
 fun nickCommands(): List<Command> = listOf(
     nickCommand(),
@@ -139,27 +137,28 @@ private fun forceNickCommand(): Command = command("forcenick") {
     }
 }
 
+private val mojangApi = httpClient {
+    baseUrl("https://api.mojang.com")
+    connectTimeout(10.seconds)
+    defaultTimeout(10.seconds)
+}
+
+private val sessionApi = httpClient {
+    baseUrl("https://sessionserver.mojang.com")
+    connectTimeout(10.seconds)
+    defaultTimeout(10.seconds)
+}
+
 private fun fetchMojangSkin(username: String): Pair<String, String> {
-    val client = HttpClient.newHttpClient()
-
-    val profileRequest = HttpRequest.newBuilder()
-        .uri(URI.create("https://api.mojang.com/users/profiles/minecraft/$username"))
-        .GET()
-        .build()
-    val profileResponse = client.send(profileRequest, HttpResponse.BodyHandlers.ofString())
-    require(profileResponse.statusCode() == 200) { "Mojang profile lookup failed for $username" }
-
-    val profileJson = JsonParser.parseString(profileResponse.body()).asJsonObject
+    val profileResponse = mojangApi.get("/users/profiles/minecraft/$username").requireSuccess()
+    val profileJson = JsonParser.parseString(profileResponse.body).asJsonObject
     val id = profileJson.get("id").asString
 
-    val sessionRequest = HttpRequest.newBuilder()
-        .uri(URI.create("https://sessionserver.mojang.com/session/minecraft/profile/$id?unsigned=false"))
-        .GET()
-        .build()
-    val sessionResponse = client.send(sessionRequest, HttpResponse.BodyHandlers.ofString())
-    require(sessionResponse.statusCode() == 200) { "Mojang session lookup failed for $username" }
+    val sessionResponse = sessionApi.get("/session/minecraft/profile/$id") {
+        query("unsigned", "false")
+    }.requireSuccess()
 
-    val sessionJson = JsonParser.parseString(sessionResponse.body()).asJsonObject
+    val sessionJson = JsonParser.parseString(sessionResponse.body).asJsonObject
     val properties = sessionJson.getAsJsonArray("properties")
     val texturesProperty = properties.first { it.asJsonObject.get("name").asString == "textures" }.asJsonObject
     return texturesProperty.get("value").asString to texturesProperty.get("signature").asString

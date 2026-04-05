@@ -1,7 +1,10 @@
 package me.nebula.orbit.utils.biome
 
 import net.minestom.server.instance.block.Block
-import me.nebula.orbit.utils.mapgen.*
+import me.nebula.orbit.utils.mapgen.BiomeDefinition
+import me.nebula.orbit.utils.mapgen.GrassModifier
+import me.nebula.orbit.utils.mapgen.HeightCurve
+import me.nebula.orbit.utils.mapgen.TreeType
 
 class BiomeBlocksScope @PublishedApi internal constructor() {
     var surface: Block = Block.GRASS_BLOCK

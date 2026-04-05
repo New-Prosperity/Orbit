@@ -8,7 +8,7 @@ Player movement freeze system using event cancellation. State is stored on the P
 |---|---|
 | `start()` | Register movement cancel event listener |
 | `stop()` | Remove listener and unfreeze all |
-| `freeze(player)` | Freeze a player |
+| `freeze(player)` | Freeze a player (also resets velocity to `Vec.ZERO`) |
 | `unfreeze(player)` | Unfreeze a player |
 | `isFrozen(player)` | Check if player is frozen |
 | `toggle(player)` | Toggle freeze, returns `true` if now frozen |

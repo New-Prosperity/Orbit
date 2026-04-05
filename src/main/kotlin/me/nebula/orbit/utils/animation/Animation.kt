@@ -6,6 +6,7 @@ import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
 import net.minestom.server.instance.Instance
+import net.minestom.server.instance.batch.AbsoluteBlockBatch
 import net.minestom.server.instance.block.Block
 import net.minestom.server.network.packet.server.play.BlockChangePacket
 import net.minestom.server.timer.Task
@@ -60,7 +61,9 @@ class BlockAnimation(
                 instance.sendGroupedPacket(BlockChangePacket(pos, block))
             }
         } else {
-            frame.positions.forEach { (pos, block) -> instance.setBlock(pos, block) }
+            val batch = AbsoluteBlockBatch()
+            frame.positions.forEach { (pos, block) -> batch.setBlock(pos, block) }
+            batch.apply(instance) {}
         }
         currentFrame++
     }
@@ -71,7 +74,9 @@ class BlockAnimation(
                 instance.sendGroupedPacket(BlockChangePacket(pos, instance.getBlock(pos)))
             }
         } else {
-            originalBlocks.forEach { (pos, block) -> instance.setBlock(pos, block) }
+            val batch = AbsoluteBlockBatch()
+            originalBlocks.forEach { (pos, block) -> batch.setBlock(pos, block) }
+            batch.apply(instance) {}
         }
         originalBlocks.clear()
         animatedPositions.clear()

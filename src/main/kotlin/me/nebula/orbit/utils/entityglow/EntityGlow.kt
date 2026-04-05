@@ -62,7 +62,7 @@ object EntityGlowManager {
             task.cancel()
             if (!target.isRemoved) {
                 MinecraftServer.getConnectionManager()
-                    .onlinePlayers.firstOrNull { it.uuid == viewerUuid }
+                    .getOnlinePlayerByUuid(viewerUuid)
                     ?.let { sendGlowMetadata(it, target, false) }
             }
         }

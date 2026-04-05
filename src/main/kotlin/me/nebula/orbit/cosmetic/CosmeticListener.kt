@@ -186,16 +186,19 @@ object CosmeticListener {
         return resolved["quitFormatKey"] ?: defaultKey
     }
 
-    internal fun isAllowed(category: CosmeticCategory, cosmeticId: String): Boolean =
-        category.name in activeConfig.enabledCategories && cosmeticId !in activeConfig.blacklist
+    internal fun isAllowed(category: CosmeticCategory, cosmeticId: String): Boolean {
+        val config = activeConfig
+        return category.name in config.enabledCategories && cosmeticId !in config.blacklist
+    }
 
     private fun tickProjectileTrails() {
         MinecraftServer.getInstanceManager().instances.forEach { instance ->
+            val playersByEntityId = instance.players.associateBy { it.entityId }
             instance.entities
                 .filter { it.entityType == EntityType.ARROW || it.entityType == EntityType.SPECTRAL_ARROW }
                 .forEach { projectile ->
                     val shooterId = runCatching { projectile.getTag(SHOOTER_TAG) }.getOrNull() ?: return@forEach
-                    val shooter = instance.players.firstOrNull { it.entityId == shooterId } ?: return@forEach
+                    val shooter = playersByEntityId[shooterId] ?: return@forEach
                     val data = CosmeticDataCache.get(shooter.uuid) ?: return@forEach
                     val trailId = data.equipped[CosmeticCategory.PROJECTILE_TRAIL.name] ?: return@forEach
                     if (!isAllowed(CosmeticCategory.PROJECTILE_TRAIL, trailId)) return@forEach

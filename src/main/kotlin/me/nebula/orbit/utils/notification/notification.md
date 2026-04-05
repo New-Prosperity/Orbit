@@ -9,7 +9,7 @@ Multi-channel notification system. Send messages to players via chat, action bar
 | `CHAT` | `sendMessage` with message (falls back to title) |
 | `ACTION_BAR` | `sendActionBar` with message (falls back to title) |
 | `TITLE` | Title + subtitle with configurable fade times |
-| `BOSS_BAR` | Temporary boss bar with progress drain over duration |
+| `BOSS_BAR` | Temporary boss bar with progress drain over duration, auto-cancels task when complete |
 | `SOUND` | Plays configured sound event |
 
 ## notify DSL

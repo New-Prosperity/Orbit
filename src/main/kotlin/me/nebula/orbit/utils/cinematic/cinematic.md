@@ -65,12 +65,14 @@ player.isInCinematic  // Boolean
 | `CinematicCamera.stop(player)` | Stop and restore gamemode |
 | `CinematicCamera.isPlaying(player)` | Check if player has active cinematic |
 | `CinematicCamera.stopAll()` | Stop all active sessions |
+| `CinematicCamera.install(eventNode)` | Explicitly register disconnect cleanup (optional — `play()` auto-installs on first call) |
 
 ## Internals
 
 - Fully packet-based: spawns a virtual invisible armor stand (negative entity ID, same pattern as `BoneRenderer`) via `SpawnEntityPacket` + `EntityMetaDataPacket` — no server-side entity registered
 - Locks player camera via `CameraPacket(entityId)`; moves camera via `EntityTeleportPacket` each tick — client-interpolated, no teleport stutter
 - Player is set to `GameMode.SPECTATOR` during playback; previous gamemode is restored on stop
+- Disconnect cleanup auto-installs on the global event handler on first `play()` call (via `AtomicBoolean` guard), or can be explicitly installed via `install(eventNode)`
 - On stop: resets camera via `CameraPacket(player.entityId)`, destroys virtual entity via `DestroyEntitiesPacket`
 - Position: `KeyframeInterpolator` (reuses modelengine's interpolation pipeline)
 - Rotation: `quatSlerp` between `eulerToQuat` keyframe quaternions (no gimbal lock)

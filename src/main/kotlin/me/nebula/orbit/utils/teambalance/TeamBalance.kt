@@ -76,7 +76,7 @@ object TeamBalance {
 
     fun autoBalance(teams: MutableMap<Int, MutableList<Player>>, newPlayer: Player): Int {
         require(teams.isNotEmpty()) { "Teams must not be empty" }
-        val targetTeam = teams.minByOrNull { it.value.size }!!.key
+        val targetTeam = teams.minByOrNull { it.value.size }?.key ?: return -1
         teams.getValue(targetTeam).add(newPlayer)
         return targetTeam
     }

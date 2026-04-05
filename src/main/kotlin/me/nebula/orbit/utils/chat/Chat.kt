@@ -16,7 +16,7 @@ private val HUD_FONT: Key = Key.key("minecraft", "hud")
 private val spriteTagResolver = TagResolver.resolver("sprite") { args, _ ->
     val id = args.popOr("sprite tag requires an id").value()
     val sprite = HudSpriteRegistry.getOrNull(id) ?: return@resolver null
-    Tag.inserting(Component.text(sprite.char.toString()).font(HUD_FONT))
+    Tag.inserting(Component.text(sprite.columns.first().char.toString()).font(HUD_FONT))
 }
 
 val miniMessage: MiniMessage = MiniMessage.builder()

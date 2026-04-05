@@ -1,6 +1,13 @@
 package me.nebula.orbit.utils.modelengine.bone
 
-import me.nebula.orbit.utils.modelengine.math.*
+import me.nebula.orbit.utils.modelengine.math.QUAT_IDENTITY
+import me.nebula.orbit.utils.modelengine.math.Quat
+import me.nebula.orbit.utils.modelengine.math.eulerToQuat
+import me.nebula.orbit.utils.modelengine.math.lerpVec
+import me.nebula.orbit.utils.modelengine.math.quatMultiply
+import me.nebula.orbit.utils.modelengine.math.quatNormalize
+import me.nebula.orbit.utils.modelengine.math.quatRotateVec
+import me.nebula.orbit.utils.modelengine.math.quatSlerp
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import kotlin.math.cos

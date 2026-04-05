@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.freeze
 
 import net.minestom.server.MinecraftServer
+import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerMoveEvent
@@ -28,7 +29,10 @@ object FreezeManager {
         unfreezeAll()
     }
 
-    fun freeze(player: Player) { player.setTag(TAG, true) }
+    fun freeze(player: Player) {
+        player.setTag(TAG, true)
+        player.velocity = Vec.ZERO
+    }
     fun unfreeze(player: Player) { player.removeTag(TAG) }
     fun isFrozen(player: Player): Boolean = player.getTag(TAG) == true
     fun toggle(player: Player): Boolean {

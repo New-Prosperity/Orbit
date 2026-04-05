@@ -76,7 +76,7 @@ private fun cycle(player: Player, field: String, options: List<String>) {
     val current = when (field) {
         "profileVisibility" -> PlayerCache.get(player.uuid)?.preferences?.profileVisibility ?: "PUBLIC"
         "cosmeticDisplay" -> PlayerCache.get(player.uuid)?.preferences?.cosmeticDisplay ?: "FULL"
-        else -> options.first()
+        else -> options.firstOrNull() ?: return
     }
     val index = options.indexOf(current)
     val next = options[(index + 1) % options.size]

@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.modelengine.model
 
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.blueprint.ModelBlueprint
+import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
 import java.util.UUID
@@ -81,8 +82,7 @@ class ModeledEntity(val owner: ModelOwner) {
     }
 
     private fun findPlayer(uuid: UUID): Player? =
-        net.minestom.server.MinecraftServer.getConnectionManager()
-            .onlinePlayers.firstOrNull { it.uuid == uuid }
+        MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
 }
 
 class ModeledEntityBuilder @PublishedApi internal constructor(

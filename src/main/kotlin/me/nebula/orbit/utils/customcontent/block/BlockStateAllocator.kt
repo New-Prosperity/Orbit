@@ -49,10 +49,9 @@ object BlockStateAllocator {
             return existing.state
         }
         val pool = pools[hitbox] ?: error("No pool for hitbox type: ${hitbox.name}")
-        val index = poolNextIndex.getOrDefault(hitbox, 0)
+        val index = poolNextIndex.compute(hitbox) { _, current -> (current ?: 0) + 1 }!! - 1
         require(index < pool.size) { "Pool exhausted for hitbox ${hitbox.name}: used $index/${pool.size}" }
         val state = pool[index]
-        poolNextIndex[hitbox] = index + 1
         allocations[customBlockId] = AllocationEntry(hitbox, index, state)
         allocatedStateIds += state.stateId()
         stateIdToBlockId[state.stateId()] = customBlockId

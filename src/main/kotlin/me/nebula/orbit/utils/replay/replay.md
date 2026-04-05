@@ -1,86 +1,71 @@
 # Replay
 
-Game recording and playback system with NPC-ready frame types, speed control, perspective switching, and MinIO persistent storage.
+Game recording and playback with two modes: semantic frames (NPC-based) and raw packet capture (pixel-perfect). Both support MinIO persistent storage via `.nebr` binary format or legacy GZIP JSON.
 
-## Frame Types
+## Binary Format (.nebr)
 
-| Frame | Data | Description |
-|---|---|---|
-| `Position` | uuid, pos, sneaking | Player position + look + sneak state |
-| `BlockChange` | x, y, z, blockId | Block modification |
-| `Chat` | uuid, message | Chat message |
-| `ItemHeld` | uuid, slot, item | Held item change |
-| `EntitySpawn` | uuid, name, skin | Player join with skin data |
-| `EntityDespawn` | uuid | Player leave |
-| `Death` | uuid, killerUuid? | Player death |
+Custom binary format with Zstd-compressed tick chunks for O(1) seeking. Header includes match metadata, player table, and embedded or referenced world snapshot.
 
-## Recording
+```
+HEADER: magic(NeRr) + version + protocol + matchId + gamemode + map + timestamp + duration + players
+WORLD:  REFERENCE(mapName) or EMBEDDED(Zstd NebulaWorld)
+FRAMES: Zstd-compressed tick chunks (~1000 ticks each)
+```
+
+## Packet Recording (production)
+
+`PacketReplayRecorder` captures all outgoing `ServerPacket.Play` via `PlayerPacketOutEvent`. Pixel-perfect recording — replays exactly what clients saw.
 
 ```kotlin
-val recorder = ReplayRecorder()
-recorder.start()
-recorder.recordPlayerJoin(player)
-recorder.recordPosition(player)
-recorder.recordDeath(victim, killer)
-val data = recorder.stop()
+val recorder = PacketReplayRecorder()
+recorder.start(gameInstance)
+// ... match plays, packets recorded automatically ...
+val replayFile = recorder.buildReplayFile(gameInstance, matchId, gameMode, mapName)
+ReplayStorage.saveBinary(matchId, replayFile)
 ```
+
+Integrated into `GameMode.enterPlaying()` → `enterEnding()` automatically.
+
+## Semantic Recording (legacy)
+
+Frame-based recording for NPC playback.
+
+| Frame | Data |
+|---|---|
+| `Position` | uuid, pos, sneaking |
+| `BlockChange` | x, y, z, blockId |
+| `Chat` | uuid, message |
+| `ItemHeld` | uuid, slot, item |
+| `EntitySpawn` | uuid, name, skin |
+| `EntityDespawn` | uuid |
+| `Death` | uuid, killerUuid? |
 
 ## Playback
 
 ```kotlin
-val player = ReplayPlayer(data)
-player.setSpeed(2.0)
-player.setPerspective(someUuid)
-player.onComplete { println("Done") }
-player.play { frame ->
-    when (frame) {
-        is ReplayFrame.Position -> npc.teleport(frame.pos)
-        is ReplayFrame.EntitySpawn -> spawnNpc(frame)
-        is ReplayFrame.Death -> playDeathEffect(frame)
-        ...
-    }
+val replayFile = ReplayStorage.loadBinary(matchId)!!
+val viewer = ReplayViewer(replayFile)
+viewer.load().thenAccept { instance ->
+    viewer.addViewer(spectator)
+    viewer.play()
 }
+viewer.setSpeed(2.0)
+viewer.pause()
+viewer.seekTo(tick)
 ```
-
-### Controls
-
-| Method | Description |
-|---|---|
-| `play(onFrame)` | Start playback with frame callback |
-| `stop()` | Stop playback |
-| `pause()` / `resume()` | Pause/resume |
-| `setSpeed(double)` | Change speed (0.25x, 0.5x, 1x, 2x, 4x) |
-| `seekTo(tick)` | Jump to specific tick |
-| `setPerspective(uuid?)` | Follow specific player |
-| `availablePerspectives()` | All recorded player UUIDs |
-| `progressPercent` | 0.0-1.0 playback progress |
 
 ## Storage
 
-### In-Memory
-
+### Binary (.nebr) — recommended
 ```kotlin
-ReplayManager.save("game-123", data)
-val loaded = ReplayManager.load("game-123")
+ReplayStorage.saveBinary("match-123", replayFile)
+val loaded = ReplayStorage.loadBinary("match-123")
 ```
 
-### MinIO (Persistent)
-
+### Legacy JSON — backward compat
 ```kotlin
-ReplayStorage.configure(minioClient)
-ReplayStorage.upload("game-123", data, ReplayMetadata(gameMode = "battleroyale", ...))
-val (metadata, data) = ReplayStorage.download("game-123")!!
+ReplayStorage.save("match-123", data, metadata)
+val (metadata, data) = ReplayStorage.load("match-123")
 ```
 
-Replays are GZIP-compressed JSON stored at `replays/{name}.replay.gz`.
-
-### Size Estimation
-
-Per frame: ~80-120 bytes JSON (Position frame with UUID, coords, yaw/pitch, sneak).
-At 20 ticks/s recording rate with 24 players over 15 minutes:
-- Frames: 24 players × 18,000 ticks = 432,000 position frames
-- Raw JSON: ~432K × 100 bytes = ~43 MB
-- GZIP compressed: ~3-5 MB (position data compresses well)
-- With block changes, deaths, spawns: +10-20% → ~4-6 MB per game
-
-At 10 ticks/s (recommended): ~2-3 MB per game.
+Both stored in MinIO under the `replays/` scope.

@@ -48,16 +48,83 @@ import me.nebula.gravity.ranking.RankingReportStore
 import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.gravity.sanction.SanctionStore
-import me.nebula.gravity.server.*
+import me.nebula.gravity.server.ConnectPlayerProcessor
+import me.nebula.gravity.server.DisconnectPlayerProcessor
+import me.nebula.gravity.server.ProvisionStore
+import me.nebula.gravity.server.SyncConnectedPlayersProcessor
 import me.nebula.gravity.session.SessionStore
 import me.nebula.gravity.stats.StatsStore
 import me.nebula.orbit.commands.installBasicCommands
 import me.nebula.orbit.commands.installGameCommands
 import me.nebula.orbit.commands.settingsCommand
 import me.nebula.orbit.commands.vanishCommand
-import me.nebula.orbit.cosmetic.*
+import me.nebula.orbit.cosmetic.AuraManager
+import me.nebula.orbit.cosmetic.CompanionManager
+import me.nebula.orbit.cosmetic.CosmeticListener
+import me.nebula.orbit.cosmetic.CosmeticMenu
+import me.nebula.orbit.cosmetic.CosmeticMountManager
+import me.nebula.orbit.cosmetic.CosmeticRegistry
+import me.nebula.orbit.cosmetic.GadgetManager
+import me.nebula.orbit.cosmetic.GravestoneManager
+import me.nebula.orbit.cosmetic.PetManager
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.game.battleroyale.BattleRoyaleMode
+import me.nebula.orbit.mode.build.BuildMode
+import me.nebula.orbit.utils.vanilla.VanillaModules
+import me.nebula.orbit.utils.vanilla.modules.BlockPickModule
+import me.nebula.orbit.utils.vanilla.modules.DrowningModule
+import me.nebula.orbit.utils.vanilla.modules.FallDamageModule
+import me.nebula.orbit.utils.vanilla.modules.FireDamageModule
+import me.nebula.orbit.utils.vanilla.modules.GravityBlocksModule
+import me.nebula.orbit.utils.vanilla.modules.ArmorReductionModule
+import me.nebula.orbit.utils.vanilla.modules.AttackCooldownModule
+import me.nebula.orbit.utils.vanilla.modules.BlockDropsModule
+import me.nebula.orbit.utils.vanilla.modules.BucketModule
+import me.nebula.orbit.utils.vanilla.modules.ChestModule
+import me.nebula.orbit.utils.vanilla.modules.CriticalHitsModule
+import me.nebula.orbit.utils.vanilla.modules.FlintAndSteelModule
+import me.nebula.orbit.utils.vanilla.modules.FoodConsumptionModule
+import me.nebula.orbit.utils.vanilla.modules.HungerModule
+import me.nebula.orbit.utils.vanilla.modules.ItemPickupModule
+import me.nebula.orbit.utils.vanilla.modules.ToolDurabilityModule
+import me.nebula.orbit.utils.vanilla.modules.NaturalRegenModule
+import me.nebula.orbit.utils.vanilla.modules.ProjectilesModule
+import me.nebula.orbit.utils.vanilla.modules.SuffocationModule
+import me.nebula.orbit.utils.vanilla.modules.TntExplosionModule
+import me.nebula.orbit.utils.vanilla.modules.VoidDamageModule
+import me.nebula.orbit.utils.vanilla.modules.WaterFlowModule
+import me.nebula.orbit.utils.vanilla.modules.LavaFlowModule
+import me.nebula.orbit.utils.vanilla.modules.NetherPortalModule
+import me.nebula.orbit.utils.vanilla.modules.DamageIntegrationModule
+import me.nebula.orbit.utils.vanilla.modules.SwimmingModule
+import me.nebula.orbit.utils.vanilla.modules.DoorInteractionModule
+import me.nebula.orbit.utils.vanilla.modules.LeverButtonModule
+import me.nebula.orbit.utils.vanilla.modules.FarmlandModule
+import me.nebula.orbit.utils.vanilla.modules.CropGrowthModule
+import me.nebula.orbit.utils.vanilla.modules.LadderClimbingModule
+import me.nebula.orbit.utils.vanilla.modules.SlimeBlockModule
+import me.nebula.orbit.utils.vanilla.modules.ItemDespawnModule
+import me.nebula.orbit.utils.vanilla.modules.PressurePlateModule
+import me.nebula.orbit.utils.vanilla.modules.NoteBlockModule
+import me.nebula.orbit.utils.vanilla.modules.ComposterModule
+import me.nebula.orbit.utils.vanilla.modules.CauldronModule
+import me.nebula.orbit.utils.vanilla.modules.RespawnAnchorModule
+import me.nebula.orbit.utils.vanilla.modules.AnvilModule
+import me.nebula.orbit.utils.vanilla.modules.BrewingStandModule
+import me.nebula.orbit.utils.vanilla.modules.JukeboxModule
+import me.nebula.orbit.utils.vanilla.modules.ShulkerBoxModule
+import me.nebula.orbit.utils.vanilla.modules.TotemModule
+import me.nebula.orbit.utils.vanilla.modules.SmithingTableModule
+import me.nebula.orbit.utils.vanilla.modules.SweepAttackModule
+import me.nebula.orbit.utils.vanilla.modules.ShieldBlockingModule
+import me.nebula.orbit.utils.vanilla.modules.FireSpreadModule
+import me.nebula.orbit.utils.vanilla.modules.BedRespawnModule
+import me.nebula.orbit.utils.vanilla.modules.BoneMealModule
+import me.nebula.orbit.utils.vanilla.modules.EnderChestModule
+import me.nebula.orbit.utils.vanilla.modules.CampfireCookingModule
+import me.nebula.orbit.utils.vanilla.modules.CraftingModule
+import me.nebula.orbit.utils.vanilla.modules.FurnaceModule
+import me.nebula.orbit.utils.vanilla.modules.StonecutterModule
 import me.nebula.orbit.mode.hub.HubMode
 import me.nebula.orbit.progression.BattlePassMenu
 import me.nebula.orbit.progression.achievement.AchievementMenu
@@ -89,7 +156,13 @@ import me.nebula.orbit.utils.customcontent.armor.armorTestCommand
 import me.nebula.orbit.utils.tooltip.TooltipStyleRegistry
 import me.nebula.orbit.utils.tooltip.tooltipCommand
 import me.nebula.orbit.utils.customcontent.customContentCommand
-import me.nebula.orbit.utils.hud.*
+import me.nebula.orbit.utils.hud.HudAnchor
+import me.nebula.orbit.utils.hud.HudManager
+import me.nebula.orbit.utils.hud.hudLayout
+import me.nebula.orbit.utils.hud.hideHud
+import me.nebula.orbit.utils.hud.isHudShowing
+import me.nebula.orbit.utils.hud.showHud
+import me.nebula.orbit.utils.hud.updateHud
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.modelEngineCommand
@@ -101,6 +174,7 @@ import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
+import net.minestom.server.entity.Player
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
@@ -112,8 +186,8 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
-import java.util.*
-import java.util.concurrent.ConcurrentHashMap
+import net.minestom.server.tag.Tag
+import java.util.UUID
 
 object Orbit {
 
@@ -137,18 +211,16 @@ object Orbit {
         private set
 
     private val logger = logger("Orbit")
-    private val localeCache = ConcurrentHashMap<UUID, String>()
+    val LOCALE_TAG: Tag<String> = Tag.String("nebula:locale")
     private val globalTasks = mutableListOf<Task>()
 
-    fun localeOf(playerId: UUID): String =
-        localeCache[playerId] ?: translations.defaultLocale
-
-    fun cacheLocale(playerId: UUID, locale: String) {
-        localeCache[playerId] = locale
+    fun localeOf(playerId: UUID): String {
+        val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(playerId)
+        return player?.getTag(LOCALE_TAG) ?: translations.defaultLocale
     }
 
-    fun evictLocale(playerId: UUID) {
-        localeCache.remove(playerId)
+    fun cacheLocale(player: Player, locale: String) {
+        player.setTag(LOCALE_TAG, locale)
     }
 
     fun syncConnectedPlayers() {
@@ -295,6 +367,7 @@ object Orbit {
             logger.error(throwable) { "Unhandled exception" }
         }
 
+        registerVanillaModules()
         mode = resolveMode(resolvedWorldPath)
         logger.info { "Server mode: ${mode::class.simpleName}" }
 
@@ -423,7 +496,7 @@ object Orbit {
             val player = event.player
             val cached = PlayerCache.get(player.uuid) ?: PlayerCache.getOrLoad(player.uuid)
             val locale = cached.player?.language ?: translations.defaultLocale
-            cacheLocale(player.uuid, locale)
+            cacheLocale(player, locale)
             AchievementRegistry.loadPlayer(player.uuid)
 
             val nickData = cached.nick
@@ -488,7 +561,6 @@ object Orbit {
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             AchievementRegistry.unloadPlayer(event.player.uuid)
-            evictLocale(event.player.uuid)
             PlayerCache.evict(event.player.uuid)
             val pUuid = provisionUuid
             if (pUuid != null) {
@@ -587,6 +659,64 @@ object Orbit {
         when (gameMode) {
             null -> HubMode()
             "battleroyale" -> BattleRoyaleMode(worldPath)
+            "build" -> BuildMode(worldPath)
             else -> error("Unknown game mode: $gameMode")
         }
+
+    private fun registerVanillaModules() {
+        VanillaModules.register(BlockPickModule)
+        VanillaModules.register(FallDamageModule)
+        VanillaModules.register(VoidDamageModule)
+        VanillaModules.register(GravityBlocksModule)
+        VanillaModules.register(HungerModule)
+        VanillaModules.register(NaturalRegenModule)
+        VanillaModules.register(FireDamageModule)
+        VanillaModules.register(DrowningModule)
+        VanillaModules.register(TntExplosionModule)
+        VanillaModules.register(ProjectilesModule)
+        VanillaModules.register(ArmorReductionModule)
+        VanillaModules.register(CriticalHitsModule)
+        VanillaModules.register(AttackCooldownModule)
+        VanillaModules.register(SuffocationModule)
+        VanillaModules.register(ItemPickupModule)
+        VanillaModules.register(FoodConsumptionModule)
+        VanillaModules.register(BlockDropsModule)
+        VanillaModules.register(ToolDurabilityModule)
+        VanillaModules.register(FlintAndSteelModule)
+        VanillaModules.register(BucketModule)
+        VanillaModules.register(ChestModule)
+        VanillaModules.register(WaterFlowModule)
+        VanillaModules.register(LavaFlowModule)
+        VanillaModules.register(SweepAttackModule)
+        VanillaModules.register(ShieldBlockingModule)
+        VanillaModules.register(FireSpreadModule)
+        VanillaModules.register(BedRespawnModule)
+        VanillaModules.register(BoneMealModule)
+        VanillaModules.register(EnderChestModule)
+        VanillaModules.register(CampfireCookingModule)
+        VanillaModules.register(CraftingModule)
+        VanillaModules.register(FurnaceModule)
+        VanillaModules.register(StonecutterModule)
+        VanillaModules.register(NetherPortalModule)
+        VanillaModules.register(DamageIntegrationModule)
+        VanillaModules.register(SwimmingModule)
+        VanillaModules.register(DoorInteractionModule)
+        VanillaModules.register(LeverButtonModule)
+        VanillaModules.register(FarmlandModule)
+        VanillaModules.register(CropGrowthModule)
+        VanillaModules.register(LadderClimbingModule)
+        VanillaModules.register(SlimeBlockModule)
+        VanillaModules.register(ItemDespawnModule)
+        VanillaModules.register(PressurePlateModule)
+        VanillaModules.register(NoteBlockModule)
+        VanillaModules.register(ComposterModule)
+        VanillaModules.register(CauldronModule)
+        VanillaModules.register(RespawnAnchorModule)
+        VanillaModules.register(AnvilModule)
+        VanillaModules.register(BrewingStandModule)
+        VanillaModules.register(JukeboxModule)
+        VanillaModules.register(ShulkerBoxModule)
+        VanillaModules.register(TotemModule)
+        VanillaModules.register(SmithingTableModule)
+    }
 }

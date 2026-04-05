@@ -62,6 +62,10 @@ val block: Point? = player.getLookedAtBlock(maxDistance = 5.0)
 | `EntityRayResult` | `entity: Entity`, `distance: Double` |
 | `RaycastResult` | `hitEntity: Entity?`, `hitBlock: Point?`, `hitPos: Pos`, `distance: Double` |
 
+## Internals
+
+`entityAABB(entity)` is a private helper that computes the axis-aligned bounding box (min/max `Vec` pair) for an entity based on its `boundingBox` and `position`. Used by both `raycast()` and `getLookedAtEntity()` to avoid duplicating AABB calculation.
+
 ## API Summary
 
 | Function | Description |

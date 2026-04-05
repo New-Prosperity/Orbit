@@ -2,7 +2,10 @@ package me.nebula.orbit.utils.modelengine.bone
 
 import me.nebula.orbit.utils.modelengine.behavior.BoneBehavior
 import me.nebula.orbit.utils.modelengine.blueprint.BlueprintBone
-import me.nebula.orbit.utils.modelengine.math.*
+import me.nebula.orbit.utils.modelengine.math.QUAT_IDENTITY
+import me.nebula.orbit.utils.modelengine.math.Quat
+import me.nebula.orbit.utils.modelengine.math.quatMultiply
+import me.nebula.orbit.utils.modelengine.math.quatNormalize
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.item.ItemStack
 

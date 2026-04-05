@@ -11,7 +11,13 @@ import net.minestom.server.entity.GameMode
 import net.minestom.server.entity.Metadata
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.PlayerSkin
-import net.minestom.server.network.packet.server.play.*
+import me.nebula.orbit.utils.modelengine.math.quatToEuler
+import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
+import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
+import net.minestom.server.network.packet.server.play.EntityTeleportPacket
+import net.minestom.server.network.packet.server.play.PlayerInfoRemovePacket
+import net.minestom.server.network.packet.server.play.PlayerInfoUpdatePacket
+import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import java.util.EnumSet
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -55,7 +61,7 @@ class PlayerLimbBehavior(
 
         val transform = bone.globalTransform
         val worldPos = transform.toWorldPosition(modeledEntity.owner.position)
-        val (_, yaw, _) = me.nebula.orbit.utils.modelengine.math.quatToEuler(
+        val (_, yaw, _) = quatToEuler(
             transform.toWorldRotation(modeledEntity.owner.position.yaw())
         )
 
@@ -121,5 +127,5 @@ class PlayerLimbBehavior(
     }
 
     private fun findPlayer(uuid: UUID): Player? =
-        MinecraftServer.getConnectionManager().onlinePlayers.firstOrNull { it.uuid == uuid }
+        MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
 }

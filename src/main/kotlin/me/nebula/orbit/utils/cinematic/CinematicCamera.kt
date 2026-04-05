@@ -32,6 +32,7 @@ import net.minestom.server.timer.Task
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.atan2
 import kotlin.math.sqrt
@@ -81,9 +82,14 @@ object CinematicCamera {
 
     private val sessions = ConcurrentHashMap<UUID, CinematicSession>()
     private const val TICK_SECONDS = 1f / 20f
+    private val installed = AtomicBoolean(false)
 
     fun play(player: Player, sequence: CinematicSequence) {
         require(sequence.nodes.size >= 2) { "Cinematic requires at least 2 nodes" }
+
+        if (installed.compareAndSet(false, true)) {
+            install(MinecraftServer.getGlobalEventHandler())
+        }
 
         stop(player)
 
@@ -178,6 +184,7 @@ object CinematicCamera {
     fun isPlaying(player: Player): Boolean = sessions.containsKey(player.uuid)
 
     fun install(eventNode: EventNode<Event>) {
+        installed.set(true)
         eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
             stop(event.player)
         }

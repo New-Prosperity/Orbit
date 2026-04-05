@@ -19,14 +19,13 @@ object AuraManager {
     }
 
     private fun tick() {
-        for (instance in MinecraftServer.getInstanceManager().instances) {
-            for (player in instance.players) {
-                val data = CosmeticDataCache.get(player.uuid) ?: continue
-                val auraId = data.equipped[CosmeticCategory.AURA.name] ?: continue
-                if (!CosmeticListener.isAllowed(CosmeticCategory.AURA, auraId)) continue
-                val level = data.owned[auraId] ?: 1
-                CosmeticApplier.spawnAuraParticles(instance, player.position, auraId, level, ownerUuid = player.uuid)
-            }
+        for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
+            val instance = player.instance ?: continue
+            val data = CosmeticDataCache.get(player.uuid) ?: continue
+            val auraId = data.equipped[CosmeticCategory.AURA.name] ?: continue
+            if (!CosmeticListener.isAllowed(CosmeticCategory.AURA, auraId)) continue
+            val level = data.owned[auraId] ?: 1
+            CosmeticApplier.spawnAuraParticles(instance, player.position, auraId, level, ownerUuid = player.uuid)
         }
     }
 }

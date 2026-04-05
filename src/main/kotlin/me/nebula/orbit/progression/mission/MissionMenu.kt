@@ -1,5 +1,6 @@
 package me.nebula.orbit.progression.mission
 
+import me.nebula.ether.utils.duration.DurationFormatter
 import me.nebula.gravity.mission.MissionData
 import me.nebula.gravity.mission.MissionStore
 import me.nebula.gravity.mission.ActiveMission
@@ -19,7 +20,7 @@ object MissionMenu {
         val missionGui = gui(player.translateRaw("orbit.mission.title"), rows = 4) {
             slot(4, itemStack(Material.CLOCK) {
                 name(player.translateRaw("orbit.mission.daily_header"))
-                val resetIn = formatDuration(data.dailyResetAt - System.currentTimeMillis())
+                val resetIn = DurationFormatter.formatCompact(data.dailyResetAt - System.currentTimeMillis())
                 lore(player.translateRaw("orbit.mission.reset_timer", "time" to resetIn))
                 clean()
             })
@@ -28,7 +29,7 @@ object MissionMenu {
 
             slot(22, itemStack(Material.COMPASS) {
                 name(player.translateRaw("orbit.mission.weekly_header"))
-                val resetIn = formatDuration(data.weeklyResetAt - System.currentTimeMillis())
+                val resetIn = DurationFormatter.formatCompact(data.weeklyResetAt - System.currentTimeMillis())
                 lore(player.translateRaw("orbit.mission.reset_timer", "time" to resetIn))
                 clean()
             })
@@ -68,11 +69,4 @@ object MissionMenu {
         }
     }
 
-    private fun formatDuration(millis: Long): String {
-        if (millis <= 0) return "0m"
-        val totalMinutes = millis / 60_000
-        val hours = totalMinutes / 60
-        val minutes = totalMinutes % 60
-        return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
-    }
 }

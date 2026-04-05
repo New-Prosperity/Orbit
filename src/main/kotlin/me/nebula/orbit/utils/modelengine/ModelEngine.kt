@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.modelengine
 
 import me.nebula.orbit.utils.modelengine.blueprint.ModelBlueprint
 import me.nebula.orbit.utils.modelengine.generator.RawGenerationResult
+import me.nebula.orbit.utils.modelengine.lod.LODHandler
 import me.nebula.orbit.utils.modelengine.model.ModelOwner
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
 import me.nebula.orbit.utils.modelengine.model.ModeledEntityBuilder
@@ -108,6 +109,7 @@ object ModelEngine {
         modeledEntities.values.forEach { it.evictViewer(uuid) }
         MountManager.evictPlayer(uuid)
         VFXRegistry.evictPlayer(uuid)
+        LODHandler.cleanupAll(uuid)
     }
 
     private fun tick() {

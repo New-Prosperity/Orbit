@@ -24,8 +24,7 @@ import me.nebula.orbit.utils.combo.uninstall
 import me.nebula.orbit.utils.deathrecap.DamageEntry
 import me.nebula.orbit.utils.deathrecap.DeathRecapTracker
 import me.nebula.orbit.utils.gamechat.GameChatPipeline
-import me.nebula.orbit.utils.replay.ReplayMetadata
-import me.nebula.orbit.utils.replay.ReplayRecorder
+import me.nebula.orbit.utils.replay.PacketReplayRecorder
 import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.orbit.utils.killfeed.KillEvent
 import me.nebula.orbit.utils.killfeed.KillFeed
@@ -74,11 +73,13 @@ import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
+import net.minestom.server.tag.Tag
 import net.minestom.server.timer.Task
 import java.nio.file.Files
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -174,10 +175,10 @@ abstract class GameMode : ServerMode {
 
     fun placementOf(uuid: UUID): Int? = placements[uuid]
 
+    private val spectatorTargetTag = Tag.UUID("game:spectator_target")
     private val disconnectTimers = ConcurrentHashMap<UUID, Task>()
     private val respawnTimers = ConcurrentHashMap<UUID, Task>()
     private val gameEvents = ConcurrentHashMap<String, Task>()
-    private val spectatorTargets = ConcurrentHashMap<UUID, UUID>()
     @Volatile private var reconnectWindowTask: Task? = null
     @Volatile private var lateJoinWindowTask: Task? = null
     @Volatile private var afkCheckTask: Task? = null
@@ -191,7 +192,7 @@ abstract class GameMode : ServerMode {
     @Volatile private var gameMechanicsNode: EventNode<*>? = null
     @Volatile private var reconnectWindowExpired = false
     @Volatile private var lateJoinWindowExpired = false
-    private val lateJoinCount = java.util.concurrent.atomic.AtomicInteger(0)
+    private val lateJoinCount = AtomicInteger(0)
     @Volatile private var _isOvertime = false
     @Volatile private var _isSuddenDeath = false
     @Volatile private var chatPipeline: GameChatPipeline? = null
@@ -201,7 +202,7 @@ abstract class GameMode : ServerMode {
     @Volatile private var rewardDistributor: RewardDistributor? = null
     @Volatile private var ceremony: Ceremony? = null
     @Volatile protected var comboCounter: ComboConfig? = null
-    private val replayRecorder = ReplayRecorder()
+    private val replayRecorder = PacketReplayRecorder()
 
     override val spawnPoint: Pos by lazy { settings.spawn.toPos() }
 
@@ -376,7 +377,7 @@ abstract class GameMode : ServerMode {
         if (!tracker.isSpectating(player.uuid)) return
 
         spectatorToolkit?.remove(player)
-        spectatorTargets.remove(player.uuid)
+        player.removeTag(spectatorTargetTag)
         player.stopSpectating()
         tracker.revive(player.uuid)
         player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
@@ -463,10 +464,10 @@ abstract class GameMode : ServerMode {
         if (!tracker.isSpectating(player.uuid)) return null
         val targets = resolveSpectatorTargets(player)
         if (targets.isEmpty()) return null
-        val currentTargetUuid = spectatorTargets[player.uuid]
+        val currentTargetUuid = player.getTag(spectatorTargetTag)
         val currentIndex = if (currentTargetUuid != null) targets.indexOfFirst { it.uuid == currentTargetUuid } else -1
         val next = targets[(currentIndex + 1) % targets.size]
-        spectatorTargets[player.uuid] = next.uuid
+        player.setTag(spectatorTargetTag, next.uuid)
         player.spectate(next)
         return next
     }
@@ -475,10 +476,10 @@ abstract class GameMode : ServerMode {
         if (!tracker.isSpectating(player.uuid)) return null
         val targets = resolveSpectatorTargets(player)
         if (targets.isEmpty()) return null
-        val currentTargetUuid = spectatorTargets[player.uuid]
+        val currentTargetUuid = player.getTag(spectatorTargetTag)
         val currentIndex = if (currentTargetUuid != null) targets.indexOfFirst { it.uuid == currentTargetUuid } else targets.size
         val prev = targets[(currentIndex - 1 + targets.size) % targets.size]
-        spectatorTargets[player.uuid] = prev.uuid
+        player.setTag(spectatorTargetTag, prev.uuid)
         player.spectate(prev)
         return prev
     }
@@ -498,7 +499,7 @@ abstract class GameMode : ServerMode {
     }
 
     fun broadcastAlive(action: (Player) -> Unit) {
-        for (uuid in tracker.alive) {
+        for (uuid in tracker.alive.toSet()) {
             MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.let(action)
         }
     }
@@ -535,7 +536,7 @@ abstract class GameMode : ServerMode {
             resolveSpectatorTargets(eliminated).firstOrNull()
         }
         if (target != null) {
-            spectatorTargets[eliminated.uuid] = target.uuid
+            eliminated.setTag(spectatorTargetTag, target.uuid)
             eliminated.spectate(target)
         }
     }
@@ -616,8 +617,7 @@ abstract class GameMode : ServerMode {
             return
         }
 
-        if (canLateJoin() && !VanishManager.isVanished(player)) {
-            lateJoinCount.incrementAndGet()
+        if (tryClaimLateJoinSlot() && !VanishManager.isVanished(player)) {
             tracker.join(player.uuid)
 
             if (isTeamMode) {
@@ -676,7 +676,7 @@ abstract class GameMode : ServerMode {
         if (!tracker.isAlive(player.uuid) && !tracker.isRespawning(player.uuid)) return
 
         respawnTimers.remove(player.uuid)?.cancel()
-        spectatorTargets.remove(player.uuid)
+        player.removeTag(spectatorTargetTag)
 
         val combatLogSeconds = settings.timing.combatLogSeconds
         if (combatLogSeconds > 0 && tracker.isInCombat(player.uuid, combatLogSeconds * 1000L)) {
@@ -770,7 +770,7 @@ abstract class GameMode : ServerMode {
         }
 
         spectatorToolkit?.remove(player)
-        spectatorTargets.remove(uuid)
+        player.removeTag(spectatorTargetTag)
         player.stopSpectating()
         tracker.revive(uuid)
         val pos = buildRespawnPosition(player)
@@ -788,11 +788,14 @@ abstract class GameMode : ServerMode {
         GracePeriodManager.apply(player, RESPAWN_GRACE_NAME)
     }
 
-    private fun canLateJoin(): Boolean {
+    private fun tryClaimLateJoinSlot(): Boolean {
         val config = settings.lateJoin ?: return false
         if (lateJoinWindowExpired) return false
-        if (config.maxLateJoiners > 0 && lateJoinCount.get() >= config.maxLateJoiners) return false
-        return true
+        if (config.maxLateJoiners <= 0) return true
+        val previous = lateJoinCount.getAndUpdate { current ->
+            if (current >= config.maxLateJoiners) current else current + 1
+        }
+        return previous < config.maxLateJoiners
     }
 
     private fun startAfkCheck() {
@@ -986,6 +989,9 @@ abstract class GameMode : ServerMode {
     }
 
     private fun enterWaiting() {
+        startingCountdown?.stop()
+        startingCountdown = null
+        cleanupFreezeNode()
         cleanupReconnectionState()
         cleanupRespawnTimers()
         cleanupLateJoinState()
@@ -1007,7 +1013,8 @@ abstract class GameMode : ServerMode {
         ceremony = null
         comboCounter?.uninstall()
         comboCounter = null
-        spectatorTargets.clear()
+        lobbyInstance.players.forEach { it.removeTag(spectatorTargetTag) }
+        _gameInstance?.players?.forEach { it.removeTag(spectatorTargetTag) }
         tracker.clear()
         lastEndResult = null
         gameStartTime = 0L
@@ -1128,7 +1135,7 @@ abstract class GameMode : ServerMode {
 
         val respawnConfig = settings.respawn
         if (respawnConfig != null && respawnConfig.maxLives > 0) {
-            for (uuid in tracker.alive) {
+            for (uuid in tracker.alive.toSet()) {
                 tracker.setLives(uuid, respawnConfig.maxLives)
             }
         }
@@ -1139,7 +1146,7 @@ abstract class GameMode : ServerMode {
             }
         }
 
-        val alivePlayers = tracker.alive.mapNotNull { uuid ->
+        val alivePlayers = tracker.alive.toSet().mapNotNull { uuid ->
             MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
         }
 
@@ -1217,7 +1224,7 @@ abstract class GameMode : ServerMode {
         deathRecapTracker = buildDeathRecapTracker()
         rewardDistributor = buildRewardDistributor()
 
-        replayRecorder.start()
+        replayRecorder.start(gameInstance)
 
         onPlayingStart()
     }
@@ -1251,7 +1258,7 @@ abstract class GameMode : ServerMode {
         cleanupGameMechanicsNode()
         cleanupVoidCheck()
 
-        for (uuid in tracker.alive) {
+        for (uuid in tracker.alive.toSet()) {
             placements[uuid] = 1
         }
 
@@ -1268,20 +1275,22 @@ abstract class GameMode : ServerMode {
 
         persistGameStats(result)
 
-        val replayData = replayRecorder.stop()
-        if (replayData.frames.isNotEmpty() && ReplayStorage.isInitialized()) {
+        if (replayRecorder.isRecording && ReplayStorage.isInitialized()) {
+            val replayName = "${Orbit.serverName}-${System.currentTimeMillis()}"
             Thread.startVirtualThread {
                 runCatching {
-                    val metadata = ReplayMetadata(
-                        gameMode = Orbit.gameMode ?: "unknown",
-                        mapName = Orbit.mapName ?: "",
-                        recordedAt = System.currentTimeMillis(),
-                        playerCount = initialPlayerCount,
-                        durationTicks = replayData.durationTicks,
+                    val replayFile = replayRecorder.buildReplayFile(
+                        gameInstance,
+                        replayName,
+                        Orbit.gameMode ?: "unknown",
+                        Orbit.mapName ?: "",
                     )
-                    ReplayStorage.save("${Orbit.serverName}-${System.currentTimeMillis()}", replayData, metadata)
+                    ReplayStorage.saveBinary(replayName, replayFile)
+                    logger.info { "Replay saved: $replayName (${replayFile.rawPackets.size} packets)" }
                 }.onFailure { logger.warn { "Failed to save replay: ${it.message}" } }
             }
+        } else if (replayRecorder.isRecording) {
+            replayRecorder.stop(gameInstance)
         }
 
         rewardDistributor?.distribute(result, tracker.all)
@@ -1337,7 +1346,7 @@ abstract class GameMode : ServerMode {
     }
 
     protected fun autoBalanceTeams(teamNames: List<String>) {
-        val alivePlayers = tracker.alive.mapNotNull { uuid ->
+        val alivePlayers = tracker.alive.toSet().mapNotNull { uuid ->
             MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
         }
         val balanced = TeamBalance.balance(alivePlayers, teamNames.size)

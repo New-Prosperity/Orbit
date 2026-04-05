@@ -59,6 +59,8 @@ import net.minestom.server.item.Material
 import net.minestom.server.tag.Tag
 import java.time.Duration
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import net.minestom.server.timer.Task
 
 class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
@@ -100,7 +102,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     private val lastAttackerTimeTag = Tag.Long("br_last_attacker_time")
     private var worldBorder: ManagedWorldBorder? = null
     private var borderDamageTask: Task? = null
-    private val borderPhasesTasks = mutableListOf<Task>()
+    private val borderPhasesTasks = CopyOnWriteArrayList<Task>()
     private var currentBorderDamage = season.borderDamagePerSecond
     @Volatile private var deathmatchActive = false
     @Volatile private var spawnBlocking = false
@@ -135,7 +137,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
         }
     }
 
-    private val votedValues = mutableMapOf<String, Int>()
+    private val votedValues = ConcurrentHashMap<String, Int>()
 
     override fun onGameSetup(players: List<Player>) {
         for (cat in SeasonConfig.current.voteCategories) {
@@ -310,10 +312,10 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     }
 
     override fun onGameReset() {
-        borderDamageTask?.cancel()
-        borderDamageTask = null
         borderPhasesTasks.forEach { it.cancel() }
         borderPhasesTasks.clear()
+        borderDamageTask?.cancel()
+        borderDamageTask = null
         worldBorder?.setDiameter(season.border.initialDiameter)
         worldBorder = null
         StatTracker.clear()

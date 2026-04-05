@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.hud.shader
 
+import me.nebula.orbit.utils.hud.font.HEIGHT_TIERS
 import me.nebula.orbit.utils.screen.shader.MapShaderPack
 
 object HudShaderPack {
@@ -16,7 +17,9 @@ object HudShaderPack {
         return entries
     }
 
-    private fun generateVsh(): String = """
+    private fun generateVsh(): String {
+        val tierArray = HEIGHT_TIERS.joinToString(", ") { "$it.0" }
+        return """
 #version 330
 
 #moj_import <minecraft:fog.glsl>
@@ -37,14 +40,9 @@ out vec4 vertexColor;
 out vec2 texCoord0;
 flat out int hudFlag;
 
-const float HUD_CHAR_SIZE = 8.0;
-const int HUD_MARKER = 254;
-const vec2 HUD_CORNERS[4] = vec2[4](
-    vec2(0.0, 0.0),
-    vec2(0.0, HUD_CHAR_SIZE),
-    vec2(HUD_CHAR_SIZE, HUD_CHAR_SIZE),
-    vec2(HUD_CHAR_SIZE, 0.0)
-);
+const float CELL_WIDTH = 8.0;
+const int NUM_TIERS = ${HEIGHT_TIERS.size};
+const float TIER_HEIGHTS[NUM_TIERS] = float[NUM_TIERS]($tierArray);
 
 void main() {
     vec3 pos = Position;
@@ -53,15 +51,28 @@ void main() {
     bool isGui = ProjMat[2][3] == 0.0;
     if (isGui) {
         int blueVal = int(Color.b * 255.0 + 0.5);
-        if (blueVal == HUD_MARKER) {
+        if (blueVal >= 128) {
             hudFlag = 1;
+            int encoded = blueVal - 128;
+            int tierIndex = encoded >> 4;
+            int charOffset = encoded & 15;
+            float spriteH = (tierIndex < NUM_TIERS) ? TIER_HEIGHTS[tierIndex] : CELL_WIDTH;
+
             float guiW = 2.0 / ProjMat[0][0];
             float guiH = -2.0 / ProjMat[1][1];
-            float targetX = Color.r * guiW;
-            float targetY = Color.g * guiH;
+            float baseX = Color.r * guiW;
+            float baseY = Color.g * guiH;
+            float targetX = baseX + float(charOffset) * CELL_WIDTH;
+
             int corner = gl_VertexID % 4;
-            pos = vec3(targetX + HUD_CORNERS[corner].x, targetY + HUD_CORNERS[corner].y, pos.z);
-        } else if (blueVal == 63 || blueVal == 64) {
+            vec2 cornerOffset;
+            if (corner == 0) cornerOffset = vec2(0.0, 0.0);
+            else if (corner == 1) cornerOffset = vec2(0.0, spriteH);
+            else if (corner == 2) cornerOffset = vec2(CELL_WIDTH, spriteH);
+            else cornerOffset = vec2(CELL_WIDTH, 0.0);
+
+            pos = vec3(targetX + cornerOffset.x, baseY + cornerOffset.y, pos.z);
+        } else if (blueVal >= 32 && blueVal <= 64) {
             int redVal = int(Color.r * 255.0 + 0.5);
             int greenVal = int(Color.g * 255.0 + 0.5);
             bool grayscale = abs(redVal - blueVal) <= 2 && abs(greenVal - blueVal) <= 2;
@@ -79,6 +90,7 @@ void main() {
     texCoord0 = UV0;
 }
 """.trimIndent()
+    }
 
     private fun generateFsh(): String = """
 #version 330

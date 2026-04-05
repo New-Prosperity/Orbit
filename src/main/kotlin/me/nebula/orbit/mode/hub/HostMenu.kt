@@ -13,6 +13,7 @@ import me.nebula.gravity.queue.PoolConfigStore
 import me.nebula.gravity.rank.RankManager
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
+import me.nebula.orbit.utils.gui.confirmGui
 import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.gui.openGui
 import me.nebula.orbit.utils.itembuilder.itemStack
@@ -94,21 +95,23 @@ object HostMenu {
     }
 
     private fun openConfirmMenu(player: Player, config: PoolConfig, map: String?) {
-        val gui = gui(player.translateRaw("orbit.host.confirm.title"), rows = 3) {
-            slot(11, itemStack(Material.EMERALD_BLOCK) {
+        val confirm = confirmGui(
+            title = player.translateRaw("orbit.host.confirm.title"),
+            confirmItem = itemStack(Material.EMERALD_BLOCK) {
                 name(player.translateRaw("orbit.host.confirm.accept"))
                 lore(player.translateRaw("orbit.host.confirm.gamemode", "gamemode" to config.gameMode))
                 map?.let { lore(player.translateRaw("orbit.host.confirm.map", "map" to it)) }
                 lore(player.translateRaw("orbit.host.confirm.cost"))
                 clean()
-            }) { p -> confirm(p, config, map) }
-            slot(15, itemStack(Material.REDSTONE_BLOCK) {
+            },
+            cancelItem = itemStack(Material.REDSTONE_BLOCK) {
                 name(player.translateRaw("orbit.host.confirm.cancel"))
                 clean()
-            }) { p -> openGameModeMenu(p) }
-            fillDefault()
-        }
-        player.openGui(gui)
+            },
+            onConfirm = { p -> confirm(p, config, map) },
+            onCancel = { p -> openGameModeMenu(p) },
+        )
+        player.openGui(confirm)
     }
 
     private fun confirm(player: Player, config: PoolConfig, map: String?) {

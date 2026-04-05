@@ -120,7 +120,7 @@ object Screen {
         repeat(REMOUNT_CHECK_TICKS) {
             for ((uuid, session) in sessions) {
                 val player = MinecraftServer.getConnectionManager()
-                    .onlinePlayers.firstOrNull { it.uuid == uuid } ?: continue
+                    .getOnlinePlayerByUuid(uuid) ?: continue
                 if (player.vehicle?.entityId != session.anchorEntity.entityId) {
                     session.anchorEntity.addPassenger(player)
                     if (session.cameraApplied) {
@@ -260,7 +260,7 @@ object Screen {
             iter.remove()
             session.anchorEntity.remove()
             val player = MinecraftServer.getConnectionManager()
-                .onlinePlayers.firstOrNull { it.uuid == uuid } ?: continue
+                .getOnlinePlayerByUuid(uuid) ?: continue
             player.sendPacket(CameraPacket(player.entityId))
             session.display.destroy(player)
             player.sendPacket(DestroyEntitiesPacket(listOf(session.viewpointEntityId, session.cursor.entityId)))

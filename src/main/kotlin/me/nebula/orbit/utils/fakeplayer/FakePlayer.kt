@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.fakeplayer
 
+import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
@@ -76,6 +77,7 @@ private val BOT_ORIGIN_Z_TAG: Tag<Double> = Tag.Double("nebula:bot_origin_z")
 
 object FakePlayerManager {
 
+    private val logger = logger("FakePlayer")
     private val activeBots = ConcurrentHashMap<UUID, Player>()
     private val botIndex = AtomicInteger(0)
     private var behaviorTask: Task? = null
@@ -102,36 +104,38 @@ object FakePlayerManager {
             val delayTicks = i * staggerDelayTicks
             delay(delayTicks.coerceAtLeast(1)) {
                 Thread.startVirtualThread {
-                    val connection = FakePlayerConnection()
-                    val skinProperties = profile.skin?.let {
-                        listOf(GameProfile.Property("textures", it.textures(), it.signature()))
-                    } ?: emptyList()
-                    val gameProfile = GameProfile(uuid, name, skinProperties)
+                    runCatching {
+                        val connection = FakePlayerConnection()
+                        val skinProperties = profile.skin?.let {
+                            listOf(GameProfile.Property("textures", it.textures(), it.signature()))
+                        } ?: emptyList()
+                        val gameProfile = GameProfile(uuid, name, skinProperties)
 
-                    val player = connectionManager.createPlayer(connection, gameProfile)
-                    connection.setServerState(ConnectionState.CONFIGURATION)
-                    connection.setClientState(ConnectionState.CONFIGURATION)
-                    connection.receiveKnownPacksResponse(listOf(SelectKnownPacksPacket.MINECRAFT_CORE))
-                    connectionManager.doConfiguration(player, true)
-                    connectionManager.transitionConfigToPlay(player)
+                        val player = connectionManager.createPlayer(connection, gameProfile)
+                        connection.setServerState(ConnectionState.CONFIGURATION)
+                        connection.setClientState(ConnectionState.CONFIGURATION)
+                        connection.receiveKnownPacksResponse(listOf(SelectKnownPacksPacket.MINECRAFT_CORE))
+                        connectionManager.doConfiguration(player, true)
+                        connectionManager.transitionConfigToPlay(player)
 
-                    player.setTag(BOT_TAG, true)
-                    player.setTag(BOT_BEHAVIOR_TAG, profile.behavior.name)
-                    player.setTag(BOT_ORIGIN_X_TAG, spawnPos.x())
-                    player.setTag(BOT_ORIGIN_Z_TAG, spawnPos.z())
-                    player.setTag(BOT_ANGLE_TAG, Random.nextFloat() * 360f)
-                    player.gameMode = profile.gameMode
-                    player.isSneaking = profile.sneaking
-                    player.isSprinting = profile.sprinting
+                        player.setTag(BOT_TAG, true)
+                        player.setTag(BOT_BEHAVIOR_TAG, profile.behavior.name)
+                        player.setTag(BOT_ORIGIN_X_TAG, spawnPos.x())
+                        player.setTag(BOT_ORIGIN_Z_TAG, spawnPos.z())
+                        player.setTag(BOT_ANGLE_TAG, Random.nextFloat() * 360f)
+                        player.gameMode = profile.gameMode
+                        player.isSneaking = profile.sneaking
+                        player.isSprinting = profile.sprinting
 
-                    profile.equipment.forEach { (slot, item) -> player.setEquipment(slot, item) }
-                    profile.hotbarItems.forEach { (slot, item) -> player.inventory.setItemStack(slot, item) }
+                        profile.equipment.forEach { (slot, item) -> player.setEquipment(slot, item) }
+                        profile.hotbarItems.forEach { (slot, item) -> player.inventory.setItemStack(slot, item) }
 
-                    activeBots[uuid] = player
+                        activeBots[uuid] = player
 
-                    profile.onReady?.let { callback ->
-                        delay(5) { callback(player) }
-                    }
+                        profile.onReady?.let { callback ->
+                            delay(5) { callback(player) }
+                        }
+                    }.onFailure { logger.error(it) { "Failed to spawn fake player" } }
                 }
             }
         }

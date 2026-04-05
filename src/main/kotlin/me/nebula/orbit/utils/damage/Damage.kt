@@ -9,8 +9,10 @@ import net.minestom.server.entity.LivingEntity
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.damage.DamageType
 import net.minestom.server.entity.metadata.display.TextDisplayMeta
+import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.entity.EntityDamageEvent
+import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.instance.Instance
 import net.minestom.server.registry.RegistryKey
 import net.minestom.server.timer.TaskSchedule
@@ -22,7 +24,7 @@ data class DamageRecord(
     val victimUuid: UUID,
     val attackerUuid: UUID?,
     val amount: Float,
-    val type: DamageType,
+    val type: RegistryKey<DamageType>,
     val timestamp: Long = System.currentTimeMillis(),
 )
 
@@ -31,7 +33,7 @@ object DamageTracker {
     private val history = ConcurrentHashMap<UUID, MutableList<DamageRecord>>()
     private const val MAX_HISTORY = 50
 
-    fun record(victim: LivingEntity, attacker: Entity?, amount: Float, type: DamageType) {
+    fun record(victim: LivingEntity, attacker: Entity?, amount: Float, type: RegistryKey<DamageType>) {
         val uuid = if (victim is Player) victim.uuid else return
         val attackerUuid = if (attacker is Player) attacker.uuid else null
         val record = DamageRecord(uuid, attackerUuid, amount, type)
@@ -57,6 +59,13 @@ object DamageTracker {
 
     fun clear(player: Player) {
         history.remove(player.uuid)
+    }
+
+    fun install(eventNode: EventNode<Event>) {
+        eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
+            clear(event.player)
+            DamageMultiplierManager.clearPlayer(event.player)
+        }
     }
 }
 

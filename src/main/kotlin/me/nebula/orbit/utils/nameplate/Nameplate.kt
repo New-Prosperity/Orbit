@@ -187,6 +187,7 @@ object NameplateManager {
     fun hideTo(target: Player, viewer: Player) {
         val plate = activePlates[target.uuid] ?: return
         if (!plate.viewers.remove(viewer.uuid)) return
+        plate.lastRendered.remove(viewer.uuid)
         viewer.sendPacket(DestroyEntitiesPacket(listOf(plate.entityId)))
     }
 

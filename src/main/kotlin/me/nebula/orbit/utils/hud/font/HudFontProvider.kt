@@ -5,14 +5,15 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.awt.Color
 import java.awt.Graphics2D
+import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
-import java.awt.image.BufferedImage
 
 object HudFontProvider {
 
-    private const val CELL_SIZE = 8
     private val gson = GsonBuilder().setPrettyPrinting().create()
+
+    private const val BITMAP_WIDTH = 5
 
     @Suppress("MagicNumber")
     private val DIGIT_PATTERNS = arrayOf(
@@ -36,31 +37,45 @@ object HudFontProvider {
         "glyph_percent" to intArrayOf(0b10001, 0b00010, 0b00100, 0b01000, 0b10001, 0b00000, 0b00000),
     )
 
-    private const val BITMAP_WIDTH = 5
-
     fun generate(): Map<String, ByteArray> {
         val entries = LinkedHashMap<String, ByteArray>()
-        entries["assets/nebula/textures/hud/sprites.png"] = generateAtlas()
+
+        for ((tierIndex, tierHeight) in HEIGHT_TIERS.withIndex()) {
+            val tierSprites = HudSpriteRegistry.spritesForTier(tierIndex)
+            if (tierSprites.isEmpty()) continue
+            val atlasBytes = generateTierAtlas(tierIndex, tierHeight, tierSprites)
+            entries["assets/nebula/textures/hud/tier_$tierIndex.png"] = atlasBytes
+        }
+
         entries["assets/minecraft/font/hud.json"] = generateFontJson()
         return entries
     }
 
-    private fun generateAtlas(): ByteArray {
-        val columns = HudSpriteRegistry.COLUMNS
-        val rows = HudSpriteRegistry.rowCount()
+    private fun generateTierAtlas(tierIndex: Int, tierHeight: Int, sprites: List<HudSpriteDef>): ByteArray {
+        val rows = HudSpriteRegistry.tierRowCount(tierIndex)
         if (rows == 0) return ByteArray(0)
 
-        val image = BufferedImage(columns * CELL_SIZE, rows * CELL_SIZE, BufferedImage.TYPE_INT_ARGB)
+        val atlasW = HudSpriteRegistry.ATLAS_COLUMNS * HudSpriteRegistry.CELL_WIDTH
+        val atlasH = rows * tierHeight
+        val image = BufferedImage(atlasW, atlasH, BufferedImage.TYPE_INT_ARGB)
         val g = image.createGraphics()
 
-        for (sprite in HudSpriteRegistry.all()) {
-            val x = sprite.col * CELL_SIZE
-            val y = sprite.row * CELL_SIZE
-            val custom = HudSpriteRegistry.customImage(sprite.id)
-            if (custom != null) {
-                g.drawImage(custom, x, y, CELL_SIZE, CELL_SIZE, null)
-            } else {
-                drawDefaultSprite(g, sprite.id, x, y)
+        for (sprite in sprites) {
+            for (col in sprite.columns) {
+                val destX = col.atlasCol * HudSpriteRegistry.CELL_WIDTH
+                val destY = col.atlasRow * tierHeight
+                val srcX = col.columnIndex * HudSpriteRegistry.CELL_WIDTH
+                val srcW = minOf(HudSpriteRegistry.CELL_WIDTH, sprite.sourceWidth - srcX)
+                val srcH = minOf(tierHeight, sprite.sourceHeight)
+
+                if (srcW > 0 && srcH > 0) {
+                    val sub = sprite.image.getSubimage(srcX, 0, srcW, srcH)
+                    g.drawImage(sub, destX, destY, null)
+                }
+
+                if (isDefaultSprite(sprite.id) && col.columnIndex == 0) {
+                    drawDefaultSprite(g, sprite.id, destX, destY, tierHeight)
+                }
             }
         }
 
@@ -70,27 +85,26 @@ object HudFontProvider {
         return baos.toByteArray()
     }
 
-    private fun drawDefaultSprite(g: Graphics2D, id: String, x: Int, y: Int) {
+    private fun isDefaultSprite(id: String): Boolean =
+        id.startsWith("digit_") || id.startsWith("glyph_")
+
+    private fun drawDefaultSprite(g: Graphics2D, id: String, x: Int, y: Int, cellHeight: Int) {
         when {
             id.startsWith("digit_") -> {
                 val digit = id.removePrefix("digit_").toInt()
-                drawBitmap(g, DIGIT_PATTERNS[digit], x, y, Color.WHITE)
+                drawBitmap(g, DIGIT_PATTERNS[digit], x, y, cellHeight, Color.WHITE)
             }
             id.startsWith("glyph_") -> {
                 val pattern = GLYPH_PATTERNS[id] ?: return
-                drawBitmap(g, pattern, x, y, Color.WHITE)
-            }
-            else -> {
-                g.color = spriteColor(id)
-                g.fillRect(x, y, CELL_SIZE, CELL_SIZE)
+                drawBitmap(g, pattern, x, y, cellHeight, Color.WHITE)
             }
         }
     }
 
-    private fun drawBitmap(g: Graphics2D, pattern: IntArray, ox: Int, oy: Int, color: Color) {
+    private fun drawBitmap(g: Graphics2D, pattern: IntArray, ox: Int, oy: Int, cellHeight: Int, color: Color) {
         g.color = color
-        val padX = (CELL_SIZE - BITMAP_WIDTH) / 2
-        val padY = (CELL_SIZE - pattern.size) / 2
+        val padX = (HudSpriteRegistry.CELL_WIDTH - BITMAP_WIDTH) / 2
+        val padY = (cellHeight - pattern.size) / 2
         for (row in pattern.indices) {
             for (col in 0 until BITMAP_WIDTH) {
                 if (pattern[row] and (1 shl (BITMAP_WIDTH - 1 - col)) != 0) {
@@ -100,48 +114,35 @@ object HudFontProvider {
         }
     }
 
-    @Suppress("MagicNumber")
-    private fun spriteColor(id: String): Color = when (id) {
-        "bar_bg" -> Color(60, 60, 60)
-        "bar_fill_red" -> Color(220, 50, 50)
-        "bar_fill_blue" -> Color(50, 100, 220)
-        "bar_fill_green" -> Color(50, 200, 50)
-        "bar_fill_yellow" -> Color(230, 220, 50)
-        "bar_empty" -> Color(40, 40, 40)
-        "icon_health" -> Color(220, 30, 30)
-        "icon_mana" -> Color(50, 80, 220)
-        "icon_shield" -> Color(180, 180, 200)
-        "icon_speed" -> Color(100, 200, 230)
-        "icon_strength" -> Color(180, 40, 40)
-        "icon_fire" -> Color(240, 150, 30)
-        else -> Color(200, 200, 200)
-    }
-
     private fun generateFontJson(): ByteArray {
-        val allSprites = HudSpriteRegistry.all().toList()
-        val columns = HudSpriteRegistry.COLUMNS
-        val rows = HudSpriteRegistry.rowCount()
-
-        val charRows = (0 until rows).map { row ->
-            buildString {
-                for (col in 0 until columns) {
-                    val sprite = allSprites.firstOrNull { it.row == row && it.col == col }
-                    append(sprite?.char ?: '\u0000')
-                }
-            }
-        }
-
         val json = JsonObject().apply {
             add("providers", JsonArray().apply {
-                add(JsonObject().apply {
-                    addProperty("type", "bitmap")
-                    addProperty("file", "nebula:hud/sprites.png")
-                    addProperty("height", CELL_SIZE)
-                    addProperty("ascent", CELL_SIZE)
-                    add("chars", JsonArray().apply {
-                        charRows.forEach { add(it) }
+                for ((tierIndex, tierHeight) in HEIGHT_TIERS.withIndex()) {
+                    val tierSprites = HudSpriteRegistry.spritesForTier(tierIndex)
+                    if (tierSprites.isEmpty()) continue
+
+                    val rows = HudSpriteRegistry.tierRowCount(tierIndex)
+                    val allColumns = tierSprites.flatMap { it.columns }
+
+                    val charRows = (0 until rows).map { row ->
+                        buildString {
+                            for (col in 0 until HudSpriteRegistry.ATLAS_COLUMNS) {
+                                val column = allColumns.firstOrNull { it.atlasRow == row && it.atlasCol == col }
+                                append(column?.char ?: '\u0000')
+                            }
+                        }
+                    }
+
+                    add(JsonObject().apply {
+                        addProperty("type", "bitmap")
+                        addProperty("file", "nebula:hud/tier_$tierIndex.png")
+                        addProperty("height", tierHeight)
+                        addProperty("ascent", tierHeight)
+                        add("chars", JsonArray().apply {
+                            charRows.forEach { add(it) }
+                        })
                     })
-                })
+                }
             })
         }
         return gson.toJson(json).toByteArray(Charsets.UTF_8)

@@ -36,7 +36,7 @@ class TabEntryBuilder @PublishedApi internal constructor(
     @PublishedApi internal var listOrder: Int = 50
     @PublishedApi internal var skinValue: String? = null
     @PublishedApi internal var skinSignature: String? = null
-    @PublishedApi internal var ping: Int = 0
+    @PublishedApi internal var ping: Int = -1
     @PublishedApi internal var visibleWhen: ((Player) -> Boolean)? = null
     @PublishedApi internal var contentProvider: ((Player) -> Component)? = null
 
@@ -71,6 +71,18 @@ object TabListManager {
     private val fakeEntries = ConcurrentHashMap<UUID, ConcurrentHashMap<String, TabEntryDef>>()
     private val playerFormats = ConcurrentHashMap<UUID, PlayerFormatDef>()
     private var globalFormat: ((Player) -> PlayerFormatDef)? = null
+
+    private const val BLANK_SKIN_VALUE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZmY5YmI5ZTU2MTI1YzgyMjdiOTRiYmRhOWY2ZTBmODYyOTMxYzIyOTI1NWJhOGYxMjA1ZDEzYzQ0YzFiYjU2MSJ9fX0="
+
+    @Volatile var blankSkinValue: String? = BLANK_SKIN_VALUE
+        private set
+    @Volatile var blankSkinSignature: String? = null
+        private set
+
+    fun setBlankSkin(value: String, signature: String? = null) {
+        blankSkinValue = value
+        blankSkinSignature = signature
+    }
 
     fun setGlobalFormat(formatter: (Player) -> PlayerFormatDef) {
         globalFormat = formatter
@@ -203,7 +215,7 @@ object TabListManager {
         )
         viewer.sendPacket(
             PlayerInfoUpdatePacket(
-                EnumSet.of(Action.ADD_PLAYER, Action.UPDATE_DISPLAY_NAME, Action.UPDATE_LISTED, Action.UPDATE_LIST_ORDER),
+                EnumSet.of(Action.ADD_PLAYER, Action.UPDATE_DISPLAY_NAME, Action.UPDATE_LISTED, Action.UPDATE_LIST_ORDER, Action.UPDATE_LATENCY),
                 listOf(entry),
             )
         )
@@ -233,13 +245,14 @@ object TabListManager {
 
 inline fun Player.addTabEntry(id: String, block: TabEntryBuilder.() -> Unit) {
     val builder = TabEntryBuilder(id).apply(block)
+    val useFallbackSkin = builder.skinValue == null
     TabListManager.addEntry(this, id, TabEntryDef(
         id = id,
         uuid = UUID.nameUUIDFromBytes("tabentry:$id".toByteArray()),
         displayName = builder.displayName,
         listOrder = builder.listOrder,
-        skinValue = builder.skinValue,
-        skinSignature = builder.skinSignature,
+        skinValue = builder.skinValue ?: TabListManager.blankSkinValue,
+        skinSignature = builder.skinSignature ?: if (useFallbackSkin) TabListManager.blankSkinSignature else null,
         ping = builder.ping,
         visibleWhen = builder.visibleWhen,
         contentProvider = builder.contentProvider,

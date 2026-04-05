@@ -10,7 +10,27 @@ data class BlockbenchModel(
     val groups: List<BbGroup>,
     val textures: List<BbTexture>,
     val animations: List<BbAnimation>,
+    val display: Map<String, BbDisplaySlot> = emptyMap(),
 )
+
+data class BbDisplaySlot(
+    val rotation: FloatArray = FloatArray(3),
+    val translation: FloatArray = FloatArray(3),
+    val scale: FloatArray = floatArrayOf(1f, 1f, 1f),
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is BbDisplaySlot) return false
+        return rotation.contentEquals(other.rotation) && translation.contentEquals(other.translation) && scale.contentEquals(other.scale)
+    }
+
+    override fun hashCode(): Int {
+        var result = rotation.contentHashCode()
+        result = 31 * result + translation.contentHashCode()
+        result = 31 * result + scale.contentHashCode()
+        return result
+    }
+}
 
 data class BbMeta(
     val formatVersion: String,

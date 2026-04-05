@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.autorestart
 
+import me.nebula.ether.utils.duration.DurationFormatter
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
@@ -46,6 +47,7 @@ object AutoRestartManager {
         startTimeMs = System.currentTimeMillis()
 
         config.warningIntervals
+            .sortedDescending()
             .filter { it < config.delay }
             .forEach { interval ->
                 val fireAt = config.delay.minus(interval)
@@ -73,7 +75,7 @@ object AutoRestartManager {
 
     private fun broadcastWarning(remaining: Duration) {
         val cfg = config ?: return
-        val timeStr = formatDuration(remaining)
+        val timeStr = DurationFormatter.format(remaining.toMillis())
         val message = miniMessage.deserialize(cfg.warningTemplate.replace("{time}", timeStr))
         MinecraftServer.getConnectionManager().onlinePlayers.forEach { it.sendMessage(message) }
     }
@@ -86,22 +88,6 @@ object AutoRestartManager {
         cancel()
     }
 
-    private fun formatDuration(duration: Duration): String {
-        val totalSeconds = duration.seconds
-        return when {
-            totalSeconds >= 3600 -> {
-                val hours = totalSeconds / 3600
-                val minutes = (totalSeconds % 3600) / 60
-                if (minutes > 0) "${hours}h ${minutes}m" else "${hours}h"
-            }
-            totalSeconds >= 60 -> {
-                val minutes = totalSeconds / 60
-                val seconds = totalSeconds % 60
-                if (seconds > 0) "${minutes}m ${seconds}s" else "${minutes}m"
-            }
-            else -> "${totalSeconds}s"
-        }
-    }
 }
 
 inline fun autoRestart(block: AutoRestartConfig.() -> Unit) {

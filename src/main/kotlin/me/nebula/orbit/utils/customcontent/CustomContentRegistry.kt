@@ -2,17 +2,30 @@ package me.nebula.orbit.utils.customcontent
 
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import javax.imageio.ImageIO
 import me.nebula.orbit.utils.customcontent.armor.ArmorShaderPack
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
 import me.nebula.orbit.utils.customcontent.effects.EffectsShaderPack
 import me.nebula.orbit.utils.tooltip.TooltipStylePack
 import me.nebula.orbit.utils.hud.font.HudFontProvider
+import me.nebula.orbit.utils.hud.font.HudSpriteRegistry
 import me.nebula.orbit.utils.hud.shader.HudShaderPack
-import me.nebula.orbit.utils.customcontent.block.*
+import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
+import me.nebula.orbit.utils.customcontent.block.CustomBlock
+import me.nebula.orbit.utils.customcontent.block.CustomBlockDefinition
+import me.nebula.orbit.utils.customcontent.block.CustomBlockDsl
+import me.nebula.orbit.utils.customcontent.block.CustomBlockLoader
+import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
 import me.nebula.orbit.utils.customcontent.event.CustomBlockBreakHandler
 import me.nebula.orbit.utils.customcontent.event.CustomBlockInteractHandler
 import me.nebula.orbit.utils.customcontent.event.CustomBlockPlaceHandler
-import me.nebula.orbit.utils.customcontent.item.*
+import me.nebula.orbit.utils.customcontent.item.CustomItem
+import me.nebula.orbit.utils.customcontent.item.CustomItemDefinition
+import me.nebula.orbit.utils.customcontent.item.CustomItemDsl
+import me.nebula.orbit.utils.customcontent.item.CustomItemLoader
+import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.customcontent.pack.PackMerger
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
@@ -24,6 +37,7 @@ object CustomContentRegistry {
 
     private val logger = logger("CustomContent")
     private lateinit var resources: ResourceManager
+    @Volatile
     private var mergeResult: PackMerger.MergeResult? = null
 
     private const val BASE_DIR = "customcontent"
@@ -31,6 +45,7 @@ object CustomContentRegistry {
     private const val ITEMS_DIR = "$BASE_DIR/items"
     private const val BLOCKS_DIR = "$BASE_DIR/blocks"
     private const val ARMORS_DIR = "$BASE_DIR/armors"
+    private const val SPRITES_DIR = "$BASE_DIR/sprites"
 
     val packBytes: ByteArray? get() = mergeResult?.packBytes
     val packSha1: String? get() = mergeResult?.sha1
@@ -43,6 +58,9 @@ object CustomContentRegistry {
         resources.ensureDirectory(ITEMS_DIR)
         resources.ensureDirectory(BLOCKS_DIR)
         resources.ensureDirectory(ARMORS_DIR)
+        resources.ensureDirectory(SPRITES_DIR)
+
+        loadSprites()
 
         ModelIdRegistry.init(resources, "$BASE_DIR/model_ids.dat")
         BlockStateAllocator.init(resources, "$BASE_DIR/allocations.dat")
@@ -164,7 +182,9 @@ object CustomContentRegistry {
         val tooltipEntries = TooltipStylePack.generate()
         logger.info { "Generated tooltip style pack: ${tooltipEntries.size} entries" }
 
-        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries
+        val tabListOverrides = generateTabListOverrides()
+
+        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries + tabListOverrides
         val result = PackMerger.merge(resources, MODELS_DIR, allRaw, allShaderEntries)
         mergeResult = result
 
@@ -176,6 +196,49 @@ object CustomContentRegistry {
                 "blocks=${CustomBlockRegistry.all().size}, armors=${CustomArmorRegistry.all().size}"
         }
         return result
+    }
+
+    private fun loadSprites() {
+        val files = resources.list(SPRITES_DIR, "png")
+        for (path in files) {
+            val fileName = path.substringAfterLast('/')
+            val id = fileName.removeSuffix(".png")
+            if (HudSpriteRegistry.getOrNull(id) != null) {
+                logger.warn { "Sprite '$id' already registered, skipping file $fileName" }
+                continue
+            }
+            val bytes = resources.readBytes(path)
+            val image = ImageIO.read(bytes.inputStream())
+            HudSpriteRegistry.register(id, image)
+            logger.info { "Registered sprite: $id (${image.width}x${image.height})" }
+        }
+    }
+
+    private fun generateTabListOverrides(): Map<String, ByteArray> {
+        val entries = mutableMapOf<String, ByteArray>()
+
+        val transparentPixel = transparentPng(1, 1)
+        val pingNames = listOf("ping_1", "ping_2", "ping_3", "ping_4", "ping_5", "ping_unknown")
+        for (name in pingNames) {
+            entries["assets/minecraft/textures/gui/sprites/icon/$name.png"] = transparentPixel
+        }
+
+        val transparentSkin = transparentPng(64, 64)
+        val wideSkins = listOf("steve", "makena", "sunny")
+        val slimSkins = listOf("alex", "ari", "efe", "kai", "noor", "zuri")
+        for (name in wideSkins + slimSkins) {
+            entries["assets/minecraft/textures/entity/player/wide/$name.png"] = transparentSkin
+            entries["assets/minecraft/textures/entity/player/slim/$name.png"] = transparentSkin
+        }
+
+        return entries
+    }
+
+    private fun transparentPng(width: Int, height: Int): ByteArray {
+        val img = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        val baos = ByteArrayOutputStream()
+        ImageIO.write(img, "png", baos)
+        return baos.toByteArray()
     }
 }
 
