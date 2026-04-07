@@ -12,13 +12,17 @@ import me.nebula.ether.utils.storage.storageClient
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
 import me.nebula.orbit.utils.anticheat.AntiCheat
+import me.nebula.orbit.utils.botai.BotAI
 import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.metrics.MetricsPublisher
 import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.gravity.achievement.AchievementStore
+import me.nebula.gravity.audit.AuditStore
 import me.nebula.gravity.battlepass.BattlePassStore
 import me.nebula.gravity.battleroyale.BattleRoyaleKitStore
 import me.nebula.gravity.cosmetic.CosmeticStore
+import me.nebula.gravity.anticheat.FlaggedPlayerStore
+import me.nebula.gravity.marketplace.MarketplaceListingStore
 import me.nebula.gravity.economy.EconomyStore
 import me.nebula.gravity.economy.EconomyTransactionStore
 import me.nebula.gravity.host.HostRequestLookupStore
@@ -26,6 +30,7 @@ import me.nebula.gravity.host.HostRequestStore
 import me.nebula.gravity.host.HostTicketStore
 import me.nebula.gravity.map.MapStore
 import me.nebula.gravity.messaging.NetworkMessenger
+import me.nebula.gravity.messaging.PropertyUpdateMessage
 import me.nebula.gravity.messaging.ServerDeregistrationMessage
 import me.nebula.gravity.messaging.ServerRegistrationMessage
 import me.nebula.gravity.messaging.TransferPlayerMessage
@@ -56,17 +61,29 @@ import me.nebula.gravity.session.SessionStore
 import me.nebula.gravity.stats.StatsStore
 import me.nebula.orbit.commands.installBasicCommands
 import me.nebula.orbit.commands.installGameCommands
+import me.nebula.orbit.commands.orbitCommand
+import me.nebula.orbit.commands.cleanupReplayViewer
+import me.nebula.orbit.commands.replayCommand
 import me.nebula.orbit.commands.settingsCommand
 import me.nebula.orbit.commands.vanishCommand
 import me.nebula.orbit.cosmetic.AuraManager
 import me.nebula.orbit.cosmetic.CompanionManager
 import me.nebula.orbit.cosmetic.CosmeticListener
-import me.nebula.orbit.cosmetic.CosmeticMenu
 import me.nebula.orbit.cosmetic.CosmeticMountManager
 import me.nebula.orbit.cosmetic.CosmeticRegistry
 import me.nebula.orbit.cosmetic.GadgetManager
 import me.nebula.orbit.cosmetic.GravestoneManager
 import me.nebula.orbit.cosmetic.PetManager
+import me.nebula.orbit.cosmetic.cosmeticsCommand
+import me.nebula.orbit.mutator.MutatorRegistry
+import me.nebula.orbit.guild.guildCommand
+import me.nebula.orbit.marketplace.MarketplaceExpiry
+import me.nebula.orbit.marketplace.TradeManager
+import me.nebula.orbit.marketplace.marketplaceCommand
+import me.nebula.orbit.marketplace.sellCommand
+import me.nebula.orbit.marketplace.tradeCommand
+import me.nebula.orbit.cosmetic.installCosmeticInteraction
+import me.nebula.orbit.cosmetic.previewCommand
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.game.battleroyale.BattleRoyaleMode
 import me.nebula.orbit.mode.build.BuildMode
@@ -136,17 +153,27 @@ import me.nebula.orbit.utils.cinematic.cinematicTestCommand
 import me.nebula.orbit.utils.commandbuilder.OnlinePlayerCache
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.customcontent.CustomContentRegistry
+import me.nebula.gravity.cache.CacheSlots
 import me.nebula.gravity.cache.PlayerCache
+import me.nebula.gravity.guild.GuildInviteStore
+import me.nebula.gravity.guild.GuildLookupStore
+import me.nebula.gravity.guild.GuildStore
+import me.nebula.gravity.player.PreferenceData
 import me.nebula.gravity.leveling.LevelStore
 import me.nebula.gravity.nick.NickData
 import me.nebula.gravity.nick.NickPoolManager
 import me.nebula.gravity.nick.NickPoolStore
 import me.nebula.gravity.nick.NickStore
+import me.nebula.gravity.rating.RatingStore
 import me.nebula.gravity.rank.RankManager
 import me.nebula.orbit.nick.NickManager
 import me.nebula.orbit.nick.nickCommands
 import me.nebula.orbit.staff.StaffSpectateManager
+import me.nebula.orbit.staff.inspectCommand
+import me.nebula.orbit.staff.punishCommand
 import me.nebula.orbit.staff.spectateCommand
+import me.nebula.orbit.staff.unflagCommand
+import me.nebula.orbit.utils.statue.statueCommand
 import me.nebula.orbit.utils.vanish.VanishManager
 import me.nebula.orbit.utils.actionbar.ActionBarManager
 import me.nebula.orbit.utils.bossbar.AnimatedBossBarManager
@@ -207,11 +234,15 @@ object Orbit {
         private set
     var mapName: String? = null
         private set
+    var activeMutatorIds: List<String> = emptyList()
+        private set
+    var randomMutatorCount: Int = 0
     var storage: StorageClient? = null
         private set
 
     private val logger = logger("Orbit")
     val LOCALE_TAG: Tag<String> = Tag.String("nebula:locale")
+    val TRACE_TAG: Tag<String> = Tag.String("nebula:traceId")
     private val globalTasks = mutableListOf<Task>()
 
     fun localeOf(playerId: UUID): String {
@@ -299,6 +330,13 @@ object Orbit {
                         +LevelStore
                         +NickStore
                         +NickPoolStore
+                        +RatingStore
+                        +AuditStore
+                        +MarketplaceListingStore
+                        +FlaggedPlayerStore
+                        +GuildStore
+                        +GuildLookupStore
+                        +GuildInviteStore
                     }
                 }
             }
@@ -323,8 +361,9 @@ object Orbit {
                 hostOwner =
                     provision.metadata?.get("host_owner")?.let { runCatching { UUID.fromString(it) }.getOrNull() }
                 mapName = provision.metadata?.get("map")
+                activeMutatorIds = provision.metadata?.get("mutators")?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
                 serverName = server?.name ?: "orbit-local"
-                logger.info { "Provision discovered: name=$serverName, gameMode=$gameMode, hostOwner=$hostOwner, map=$mapName, provisionUuid=${provision.uuid}" }
+                logger.info { "Provision discovered: name=$serverName, gameMode=$gameMode, hostOwner=$hostOwner, map=$mapName, mutators=$activeMutatorIds, provisionUuid=${provision.uuid}" }
             } else {
                 serverName = "orbit-local"
                 logger.warn { "No provision found in store for P_SERVER_UUID=$serverUuid, using fallback serverName=$serverName" }
@@ -375,6 +414,7 @@ object Orbit {
 
         app.resources.ensureDirectory("models")
         ModelEngine.install()
+        BotAI.install()
 
         TooltipStyleRegistry.registerDefaults()
         CustomContentRegistry.init(app.resources, handler)
@@ -425,6 +465,7 @@ object Orbit {
         val commandManager = MinecraftServer.getCommandManager()
         installBasicCommands(commandManager)
         installGameCommands(commandManager)
+        commandManager.register(orbitCommand())
         commandManager.register(modelEngineCommand(app.resources))
         commandManager.register(customContentCommand(app.resources))
         commandManager.register(cinematicTestCommand())
@@ -435,9 +476,17 @@ object Orbit {
         commandManager.register(vanishCommand())
         commandManager.register(settingsCommand())
         commandManager.register(spectateCommand())
-        commandManager.register(command("cosmetics") {
-            onPlayerExecute { CosmeticMenu.openCategoryMenu(player) }
-        })
+        commandManager.register(inspectCommand())
+        commandManager.register(punishCommand())
+        commandManager.register(unflagCommand())
+        commandManager.register(replayCommand())
+        commandManager.register(cosmeticsCommand())
+        commandManager.register(previewCommand())
+        commandManager.register(marketplaceCommand())
+        commandManager.register(sellCommand())
+        commandManager.register(tradeCommand())
+        commandManager.register(guildCommand())
+        commandManager.register(statueCommand())
         commandManager.register(command("battlepass") {
             onPlayerExecute { BattlePassMenu.open(player) }
         })
@@ -462,9 +511,11 @@ object Orbit {
         })
 
         CosmeticRegistry.loadFromDefinitions()
+        MutatorRegistry.loadDefinitions()
         registerAchievementContent()
         CosmeticListener.activeConfig = mode.cosmeticConfig
         CosmeticListener.install(handler)
+        installCosmeticInteraction(handler)
         AuraManager.install()
         CompanionManager.install()
         PetManager.install()
@@ -474,6 +525,26 @@ object Orbit {
 
         mode.install(handler)
 
+        if (gameMode == null) MarketplaceExpiry.install()
+
+        PlayerCache.install(*CacheSlots.ORBIT)
+        PlayerCache.onStoreUpdate {
+            LevelStore.listen { onUpdated { uuid, _ -> PlayerCache.refresh(uuid, CacheSlots.LEVEL) } }
+            EconomyStore.listen { onUpdated { uuid, _ -> PlayerCache.refresh(uuid, CacheSlots.ECONOMY) } }
+            PreferenceStore.listen { onUpdated { uuid, _ -> PlayerCache.refresh(uuid, CacheSlots.PREFERENCES) } }
+            StatsStore.listen { onUpdated { uuid, _ -> PlayerCache.refresh(uuid, CacheSlots.STATS) } }
+            CosmeticStore.listen { onUpdated { uuid, _ -> PlayerCache.refresh(uuid, CacheSlots.COSMETICS) } }
+            PlayerRankStore.listen { onUpdated { uuid, _ -> PlayerCache.refresh(uuid, CacheSlots.RANK, CacheSlots.PERMISSIONS) } }
+            PlayerStore.listen { onUpdated { uuid, _ -> PlayerCache.refresh(uuid, CacheSlots.PLAYER) } }
+            NickStore.listen {
+                onUpdated { uuid, _ -> PlayerCache.refresh(uuid, CacheSlots.NICK) }
+                onRemoved { uuid -> PlayerCache.get(uuid)?.set(CacheSlots.NICK, null) }
+            }
+            GuildLookupStore.listen {
+                onUpdated { uuid, _ -> PlayerCache.refresh(uuid, CacheSlots.GUILD) }
+                onRemoved { uuid -> PlayerCache.get(uuid)?.set(CacheSlots.GUILD, null) }
+            }
+        }
         PlayerCache.installListeners()
         NickManager.installListeners()
         VanishManager.installListeners()
@@ -495,14 +566,21 @@ object Orbit {
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
             val player = event.player
             val cached = PlayerCache.get(player.uuid) ?: PlayerCache.getOrLoad(player.uuid)
-            val locale = cached.player?.language ?: translations.defaultLocale
+            val playerData = cached[CacheSlots.PLAYER]
+            val locale = playerData?.language ?: translations.defaultLocale
             cacheLocale(player, locale)
+
+            val session = SessionStore.load(player.uuid)
+            val traceId = session?.traceId?.ifEmpty { null } ?: player.uuid.toString().take(8)
+            player.setTag(TRACE_TAG, traceId)
+
             AchievementRegistry.loadPlayer(player.uuid)
 
-            val nickData = cached.nick
+            val nickData = cached[CacheSlots.NICK]
+            val preferences = cached[CacheSlots.PREFERENCES] ?: PreferenceData()
             if (nickData != null) {
                 NickManager.applyNick(player, nickData)
-            } else if (cached.preferences.streamerMode && RankManager.hasPermission(player.uuid, "nebula.streamer") && !NickManager.isNicked(player)) {
+            } else if (preferences.streamerMode && RankManager.hasPermission(player.uuid, "nebula.streamer") && !NickManager.isNicked(player)) {
                 val entry = NickPoolManager.claimRandom()
                 if (entry != null) {
                     val autoNick = NickData(entry.name, entry.skinTextures, entry.skinSignature, entry.identity)
@@ -511,13 +589,13 @@ object Orbit {
                 }
             }
 
-            if (cached.preferences.staffAutoVanish && RankManager.hasPermission(player.uuid, "staff.vanish") && !VanishManager.isVanished(player)) {
+            if (preferences.staffAutoVanish && RankManager.hasPermission(player.uuid, "staff.vanish") && !VanishManager.isVanished(player)) {
                 VanishManager.vanish(player)
             }
 
             for (other in event.spawnInstance.players) {
                 if (other === player) continue
-                val otherNick = PlayerCache.get(other.uuid)?.nick ?: continue
+                val otherNick = PlayerCache.get(other.uuid)?.get(CacheSlots.NICK) ?: continue
                 NickManager.sendNickedInfoTo(viewer = player, target = other, otherNick)
             }
 
@@ -560,8 +638,10 @@ object Orbit {
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
+            TradeManager.onDisconnect(event.player)
             AchievementRegistry.unloadPlayer(event.player.uuid)
             PlayerCache.evict(event.player.uuid)
+            cleanupReplayViewer(event.player.uuid)
             val pUuid = provisionUuid
             if (pUuid != null) {
                 ServerStore.executeOnKey(pUuid, DisconnectPlayerProcessor(event.player.uuid))
@@ -581,6 +661,19 @@ object Orbit {
             logger.info { "ServerRegistrationMessage published" }
         } else {
             logger.warn { "P_SERVER_UUID is empty, skipping server registration" }
+        }
+
+        if (gameMode != null) {
+            NetworkMessenger.subscribe<PropertyUpdateMessage> { msg ->
+                if (msg.key.startsWith("MAINTENANCE_") && msg.value == "true") {
+                    val disabledMode = msg.key.removePrefix("MAINTENANCE_").lowercase()
+                    if (disabledMode == gameMode) {
+                        for (p in MinecraftServer.getConnectionManager().onlinePlayers) {
+                            p.sendMessage(deserialize("orbit.mode.disabled_notice", localeOf(p.uuid)))
+                        }
+                    }
+                }
+            }
         }
 
         val pUuid = provisionUuid
@@ -625,7 +718,9 @@ object Orbit {
             globalTasks.forEach { it.cancel() }
             globalTasks.clear()
             MetricsPublisher.shutdown()
+            BotAI.uninstall()
             AntiCheat.uninstall()
+            MarketplaceExpiry.uninstall()
             NickManager.uninstallListeners()
             VanishManager.uninstallListeners()
             StaffSpectateManager.uninstallListeners()
@@ -720,3 +815,6 @@ object Orbit {
         VanillaModules.register(SmithingTableModule)
     }
 }
+
+val Player.traceId: String
+    get() = getTag(Orbit.TRACE_TAG) ?: uuid.toString().take(8)

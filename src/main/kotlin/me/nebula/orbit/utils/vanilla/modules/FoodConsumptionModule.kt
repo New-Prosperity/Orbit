@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.vanilla.modules
 
+import me.nebula.orbit.progression.mission.MissionTracker
+import me.nebula.orbit.utils.achievement.AchievementTriggerManager
 import me.nebula.orbit.utils.sound.playSound
 import me.nebula.orbit.utils.vanilla.ModuleConfig
 import me.nebula.orbit.utils.vanilla.VanillaModule
@@ -12,6 +14,9 @@ import net.minestom.server.instance.Instance
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 private data class FoodValues(val nutrition: Int, val saturation: Float)
 
@@ -62,6 +67,12 @@ object FoodConsumptionModule : VanillaModule {
     override val id = "food-consumption"
     override val description = "Eating food restores food level and saturation"
 
+    private val foodEatenCounters = ConcurrentHashMap<UUID, AtomicLong>()
+
+    fun resetCounters() = foodEatenCounters.clear()
+
+    fun foodEatenBy(uuid: UUID): Long = foodEatenCounters[uuid]?.get() ?: 0L
+
     override fun createNode(instance: Instance, config: ModuleConfig): EventNode<Event> {
         val node = EventNode.all("vanilla-food-consumption")
 
@@ -89,6 +100,10 @@ object FoodConsumptionModule : VanillaModule {
             if (material == Material.HONEY_BOTTLE) {
                 player.inventory.addItemStack(ItemStack.of(Material.GLASS_BOTTLE))
             }
+
+            MissionTracker.onEatFood(player)
+            val count = foodEatenCounters.computeIfAbsent(player.uuid) { AtomicLong() }.incrementAndGet()
+            AchievementTriggerManager.evaluate(player, "food_eaten", count)
         }
 
         return node

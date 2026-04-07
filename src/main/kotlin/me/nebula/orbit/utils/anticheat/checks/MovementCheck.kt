@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.anticheat.checks
 
+import me.nebula.gravity.property.NetworkProperties
+import me.nebula.gravity.property.PropertyStore
 import me.nebula.orbit.utils.anticheat.AntiCheat
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
@@ -44,7 +46,7 @@ object MovementCheck {
                 states[uuid] = MovementState(
                     lastPosition = newPos,
                     lastMoveTime = System.currentTimeMillis(),
-                    lastGroundY = if (player.isOnGround) newPos.y() else newPos.y(),
+                    lastGroundY = newPos.y(),
                 )
                 return@addListener
             }
@@ -80,17 +82,20 @@ object MovementCheck {
             val newAirTicks = if (player.isOnGround) 0 else state.airTicks + 1
             val newGroundY = if (player.isOnGround) newPos.y() else state.lastGroundY
 
-            if (dy > FLY_Y_THRESHOLD && !player.isOnGround && newAirTicks > 3) {
-                AntiCheat.flag(uuid, "fly", WEIGHT, AntiCheat.MOVEMENT_KICK_THRESHOLD)
+            if (dy > FLY_Y_THRESHOLD && !player.isOnGround && newAirTicks > 3
+                && PropertyStore[NetworkProperties.AC_CHECK_FLY_ENABLED]) {
+                AntiCheat.flag(uuid, "fly", WEIGHT, AntiCheat.MOVEMENT_FLAG_THRESHOLD, AntiCheat.MOVEMENT_KICK_THRESHOLD)
             }
 
-            if (horizontalDist > SPEED_THRESHOLD) {
-                AntiCheat.flag(uuid, "speed", WEIGHT, AntiCheat.MOVEMENT_KICK_THRESHOLD)
+            if (horizontalDist > SPEED_THRESHOLD
+                && PropertyStore[NetworkProperties.AC_CHECK_SPEED_ENABLED]) {
+                AntiCheat.flag(uuid, "speed", WEIGHT, AntiCheat.MOVEMENT_FLAG_THRESHOLD, AntiCheat.MOVEMENT_KICK_THRESHOLD)
             }
 
             val fallDistance = state.lastGroundY - newPos.y()
-            if (fallDistance > NOFALL_DISTANCE && player.isOnGround && !wasOnGround(state)) {
-                AntiCheat.flag(uuid, "nofall", WEIGHT, AntiCheat.MOVEMENT_KICK_THRESHOLD)
+            if (fallDistance > NOFALL_DISTANCE && player.isOnGround && !wasOnGround(state)
+                && PropertyStore[NetworkProperties.AC_CHECK_NOFALL_ENABLED]) {
+                AntiCheat.flag(uuid, "nofall", WEIGHT, AntiCheat.MOVEMENT_FLAG_THRESHOLD, AntiCheat.MOVEMENT_KICK_THRESHOLD)
             }
 
             states[uuid] = MovementState(

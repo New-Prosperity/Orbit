@@ -122,7 +122,7 @@ player.activeHudIds                   // Set<String> of active layout IDs
 |---|---|---|---|
 | `BarElement` | `bar("id") { ... }` | Int (filled segments) | Segmented bar with bg/fill/empty sprites |
 | `SpriteElement` | `sprite("id") { ... }` | — | Single sprite at position |
-| `TextElement` | `text("id") { ... }` | String (digits/glyphs/sprites) | Renders 0-9, :, /, ., %, spaces, and `{sprite_id}` inline sprites |
+| `TextElement` | `text("id") { ... }` | String (digits/letters/glyphs/sprites) | Renders 0-9, A-Z, a-z, :, /, ., %, -, _, >, spaces, and `{sprite_id}` inline sprites. Uppercase and lowercase use distinct glyph sets (`letter_A`..`letter_Z` are 7-row caps; `letter_a`..`letter_z` are 8-row x-height with descenders) |
 | `GroupElement` | `group("id") { ... }` | addHudIcon/removeHudIcon | Dynamic sprite list (buffs, debuffs) |
 | `AnimatedSpriteElement` | `animated("id") { ... }` | — | Frame-cycling sprite animation |
 
@@ -136,12 +136,14 @@ Offset is additive to anchor position (0-1 normalized coordinates). Final positi
 - At 960×540 GUI size: ~3.75 GUI pixels per step
 - Character step between adjacent HUD elements: `3/255 ≈ 0.012` (~8 GUI pixels)
 
-## Pre-Registered Sprites (34 total)
+## Pre-Registered Sprites
 - **Bars** (6): `bar_bg`, `bar_fill_red`, `bar_fill_blue`, `bar_fill_green`, `bar_fill_yellow`, `bar_empty`
 - **Icons** (6): `icon_health`, `icon_mana`, `icon_shield`, `icon_speed`, `icon_strength`, `icon_fire`
 - **Borders** (8): `border_left`, `border_right`, `border_top`, `border_bottom`, `corner_tl`, `corner_tr`, `corner_bl`, `corner_br`
-- **Digits** (10): `digit_0`..`digit_9`
-- **Glyphs** (4): `glyph_colon`, `glyph_slash`, `glyph_dot`, `glyph_percent`
+- **Digits** (10): `digit_0`..`digit_9` — 5×7 bitmaps
+- **Glyphs** (7): `glyph_colon`, `glyph_slash`, `glyph_dot`, `glyph_percent`, `glyph_dash`, `glyph_underscore`, `glyph_arrow`
+- **Uppercase letters** (26): `letter_A`..`letter_Z` — 5×7 bitmaps, baseline at row 6
+- **Lowercase letters** (26): `letter_a`..`letter_z` — 5×8 bitmaps with x-height rows 2-6, ascenders at rows 0-1, descenders at row 7 for `g`/`j`/`p`/`q`/`y`. Aligns with uppercase baseline at row 6.
 
 ## Custom Sprites
 ```kotlin

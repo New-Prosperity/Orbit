@@ -21,7 +21,7 @@ private val GADGET_TAG = Tag.String("cosmetic:gadget")
 
 object GadgetManager {
 
-    private val cooldowns = ConcurrentHashMap<String, Cooldown<UUID>>()
+    private val cooldowns = ConcurrentHashMap<String, Cooldown<Unit>>()
     private val activeGadgets = ConcurrentHashMap<UUID, String>()
     private var eventNode: EventNode<*>? = null
 
@@ -31,6 +31,7 @@ object GadgetManager {
         val node = EventNode.all("gadget-manager")
         node.addListener(PlayerDisconnectEvent::class.java) { event ->
             unequip(event.player)
+            cleanupCooldowns(event.player.uuid)
         }
         MinecraftServer.getGlobalEventHandler().addChild(node)
         eventNode = node
@@ -61,6 +62,11 @@ object GadgetManager {
 
     fun isActive(playerId: UUID): Boolean = activeGadgets.containsKey(playerId)
 
+    private fun cleanupCooldowns(playerId: UUID) {
+        val suffix = ":$playerId"
+        cooldowns.keys.removeIf { it.endsWith(suffix) }
+    }
+
     fun onUse(player: Player) {
         val cosmeticId = activeGadgets[player.uuid] ?: return
         val definition = CosmeticRegistry[cosmeticId] ?: return
@@ -69,8 +75,9 @@ object GadgetManager {
         val resolved = definition.resolveData(level)
 
         val cooldownSec = resolved["cooldownSeconds"]?.toLongOrNull() ?: 5L
-        val cooldown = cooldowns.getOrPut(cosmeticId) { Cooldown(Duration.ofSeconds(cooldownSec)) }
-        if (!cooldown.tryUse(player.uuid)) return
+        val cooldownKey = "${cosmeticId}:${player.uuid}"
+        val cooldown = cooldowns.getOrPut(cooldownKey) { Cooldown(Duration.ofSeconds(cooldownSec)) }
+        if (!cooldown.tryUse(Unit)) return
 
         val action = resolved["action"] ?: return
         executeAction(player, action, resolved)

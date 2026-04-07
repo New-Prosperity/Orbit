@@ -114,5 +114,11 @@ object HudSpriteRegistry {
         register("glyph_slash", CELL_WIDTH, CELL_WIDTH, Color(0, 0, 0, 0))
         register("glyph_dot", CELL_WIDTH, CELL_WIDTH, Color(0, 0, 0, 0))
         register("glyph_percent", CELL_WIDTH, CELL_WIDTH, Color(0, 0, 0, 0))
+        register("glyph_dash", CELL_WIDTH, CELL_WIDTH, Color(0, 0, 0, 0))
+        register("glyph_underscore", CELL_WIDTH, CELL_WIDTH, Color(0, 0, 0, 0))
+        register("glyph_arrow", CELL_WIDTH, CELL_WIDTH, Color(0, 0, 0, 0))
+
+        for (ch in 'a'..'z') register("letter_$ch", CELL_WIDTH, CELL_WIDTH, Color(0, 0, 0, 0))
+        for (ch in 'A'..'Z') register("letter_$ch", CELL_WIDTH, CELL_WIDTH, Color(0, 0, 0, 0))
     }
 }

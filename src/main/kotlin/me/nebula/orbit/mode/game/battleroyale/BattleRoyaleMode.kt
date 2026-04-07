@@ -14,6 +14,8 @@ import me.nebula.orbit.progression.BattlePassManager
 import me.nebula.orbit.progression.mission.MissionTracker
 import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.orbit.utils.achievement.AchievementTriggerManager
+import me.nebula.gravity.cosmetic.CosmeticStore
+import me.nebula.gravity.party.PartyLookupStore
 import me.nebula.orbit.mode.game.GameMode
 import me.nebula.orbit.mode.game.GamePhase
 import me.nebula.orbit.mode.game.GameSettings
@@ -43,6 +45,7 @@ import me.nebula.orbit.utils.matchresult.matchResult
 import me.nebula.orbit.utils.deathrecap.DamageEntry
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
+import me.nebula.orbit.utils.spectatortoolkit.SpectatorTargetStats
 import me.nebula.orbit.utils.spectatortoolkit.SpectatorToolkit
 import me.nebula.orbit.utils.spectatortoolkit.spectatorToolkit
 import me.nebula.orbit.utils.stattracker.StatTracker
@@ -107,6 +110,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     @Volatile private var deathmatchActive = false
     @Volatile private var spawnBlocking = false
     private var spawnModeResult: SpawnModeResult? = null
+    private val playerMaps = ConcurrentHashMap<UUID, MutableSet<String>>()
 
     init {
         if (season.goldenHead.enabled) GoldenHeadManager.configure(season.goldenHead)
@@ -185,6 +189,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     }
 
     override fun onPlayingStart() {
+        brDeathRecapTracker.gameStartTime = System.currentTimeMillis()
         if (season.borderPhases.isNotEmpty()) {
             scheduleBorderPhases(borderSpeedMultiplier())
         } else {
@@ -258,11 +263,16 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
             attackerName = attacker?.displayUsername ?: event.damage.type.key().value(),
             amount = amount,
             source = if (attacker != null) "PLAYER" else event.damage.type.key().value(),
+            weapon = attacker?.itemInMainHand?.material(),
+            distance = attacker?.let { it.position.distance(victim.position) },
         ))
 
         if (victim.health - amount <= 0) {
             event.isCancelled = true
             victim.health = victim.getAttributeValue(Attribute.MAX_HEALTH).toFloat()
+            if (attacker != null && attacker.uuid != victim.uuid) {
+                MissionTracker.onDamageDealt(attacker, amount.toInt())
+            }
 
             val killerUuid = resolveKiller(victim)
             val killer = killerUuid?.let { MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(it) }
@@ -272,7 +282,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
                 BattleRoyaleKitManager.awardXp(killer, "kill")
                 LegendaryListener.notifyKill(killer, victim)
                 MissionTracker.onKill(killer)
-                BattlePassManager.addXpToAll(killer, 10)
+                BattlePassManager.addXpToAll(killer, applyPartyBonus(killer.uuid, 10L), activeSeasonPasses)
 
                 val killStreak = StatTracker.get(killer, "kills").toInt()
                 if (killStreak == 2) AchievementRegistry.complete(killer, "double_trouble")
@@ -332,6 +342,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
         LegendaryRegistry.clear()
         BattleRoyaleVoteManager.clear()
         votedValues.clear()
+        playerMaps.clear()
 
         if (isDualInstance && _generatedMap != null) {
             _generatedMap = null
@@ -377,15 +388,51 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
 
             if (player != null) {
                 MissionTracker.onGamePlayed(player)
-                BattlePassManager.addXpToAll(player, 50)
+                MissionTracker.onPlayGamemode(player, "battleroyale")
+                BattlePassManager.addXpToAll(player, applyPartyBonus(uuid, 50L), activeSeasonPasses)
 
                 if (isWinner) {
                     MissionTracker.onWin(player)
-                    BattlePassManager.addXpToAll(player, 100)
+                    MissionTracker.onWinGamemode(player, "battleroyale")
+                    BattlePassManager.addXpToAll(player, applyPartyBonus(uuid, 100L), activeSeasonPasses)
 
                     if (tracker.deathsOf(uuid) == 0) {
                         AchievementRegistry.complete(player, "invincible")
                     }
+
+                    if (kills == 0) {
+                        AchievementRegistry.complete(player, "pacifist")
+                    }
+
+                    if (player.health < 4f) {
+                        AchievementRegistry.complete(player, "close_call")
+                    }
+
+                    if (gameDuration < 300_000L) {
+                        AchievementRegistry.complete(player, "speed_demon")
+                    }
+                }
+
+                if (PartyLookupStore.exists(uuid)) {
+                    AchievementRegistry.progress(player, "party_animal", 1)
+                }
+
+                if (Orbit.hostOwner != null && Orbit.hostOwner == uuid) {
+                    AchievementRegistry.progress(player, "host_master", 1)
+                }
+
+                val mapName = Orbit.mapName
+                if (mapName != null) {
+                    AchievementTriggerManager.evaluate(player, "unique_maps_played", countUniqueMap(uuid, mapName))
+                }
+
+                if (kills >= 3) {
+                    AchievementRegistry.progress(player, "berserker", 1)
+                }
+
+                val cosmeticData = CosmeticStore.load(uuid)
+                if (cosmeticData != null) {
+                    AchievementTriggerManager.evaluate(player, "cosmetics_owned", cosmeticData.owned.size.toLong())
                 }
 
                 val stats = StatsStore.load(uuid)
@@ -396,6 +443,12 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
                         AchievementTriggerManager.evaluate(player, "br_kills", brStats.kills.toLong())
                         AchievementTriggerManager.evaluate(player, "br_wins", brStats.wins.toLong())
                     }
+                }
+
+                val nonHiddenTotal = AchievementRegistry.totalNonHiddenCount()
+                val nonHiddenCompleted = AchievementRegistry.completedNonHiddenCount(uuid)
+                if (nonHiddenTotal > 0 && nonHiddenCompleted >= nonHiddenTotal) {
+                    AchievementRegistry.complete(player, "completionist")
                 }
             }
         }
@@ -417,24 +470,48 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
                     MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(it)
                 }
             }
+            speedSteps(1f, 2f, 4f)
+            hud()
+            freeCamera()
+            hideOtherSpectators()
+            aliveCount { mode.tracker.aliveCount }
+            gameTimer { mode.formatRemainingTime() }
+            targetStats { target ->
+                SpectatorTargetStats(
+                    kills = StatTracker.get(target, "kills").toInt(),
+                    team = mode.tracker.teamOf(target.uuid),
+                )
+            }
         }
     }
 
-    override fun buildKillFeed(): KillFeed = killFeed {
-        tracker(this@BattleRoyaleMode.tracker)
-        firstBlood("orbit.killfeed.first_blood")
-        multiKillWindow(5000L)
-        multiKill(2, "orbit.killfeed.double_kill")
-        multiKill(3, "orbit.killfeed.triple_kill")
-        multiKill(4, "orbit.killfeed.quad_kill")
-        multiKill(5, "orbit.killfeed.penta_kill")
-        streak(3, "orbit.killfeed.streak_3")
-        streak(5, "orbit.killfeed.streak_5")
-        streak(10, "orbit.killfeed.streak_10")
-        broadcastTo { gameInstance.players }
+    private fun formatRemainingTime(): String {
+        val elapsedSec = ((System.currentTimeMillis() - gameStartTime) / 1000L).coerceAtLeast(0L)
+        val remaining = (resolveGameDuration() - elapsedSec).coerceAtLeast(0L)
+        val minutes = remaining / 60
+        val seconds = remaining % 60
+        return "%d:%02d".format(minutes, seconds)
     }
 
-    override fun buildDeathRecapTracker(): DeathRecapTracker = DeathRecapTracker()
+    override fun buildKillFeed(): KillFeed {
+        val mode = this
+        return killFeed {
+            tracker(this@BattleRoyaleMode.tracker)
+            firstBlood("orbit.killfeed.first_blood")
+            multiKillWindow(5000L)
+            multiKill(2, "orbit.killfeed.double_kill")
+            multiKill(3, "orbit.killfeed.triple_kill")
+            multiKill(4, "orbit.killfeed.quad_kill")
+            multiKill(5, "orbit.killfeed.penta_kill")
+            streak(3, "orbit.killfeed.streak_3")
+            streak(5, "orbit.killfeed.streak_5")
+            streak(10, "orbit.killfeed.streak_10")
+            broadcastTo { gameInstance.players }
+            effect { event, _ ->
+                mode.spectatorToolkit?.recordKill(event.killer?.username, event.victim.username)
+            }
+        }
+    }
 
     override fun buildRewardDistributor(): RewardDistributor = rewardDistributor {
         announcement("orbit.reward.earned")
@@ -530,6 +607,12 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
         0 -> 0.6
         2 -> 1.5
         else -> 1.0
+    }
+
+    private fun countUniqueMap(uuid: UUID, mapName: String): Long {
+        val maps = playerMaps.computeIfAbsent(uuid) { ConcurrentHashMap.newKeySet() }
+        maps.add(mapName)
+        return maps.size.toLong()
     }
 
     private fun buildResult(winner: Player?): MatchResult {

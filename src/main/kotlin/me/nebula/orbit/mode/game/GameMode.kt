@@ -2,21 +2,30 @@ package me.nebula.orbit.mode.game
 
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.hazelcast.Store
+import me.nebula.orbit.progression.PartyBonusCalculator
+import me.nebula.gravity.battlepass.BattlePassDefinition
 import me.nebula.gravity.host.ConsumeTicketProcessor
 import me.nebula.gravity.host.HostTicketStore
 import me.nebula.gravity.messaging.GameEndMessage
+import me.nebula.gravity.rating.ApplyRatingChangeProcessor
+import me.nebula.gravity.rating.EloCalculator
+import me.nebula.gravity.rating.GameModeRating
+import me.nebula.gravity.rating.RatingStore
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.rank.RankManager
 import me.nebula.gravity.reconnection.ReconnectionData
 import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.displayUsername
+import me.nebula.orbit.utils.botai.BotLobbyFiller
 import me.nebula.orbit.mode.ServerMode
+import me.nebula.orbit.mutator.MutatorEngine
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.PlaceholderResolver
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
 import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.achievement.AchievementRegistry
+import me.nebula.orbit.utils.achievement.AchievementTriggerManager
 import me.nebula.orbit.utils.ceremony.Ceremony
 import me.nebula.orbit.utils.combo.ComboConfig
 import me.nebula.orbit.utils.combo.install
@@ -24,7 +33,12 @@ import me.nebula.orbit.utils.combo.uninstall
 import me.nebula.orbit.utils.deathrecap.DamageEntry
 import me.nebula.orbit.utils.deathrecap.DeathRecapTracker
 import me.nebula.orbit.utils.gamechat.GameChatPipeline
+import me.nebula.gravity.messaging.ReplayHighlightMessage
+import me.nebula.orbit.utils.replay.HighlightType
 import me.nebula.orbit.utils.replay.PacketReplayRecorder
+import me.nebula.orbit.utils.replay.ReplayHighlights
+import me.nebula.orbit.utils.replay.ReplayMetadata
+import me.nebula.orbit.utils.replay.ReplayRecorder
 import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.orbit.utils.killfeed.KillEvent
 import me.nebula.orbit.utils.killfeed.KillFeed
@@ -57,6 +71,8 @@ import me.nebula.orbit.translation.resolveTranslated
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.sound.playSound
+import me.nebula.orbit.progression.BattlePassRegistry
+import me.nebula.orbit.progression.mission.MissionTracker
 import me.nebula.orbit.utils.vanish.VanishManager
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
@@ -65,6 +81,8 @@ import net.minestom.server.entity.damage.EntityDamage
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.GlobalEventHandler
 import net.minestom.server.event.entity.EntityDamageEvent
+import net.minestom.server.event.player.PlayerBlockBreakEvent
+import net.minestom.server.event.player.PlayerBlockPlaceEvent
 import net.minestom.server.event.player.PlayerChatEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerMoveEvent
@@ -131,7 +149,7 @@ abstract class GameMode : ServerMode {
     open fun buildChatPipeline(): GameChatPipeline? = null
     open fun buildSpectatorToolkit(): SpectatorToolkit? = null
     open fun buildKillFeed(): KillFeed? = null
-    open fun buildDeathRecapTracker(): DeathRecapTracker? = null
+    open fun buildDeathRecapTracker(): DeathRecapTracker? = DeathRecapTracker()
     open fun buildRewardDistributor(): RewardDistributor? = null
     open fun buildCeremony(result: MatchResult): Ceremony? = null
     protected open fun buildComboCounter(): ComboConfig? = null
@@ -159,12 +177,105 @@ abstract class GameMode : ServerMode {
 
     protected open fun persistGameStats(result: MatchResult) {}
 
+    private fun applyRatingChanges() {
+        val gameModeName = Orbit.gameMode ?: return
+        val gameDurationTicks = ((System.currentTimeMillis() - gameStartTime) / 50).coerceAtLeast(1)
+
+        data class PlayerRatingInput(
+            val uuid: UUID,
+            val rating: Int,
+            val placement: Int,
+            val gamesPlayed: Int,
+            val consecutiveGains: Int,
+            val survivalTicks: Long,
+        )
+
+        val playerData = mutableListOf<PlayerRatingInput>()
+        for (uuid in tracker.all) {
+            val placement = placements[uuid] ?: initialPlayerCount
+            val ratingData = RatingStore.load(uuid)
+            val gmRating = ratingData?.ratings?.get(gameModeName) ?: GameModeRating()
+            val survivalTicks = gameDurationTicks * placement / initialPlayerCount.coerceAtLeast(1)
+            playerData.add(PlayerRatingInput(uuid, gmRating.rating, placement, gmRating.gamesPlayed, gmRating.consecutiveGains, survivalTicks))
+        }
+
+        if (playerData.size < 2) return
+
+        val lobbyAvg = EloCalculator.lobbyAverage(playerData.map { it.rating })
+
+        for (pd in playerData) {
+            val opponents = playerData.filter { it.uuid != pd.uuid }.map { it.rating to it.placement }
+            val delta = EloCalculator.calculateDelta(
+                playerRating = pd.rating,
+                playerPlacement = pd.placement,
+                opponents = opponents,
+                gamesPlayed = pd.gamesPlayed,
+                consecutiveGains = pd.consecutiveGains,
+                survivalTicks = pd.survivalTicks,
+                totalGameTicks = gameDurationTicks,
+            )
+
+            val updated = RatingStore.executeOnKey(pd.uuid, ApplyRatingChangeProcessor(
+                gameMode = gameModeName,
+                change = delta,
+                placement = pd.placement,
+                lobbySize = playerData.size,
+                lobbyAvgRating = lobbyAvg,
+            ))
+
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(pd.uuid) ?: continue
+            val oldRating = pd.rating
+            val newRating = updated.rating
+            val changeStr = if (delta >= 0) "<green>+$delta" else "<red>$delta"
+            val tier = EloCalculator.tierOf(newRating)
+            val oldTier = EloCalculator.tierOf(oldRating)
+
+            player.sendMessage(player.translate(
+                "orbit.rating.change",
+                "old" to oldRating.toString(),
+                "new" to newRating.toString(),
+                "change" to changeStr,
+                "tier" to "${tier.color}${tier.displayName}",
+                "placement" to pd.placement.toString(),
+                "lobby" to playerData.size.toString(),
+            ))
+
+            if (tier != oldTier && newRating > oldRating) {
+                player.sendMessage(player.translate(
+                    "orbit.rating.tier_up",
+                    "tier" to "${tier.color}${tier.displayName}",
+                ))
+            } else if (tier != oldTier && newRating < oldRating) {
+                player.sendMessage(player.translate(
+                    "orbit.rating.tier_down",
+                    "tier" to "${tier.color}${tier.displayName}",
+                ))
+            }
+        }
+    }
+
     val phase: GamePhase get() = stateMachine.current
     val tracker = PlayerTracker()
     protected var gameStartTime: Long = 0L
         private set
     var initialPlayerCount: Int = 0
         private set
+
+    @Volatile protected var gamePartySnapshot: Map<UUID, Set<UUID>> = emptyMap()
+        private set
+
+    @Volatile protected var partyBonuses: Map<UUID, PartyBonusCalculator.PartyBonus> = emptyMap()
+        private set
+
+    protected fun applyPartyBonus(uuid: UUID, baseAmount: Long): Long {
+        val bonus = partyBonuses[uuid] ?: return baseAmount
+        return (baseAmount * bonus.multiplier).toLong()
+    }
+
+    protected fun applyPartyBonus(uuid: UUID, baseAmount: Double): Double {
+        val bonus = partyBonuses[uuid] ?: return baseAmount
+        return baseAmount * bonus.multiplier
+    }
 
     val isTeamMode: Boolean get() = settings.teams?.let { it.teamCount > 0 } ?: false
     val isFriendlyFireEnabled: Boolean get() = settings.teams?.friendlyFire ?: true
@@ -185,9 +296,14 @@ abstract class GameMode : ServerMode {
     @Volatile private var overtimeTask: Task? = null
     @Volatile private var voidCheckTask: Task? = null
     @Volatile private var waitingActionBarTask: Task? = null
+    @Volatile private var survivalMinuteTask: Task? = null
+    @Volatile private var walkDistanceTask: Task? = null
+    private val lastKnownPositions = ConcurrentHashMap<UUID, Pos>()
+    private val damageTakenCounters = ConcurrentHashMap<UUID, java.util.concurrent.atomic.AtomicLong>()
     private val placements = ConcurrentHashMap<UUID, Int>()
     private var eliminationOrder = 0
     private var totalKillCount = 0
+    @Volatile private var coreNode: EventNode<*>? = null
     @Volatile private var freezeEventNode: EventNode<*>? = null
     @Volatile private var gameMechanicsNode: EventNode<*>? = null
     @Volatile private var reconnectWindowExpired = false
@@ -196,13 +312,19 @@ abstract class GameMode : ServerMode {
     @Volatile private var _isOvertime = false
     @Volatile private var _isSuddenDeath = false
     @Volatile private var chatPipeline: GameChatPipeline? = null
-    @Volatile private var spectatorToolkit: SpectatorToolkit? = null
+    @Volatile var spectatorToolkit: SpectatorToolkit? = null
+        private set
     @Volatile private var killFeed: KillFeed? = null
-    @Volatile private var deathRecapTracker: DeathRecapTracker? = null
+    @Volatile var deathRecapTracker: DeathRecapTracker? = null
+        private set
     @Volatile private var rewardDistributor: RewardDistributor? = null
     @Volatile private var ceremony: Ceremony? = null
     @Volatile protected var comboCounter: ComboConfig? = null
     private val replayRecorder = PacketReplayRecorder()
+    private val semanticRecorder = ReplayRecorder()
+    @Volatile private var positionRecordTask: Task? = null
+    @Volatile var activeSeasonPasses: List<BattlePassDefinition> = emptyList()
+        private set
 
     override val spawnPoint: Pos by lazy { settings.spawn.toPos() }
 
@@ -302,22 +424,27 @@ abstract class GameMode : ServerMode {
         scoreboard = buildLiveScoreboard()
         tabList = buildLiveTabList()
 
-        handler.addListener(PlayerSpawnEvent::class.java) { event ->
+        val node = EventNode.all("gamemode-core-${this::class.simpleName?.lowercase()}")
+
+        node.addListener(PlayerSpawnEvent::class.java) { event ->
             if (!event.isFirstSpawn) return@addListener
             handlePlayerJoin(event.player)
         }
 
-        handler.addListener(PlayerDisconnectEvent::class.java) { event ->
+        node.addListener(PlayerDisconnectEvent::class.java) { event ->
             handlePlayerDisconnect(event.player)
         }
 
-        handler.addListener(PlayerUseItemEvent::class.java) { event ->
+        node.addListener(PlayerUseItemEvent::class.java) { event ->
             if (event.player.heldSlot.toInt() != 8) return@addListener
             if (Orbit.hostOwner != event.player.uuid) return@addListener
             if (phase != GamePhase.WAITING && phase != GamePhase.STARTING) return@addListener
             if (tracker.aliveCount < 2) return@addListener
             forceStart()
         }
+
+        handler.addChild(node)
+        coreNode = node
 
         stateMachine.forceTransition(GamePhase.WAITING)
         logger.info { "Game mode installed: ${this::class.simpleName}" }
@@ -343,10 +470,21 @@ abstract class GameMode : ServerMode {
         cleanupAfkCheck()
         cleanupOvertime()
         cleanupFreezeNode()
+        MutatorEngine.cleanup(activeInstance)
+        coreNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        coreNode = null
         cleanupGameMechanicsNode()
         cleanupVoidCheck()
         waitingActionBarTask?.cancel()
         waitingActionBarTask = null
+        survivalMinuteTask?.cancel()
+        survivalMinuteTask = null
+        walkDistanceTask?.cancel()
+        walkDistanceTask = null
+        positionRecordTask?.cancel()
+        positionRecordTask = null
+        lastKnownPositions.clear()
+        damageTakenCounters.clear()
         stateMachine.destroy()
     }
 
@@ -362,6 +500,7 @@ abstract class GameMode : ServerMode {
         eliminationOrder++
         val placement = initialPlayerCount - eliminationOrder + 1
         placements[player.uuid] = placement
+        if (placement in 1..3) MissionTracker.onTopPlacement(player)
         player.sendMessage(player.translate("orbit.game.placement",
             "place" to placement.toString(),
             "total" to initialPlayerCount.toString()))
@@ -389,6 +528,7 @@ abstract class GameMode : ServerMode {
         if (!tracker.isAlive(player.uuid)) return
 
         tracker.recordDeath(player.uuid)
+        semanticRecorder.recordDeath(player, killer)
         runCatching { AchievementRegistry.progress(player, "deaths", 1) }
 
         if (killer != null && killer.uuid != player.uuid) {
@@ -402,6 +542,7 @@ abstract class GameMode : ServerMode {
             }
             val streak = tracker.streakOf(killer.uuid)
             if (streak > 1) onKillStreak(killer, streak)
+            if (streak >= 3) MissionTracker.onKillStreak(killer)
         }
 
         creditAssists(player.uuid, killer?.uuid)
@@ -557,6 +698,8 @@ abstract class GameMode : ServerMode {
         for (damager in damagers) {
             if (damager != killerUuid && damager != victimUuid) {
                 tracker.recordAssist(damager)
+                val assister = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(damager)
+                if (assister != null) MissionTracker.onAssist(assister)
             }
         }
     }
@@ -890,6 +1033,13 @@ abstract class GameMode : ServerMode {
 
                 if (attacker != null && attacker.uuid != victim.uuid) {
                     tracker.recordDamage(attacker.uuid, victim.uuid)
+                    MissionTracker.onDamageDealt(attacker, damage.amount.toInt())
+                }
+
+                runCatching {
+                    val counter = damageTakenCounters.computeIfAbsent(victim.uuid) { java.util.concurrent.atomic.AtomicLong() }
+                    val totalDamage = counter.addAndGet(damage.amount.toLong())
+                    AchievementTriggerManager.evaluate(victim, "total_damage_taken", totalDamage)
                 }
 
                 deathRecapTracker?.recordDamage(victim.uuid, DamageEntry(
@@ -897,6 +1047,8 @@ abstract class GameMode : ServerMode {
                     attackerName = attacker?.displayUsername ?: damage.type.key().value(),
                     amount = damage.amount,
                     source = if (attacker != null) "PLAYER" else damage.type.key().value(),
+                    weapon = attacker?.itemInMainHand?.material(),
+                    distance = attacker?.let { it.position.distance(victim.position) },
                 ))
             }
         }
@@ -924,6 +1076,25 @@ abstract class GameMode : ServerMode {
                     if (senderAlive && !recipientAlive) return@removeIf true
                     false
                 }
+            }
+        }
+
+        hasListeners = true
+        node.addListener(PlayerChatEvent::class.java) { event ->
+            if (phase == GamePhase.PLAYING) {
+                semanticRecorder.recordChat(event.player, event.rawMessage)
+            }
+        }
+
+        node.addListener(PlayerBlockBreakEvent::class.java) { event ->
+            if (phase == GamePhase.PLAYING && tracker.isAlive(event.player.uuid)) {
+                MissionTracker.onMineBlock(event.player)
+            }
+        }
+
+        node.addListener(PlayerBlockPlaceEvent::class.java) { event ->
+            if (phase == GamePhase.PLAYING && tracker.isAlive(event.player.uuid)) {
+                MissionTracker.onPlaceBlock(event.player)
             }
         }
 
@@ -1015,10 +1186,19 @@ abstract class GameMode : ServerMode {
         comboCounter = null
         lobbyInstance.players.forEach { it.removeTag(spectatorTargetTag) }
         _gameInstance?.players?.forEach { it.removeTag(spectatorTargetTag) }
+        survivalMinuteTask?.cancel()
+        survivalMinuteTask = null
+        walkDistanceTask?.cancel()
+        walkDistanceTask = null
+        positionRecordTask?.cancel()
+        positionRecordTask = null
+        lastKnownPositions.clear()
         tracker.clear()
         lastEndResult = null
         gameStartTime = 0L
         initialPlayerCount = 0
+        gamePartySnapshot = emptyMap()
+        partyBonuses = emptyMap()
         placements.clear()
         eliminationOrder = 0
         totalKillCount = 0
@@ -1115,6 +1295,11 @@ abstract class GameMode : ServerMode {
 
         gameStartTime = System.currentTimeMillis()
         initialPlayerCount = tracker.aliveCount
+        activeSeasonPasses = BattlePassRegistry.activePasses()
+        gamePartySnapshot = PartyBonusCalculator.buildPartySnapshot(tracker.all)
+        partyBonuses = tracker.all.associateWith {
+            PartyBonusCalculator.calculateBonus(it, gamePartySnapshot)
+        }
 
         Orbit.hostOwner?.let { owner ->
             if (!RankManager.hasPermission(owner, "*")) {
@@ -1221,10 +1406,41 @@ abstract class GameMode : ServerMode {
         spectatorToolkit?.install()
 
         killFeed = buildKillFeed()
-        deathRecapTracker = buildDeathRecapTracker()
+        deathRecapTracker = buildDeathRecapTracker()?.also { it.gameStartTime = gameStartTime }
         rewardDistributor = buildRewardDistributor()
 
         replayRecorder.start(gameInstance)
+        semanticRecorder.start(gameInstance)
+        for (player in alivePlayers) {
+            semanticRecorder.recordPlayerJoin(player)
+        }
+        positionRecordTask = repeat(4) {
+            if (phase != GamePhase.PLAYING) return@repeat
+            for (uuid in tracker.alive.toSet()) {
+                val p = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
+                semanticRecorder.recordPosition(p)
+            }
+        }
+
+        survivalMinuteTask = repeat(1200) {
+            if (phase != GamePhase.PLAYING) return@repeat
+            for (uuid in tracker.alive.toSet()) {
+                val p = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
+                MissionTracker.onSurvivalMinute(p)
+            }
+        }
+
+        walkDistanceTask = repeat(20) {
+            if (phase != GamePhase.PLAYING) return@repeat
+            for (uuid in tracker.alive.toSet()) {
+                val p = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
+                val last = lastKnownPositions.put(uuid, p.position) ?: continue
+                val dx = p.position.x() - last.x()
+                val dz = p.position.z() - last.z()
+                val dist = kotlin.math.sqrt(dx * dx + dz * dz).toInt()
+                if (dist > 0) MissionTracker.onWalkDistance(p, dist)
+            }
+        }
 
         onPlayingStart()
     }
@@ -1246,8 +1462,14 @@ abstract class GameMode : ServerMode {
     }
 
     private fun enterEnding() {
+        BotLobbyFiller.stopFilling(Orbit.serverName)
         gameTimer?.stop()
         gameTimer = null
+        survivalMinuteTask?.cancel()
+        survivalMinuteTask = null
+        walkDistanceTask?.cancel()
+        walkDistanceTask = null
+        lastKnownPositions.clear()
         GracePeriodManager.clearAll()
         cleanupReconnectionState()
         cleanupRespawnTimers()
@@ -1260,6 +1482,8 @@ abstract class GameMode : ServerMode {
 
         for (uuid in tracker.alive.toSet()) {
             placements[uuid] = 1
+            val winner = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+            if (winner != null) MissionTracker.onTopPlacement(winner)
         }
 
         val result = lastEndResult ?: matchResult { draw() }
@@ -1274,26 +1498,75 @@ abstract class GameMode : ServerMode {
         }
 
         persistGameStats(result)
+        if (Orbit.hostOwner == null) {
+            runCatching { applyRatingChanges() }
+                .onFailure { logger.warn { "Failed to apply rating changes: ${it.message}" } }
+        } else {
+            logger.info { "Skipping rating changes for hosted game (host=${Orbit.hostOwner})" }
+        }
+
+        positionRecordTask?.cancel()
+        positionRecordTask = null
+        val semanticData = semanticRecorder.stop()
 
         if (replayRecorder.isRecording && ReplayStorage.isInitialized()) {
             val replayName = "${Orbit.serverName}-${System.currentTimeMillis()}"
+            val gm = Orbit.gameMode ?: "unknown"
+            val map = Orbit.mapName ?: ""
             Thread.startVirtualThread {
                 runCatching {
                     val replayFile = replayRecorder.buildReplayFile(
                         gameInstance,
                         replayName,
-                        Orbit.gameMode ?: "unknown",
-                        Orbit.mapName ?: "",
+                        gm,
+                        map,
                     )
                     ReplayStorage.saveBinary(replayName, replayFile)
                     logger.info { "Replay saved: $replayName (${replayFile.rawPackets.size} packets)" }
+
+                    val semanticFrames = semanticData.frames.map { it.tickOffset to it }
+                    val metadata = ReplayMetadata(
+                        gameMode = gm,
+                        mapName = map,
+                        recordedAt = System.currentTimeMillis(),
+                        playerCount = initialPlayerCount,
+                        durationTicks = semanticData.durationTicks,
+                    )
+                    ReplayStorage.save("$replayName-semantic", semanticData, metadata)
+
+                    val highlights = ReplayHighlights.detect(semanticFrames, metadata)
+                    for (highlight in highlights) {
+                        if (highlight.type == HighlightType.MULTI_KILL ||
+                            highlight.type == HighlightType.CLUTCH) {
+                            runCatching {
+                                NetworkMessenger.publish(ReplayHighlightMessage(
+                                    replayName = replayName,
+                                    gameMode = gm,
+                                    mapName = map,
+                                    playerName = semanticData.playerNames[highlight.playerUuid] ?: highlight.playerUuid.toString(),
+                                    highlightType = highlight.type.name,
+                                    description = highlight.description,
+                                ))
+                            }
+                        }
+                    }
                 }.onFailure { logger.warn { "Failed to save replay: ${it.message}" } }
             }
         } else if (replayRecorder.isRecording) {
             replayRecorder.stop(gameInstance)
         }
 
-        rewardDistributor?.distribute(result, tracker.all)
+        rewardDistributor?.distribute(result, tracker.all, partyBonuses)
+
+        for (uuid in tracker.all) {
+            val bonus = partyBonuses[uuid] ?: continue
+            if (bonus.bonusPercent <= 0) continue
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
+            player.sendMessage(player.translate("orbit.party.bonus_applied",
+                "percent" to bonus.bonusPercent.toString(),
+                "members" to bonus.partyMembersInGame.toString(),
+            ))
+        }
 
         val allPlayers = gameInstance.players.toList()
         MatchResultDisplay.broadcast(allPlayers, result)

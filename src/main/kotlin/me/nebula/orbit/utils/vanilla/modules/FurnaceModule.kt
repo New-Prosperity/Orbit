@@ -20,7 +20,7 @@ import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import java.util.concurrent.ConcurrentHashMap
 
-private val SMELTING_RECIPES = mapOf(
+internal val SMELTING_RECIPES = mapOf(
     Material.IRON_ORE to Material.IRON_INGOT,
     Material.DEEPSLATE_IRON_ORE to Material.IRON_INGOT,
     Material.RAW_IRON to Material.IRON_INGOT,
@@ -89,7 +89,7 @@ private data class FurnaceState(
     var cookProgress: Int = 0,
 )
 
-private val FURNACE_NAMES = setOf("minecraft:furnace", "minecraft:blast_furnace", "minecraft:smoker")
+internal val FURNACE_NAMES = setOf("minecraft:furnace", "minecraft:blast_furnace", "minecraft:smoker")
 
 private class FurnaceBlockHandler(
     private val key: Key,

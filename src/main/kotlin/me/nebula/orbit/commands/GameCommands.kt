@@ -3,6 +3,7 @@ package me.nebula.orbit.commands
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.game.GameMode
 import me.nebula.orbit.mode.game.GamePhase
+import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.chat.sendMM
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.commandbuilder.suggestPlayers
@@ -25,6 +26,7 @@ fun installGameCommands(commandManager: CommandManager) {
         forceEndCommand(),
         phaseCommand(),
         aliveCommand(),
+        lastDeathCommand(),
     ).forEach(commandManager::register)
 }
 
@@ -195,5 +197,21 @@ private fun aliveCommand() = command("alive") {
             val names = disconnected.map { it.toString().take(8) }
             player.sendMM("<yellow>Disconnected: <white>${names.joinToString(", ")}")
         }
+    }
+}
+
+private fun lastDeathCommand() = command("lastdeath") {
+    onPlayerExecute {
+        val gm = gameMode() ?: run {
+            player.sendMM("<red>Not in a game mode")
+            return@onPlayerExecute
+        }
+        val tracker = gm.deathRecapTracker
+        val lines = tracker?.getLastRecap(player.uuid)
+        if (lines == null) {
+            player.sendMessage(player.translate("orbit.deathrecap.no_recap"))
+            return@onPlayerExecute
+        }
+        lines.forEach(player::sendMessage)
     }
 }

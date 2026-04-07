@@ -48,6 +48,14 @@ object CosmeticListener {
 
         node.addListener(PlayerSpawnEvent::class.java) { event ->
             val player = event.player
+
+            if (!event.isFirstSpawn) {
+                PetManager.despawn(player.uuid)
+                CompanionManager.despawn(player.uuid)
+                CosmeticMountManager.despawn(player.uuid)
+                GadgetManager.unequip(player)
+            }
+
             val data = loadEquipped(player) ?: return@addListener
 
             val armorSkinId = data.equipped[CosmeticCategory.ARMOR_SKIN.name]
@@ -145,6 +153,10 @@ object CosmeticListener {
             val level = data.owned[gravestoneId] ?: 1
             GravestoneManager.spawn(instance, deathPosition, gravestoneId, level, playerUuid = player.uuid)
         }
+
+        PetManager.despawn(player.uuid)
+        CompanionManager.despawn(player.uuid)
+        CosmeticMountManager.despawn(player.uuid)
     }
 
     fun onGameWon(winner: Player) {

@@ -16,6 +16,7 @@ import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.min
 
 object SelectorMenu {
 
@@ -93,6 +94,10 @@ object SelectorMenu {
         player.sendMessage(player.translate("orbit.queue.joined", "gamemode" to displayName))
 
         if (members.size > 1) {
+            val bonusPercent = min((members.size - 1) * 5, 20)
+            player.sendMessage(player.translate("orbit.party.queue_bonus",
+                "bonus" to bonusPercent.toString()))
+
             val nonLeader = members.filter { it != player.uuid }
             if (nonLeader.isNotEmpty()) {
                 NetworkMessenger.publish(PartyQueueNotificationMessage(

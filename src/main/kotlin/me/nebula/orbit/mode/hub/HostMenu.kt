@@ -11,6 +11,7 @@ import me.nebula.gravity.party.PartyManager
 import me.nebula.gravity.queue.PoolConfig
 import me.nebula.gravity.queue.PoolConfigStore
 import me.nebula.gravity.rank.RankManager
+import me.nebula.orbit.mutator.MutatorRegistry
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.gui.confirmGui
@@ -64,7 +65,7 @@ object HostMenu {
                     if (config.maps.size > 1) {
                         openMapMenu(p, config)
                     } else {
-                        openConfirmMenu(p, config, config.maps.firstOrNull())
+                        openMutatorMenu(p, config, config.maps.firstOrNull())
                     }
                 }
                 slotIndex++
@@ -82,7 +83,7 @@ object HostMenu {
                 slot(slotIndex, itemStack(Material.FILLED_MAP) {
                     name(player.translateRaw("orbit.host.map.name", "map" to map))
                     clean()
-                }) { p -> openConfirmMenu(p, config, map) }
+                }) { p -> openMutatorMenu(p, config, map) }
                 slotIndex++
             }
             slot(18, itemStack(Material.ARROW) {
@@ -94,13 +95,72 @@ object HostMenu {
         player.openGui(gui)
     }
 
-    private fun openConfirmMenu(player: Player, config: PoolConfig, map: String?) {
+    private fun openMutatorMenu(player: Player, config: PoolConfig, map: String?, selected: MutableSet<String> = mutableSetOf()) {
+        val mutators = MutatorRegistry.all().filter { !it.random }
+
+        val gui = gui(player.translateRaw("orbit.host.mutators.title"), rows = 5) {
+            fillDefault()
+            var slotIndex = 10
+            for (mutator in mutators) {
+                if (slotIndex > 34) break
+                if (slotIndex % 9 == 0) slotIndex++
+                if (slotIndex % 9 == 8) slotIndex += 2
+
+                val active = mutator.id in selected
+                val material = Material.fromKey(mutator.material) ?: Material.PAPER
+                slot(slotIndex, itemStack(material) {
+                    name(player.translateRaw(mutator.nameKey))
+                    lore(player.translateRaw(mutator.descriptionKey))
+                    if (active) {
+                        lore("")
+                        lore("<green>${player.translateRaw("orbit.host.mutators.active")}")
+                        glowing()
+                    }
+                    clean()
+                }) { p ->
+                    if (active) {
+                        selected.remove(mutator.id)
+                    } else {
+                        if (mutator.conflictGroup != null) {
+                            selected.removeAll { id ->
+                                MutatorRegistry[id]?.conflictGroup == mutator.conflictGroup
+                            }
+                        }
+                        selected.add(mutator.id)
+                    }
+                    openMutatorMenu(p, config, map, selected)
+                }
+                slotIndex++
+            }
+
+            slot(40, itemStack(Material.EMERALD_BLOCK) {
+                name("<green>${player.translateRaw("orbit.host.mutators.confirm")}")
+                if (selected.isNotEmpty()) {
+                    lore(player.translateRaw("orbit.host.mutators.selected", "count" to selected.size.toString()))
+                }
+                clean()
+            }) { p -> openConfirmMenu(p, config, map, selected.toList()) }
+
+            slot(36, itemStack(Material.ARROW) {
+                name(player.translateRaw("orbit.host.back"))
+                clean()
+            }) { p ->
+                if (config.maps.size > 1) openMapMenu(p, config) else openGameModeMenu(p)
+            }
+        }
+        player.openGui(gui)
+    }
+
+    private fun openConfirmMenu(player: Player, config: PoolConfig, map: String?, mutators: List<String>) {
         val confirm = confirmGui(
             title = player.translateRaw("orbit.host.confirm.title"),
             confirmItem = itemStack(Material.EMERALD_BLOCK) {
                 name(player.translateRaw("orbit.host.confirm.accept"))
                 lore(player.translateRaw("orbit.host.confirm.gamemode", "gamemode" to config.gameMode))
                 map?.let { lore(player.translateRaw("orbit.host.confirm.map", "map" to it)) }
+                if (mutators.isNotEmpty()) {
+                    lore(player.translateRaw("orbit.host.confirm.mutators", "count" to mutators.size.toString()))
+                }
                 lore(player.translateRaw("orbit.host.confirm.cost"))
                 clean()
             },
@@ -108,13 +168,13 @@ object HostMenu {
                 name(player.translateRaw("orbit.host.confirm.cancel"))
                 clean()
             },
-            onConfirm = { p -> confirm(p, config, map) },
+            onConfirm = { p -> confirm(p, config, map, mutators) },
             onCancel = { p -> openGameModeMenu(p) },
         )
         player.openGui(confirm)
     }
 
-    private fun confirm(player: Player, config: PoolConfig, map: String?) {
+    private fun confirm(player: Player, config: PoolConfig, map: String?, mutators: List<String> = emptyList()) {
         player.closeInventory()
 
         if (!pendingPlayers.add(player.uuid)) {
@@ -143,11 +203,12 @@ object HostMenu {
             hostOwner = player.uuid,
             gameMode = config.gameMode,
             map = map,
-            members = members
+            members = members,
+            mutators = mutators,
         ))
 
         player.sendMessage(player.translate("orbit.host.status.requested"))
-        logger.info { "Host request published: id=$requestId, host=${player.uuid}, gameMode=${config.gameMode}, map=$map, members=${members.size}" }
+        logger.info { "Host request published: id=$requestId, host=${player.uuid}, gameMode=${config.gameMode}, map=$map, mutators=$mutators, members=${members.size}" }
     }
 
 }

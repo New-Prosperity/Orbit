@@ -19,6 +19,7 @@ import me.nebula.orbit.utils.gui.paginatedGui
 import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
+import java.util.UUID
 
 object CosmeticMenu {
 
@@ -71,7 +72,9 @@ object CosmeticMenu {
                     if (owned) {
                         if (equipped) {
                             CosmeticStore.executeOnKey(p.uuid, EquipCosmeticProcessor(category.name, null))
+                            despawnCategory(p.uuid, category, p)
                         } else {
+                            despawnCategory(p.uuid, category, p)
                             CosmeticStore.executeOnKey(p.uuid, EquipCosmeticProcessor(category.name, definition.id))
                             MissionTracker.onUseCategory(p, category.name)
                         }
@@ -132,6 +135,16 @@ object CosmeticMenu {
 
     private fun purchaseCost(definition: CosmeticDefinition, currentLevel: Int): Int =
         if (definition.maxLevel > 1) definition.price * (currentLevel + 1) else definition.price
+
+    fun despawnCategory(uuid: UUID, category: CosmeticCategory, player: Player) {
+        when (category) {
+            CosmeticCategory.PET -> PetManager.despawn(uuid)
+            CosmeticCategory.COMPANION -> CompanionManager.despawn(uuid)
+            CosmeticCategory.MOUNT -> CosmeticMountManager.despawn(uuid)
+            CosmeticCategory.GADGET -> GadgetManager.unequip(player)
+            else -> {}
+        }
+    }
 
     private fun buildCosmeticItem(
         player: Player,

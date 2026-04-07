@@ -1,5 +1,6 @@
 package me.nebula.orbit.commands
 
+import me.nebula.gravity.cache.CacheSlots
 import me.nebula.gravity.cache.PlayerCache
 import me.nebula.gravity.player.PreferenceData
 import me.nebula.gravity.player.PreferenceStore
@@ -26,7 +27,7 @@ fun settingsCommand(): Command = command("settings") {
 }
 
 private fun openSettingsGui(player: Player) {
-    val prefs = PlayerCache.get(player.uuid)?.preferences ?: PreferenceStore.load(player.uuid) ?: PreferenceData()
+    val prefs = PlayerCache.get(player.uuid)?.get(CacheSlots.PREFERENCES) ?: PreferenceStore.load(player.uuid) ?: PreferenceData()
 
     gui(player.translateRaw("orbit.settings.title"), rows = 6) {
         fillDefault()
@@ -74,8 +75,8 @@ private fun toggle(player: Player, field: String) {
 
 private fun cycle(player: Player, field: String, options: List<String>) {
     val current = when (field) {
-        "profileVisibility" -> PlayerCache.get(player.uuid)?.preferences?.profileVisibility ?: "PUBLIC"
-        "cosmeticDisplay" -> PlayerCache.get(player.uuid)?.preferences?.cosmeticDisplay ?: "FULL"
+        "profileVisibility" -> PlayerCache.get(player.uuid)?.get(CacheSlots.PREFERENCES)?.profileVisibility ?: "PUBLIC"
+        "cosmeticDisplay" -> PlayerCache.get(player.uuid)?.get(CacheSlots.PREFERENCES)?.cosmeticDisplay ?: "FULL"
         else -> options.firstOrNull() ?: return
     }
     val index = options.indexOf(current)

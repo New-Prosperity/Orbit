@@ -1,6 +1,7 @@
 package me.nebula.orbit.cosmetic
 
-import me.nebula.gravity.player.PreferenceStore
+import me.nebula.gravity.cache.CacheSlots
+import me.nebula.gravity.cache.PlayerCache
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
 import net.minestom.server.coordinate.Point
 import net.minestom.server.entity.Player
@@ -11,7 +12,7 @@ enum class CosmeticDisplayMode { FULL, REDUCED, NONE }
 object CosmeticVisibility {
 
     fun displayModeOf(playerId: UUID): CosmeticDisplayMode =
-        when (PreferenceStore.load(playerId)?.cosmeticDisplay) {
+        when (PlayerCache.get(playerId)?.get(CacheSlots.PREFERENCES)?.cosmeticDisplay) {
             "REDUCED" -> CosmeticDisplayMode.REDUCED
             "NONE" -> CosmeticDisplayMode.NONE
             else -> CosmeticDisplayMode.FULL

@@ -1,5 +1,6 @@
 package me.nebula.orbit.cosmetic
 
+import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.model.StandaloneModelOwner
 import me.nebula.orbit.utils.modelengine.model.standAloneModel
@@ -21,6 +22,7 @@ data class ActiveGravestone(
 
 object GravestoneManager {
 
+    private val logger = logger("GravestoneManager")
     private val gravestones = ConcurrentHashMap<UUID, ActiveGravestone>()
     private var task: Task? = null
 
@@ -40,10 +42,16 @@ object GravestoneManager {
     }
 
     fun spawn(instance: Instance, position: Pos, cosmeticId: String, level: Int, playerUuid: UUID) {
-        val definition = CosmeticRegistry[cosmeticId] ?: return
+        val definition = CosmeticRegistry[cosmeticId] ?: run {
+            logger.warn { "Cosmetic definition not found: $cosmeticId for player $playerUuid" }
+            return
+        }
         val resolved = definition.resolveData(level)
         val modelId = resolved["modelId"] ?: return
-        if (ModelEngine.blueprintOrNull(modelId) == null) return
+        if (ModelEngine.blueprintOrNull(modelId) == null) {
+            logger.warn { "Blueprint not found: $modelId for cosmetic $cosmeticId" }
+            return
+        }
         val scale = resolved["scale"]?.toFloatOrNull() ?: 1.0f
         val duration = resolved["duration"]?.toIntOrNull() ?: DEFAULT_DURATION_SECONDS
 

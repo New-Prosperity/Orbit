@@ -1,7 +1,15 @@
 package me.nebula.orbit.utils.anticheat
 
 import me.nebula.ether.utils.logging.logger
-import me.nebula.gravity.rank.RankManager
+import me.nebula.gravity.anticheat.FlagPlayerProcessor
+import me.nebula.gravity.anticheat.FlaggedPlayerStore
+import me.nebula.gravity.anticheat.PlayerFlag
+import me.nebula.gravity.messaging.NetworkMessenger
+import me.nebula.gravity.messaging.PlayerFlaggedMessage
+import me.nebula.gravity.cache.CacheSlots
+import me.nebula.gravity.cache.PlayerCache
+import me.nebula.orbit.Orbit
+import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.anticheat.checks.CombatCheck
 import me.nebula.orbit.utils.anticheat.checks.MovementCheck
 import me.nebula.orbit.utils.chat.mm
@@ -16,26 +24,78 @@ object AntiCheat {
 
     private val logger = logger("AntiCheat")
     private val trackers = ConcurrentHashMap<UUID, ViolationTracker>()
+    private val flaggedLocally = ConcurrentHashMap.newKeySet<UUID>()
     private var eventNode: EventNode<Event>? = null
 
-    const val MOVEMENT_KICK_THRESHOLD = 20
-    const val COMBAT_KICK_THRESHOLD = 15
+    const val MOVEMENT_FLAG_THRESHOLD = 20
+    const val MOVEMENT_KICK_THRESHOLD = 60
+    const val COMBAT_FLAG_THRESHOLD = 15
+    const val COMBAT_KICK_THRESHOLD = 45
     const val BYPASS_PERMISSION = "orbit.anticheat.bypass"
+    private const val STAFF_ALERT_PERMISSION = "staff.inspect"
 
     fun tracker(uuid: UUID): ViolationTracker =
         trackers.computeIfAbsent(uuid) { ViolationTracker() }
 
-    fun flag(uuid: UUID, type: String, weight: Int, threshold: Int) {
-        if (RankManager.hasPermission(uuid, BYPASS_PERMISSION)) return
+    fun flag(uuid: UUID, type: String, weight: Int, flagThreshold: Int, kickThreshold: Int) {
+        if (hasCachedPerm(uuid, BYPASS_PERMISSION)) return
         val tracker = tracker(uuid)
         tracker.addViolation(type, weight)
-        logger.debug { "Flag: $uuid | $type (weight=$weight, total=${tracker.totalViolations()})" }
-        if (tracker.shouldKick(threshold)) {
-            val player = MinecraftServer.getConnectionManager().onlinePlayers
-                .firstOrNull { it.uuid == uuid } ?: return
+        val total = tracker.totalViolations()
+        logger.debug { "Flag: $uuid | $type (weight=$weight, total=$total)" }
+
+        if (total >= kickThreshold) {
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: return
             trackers.remove(uuid)
+            flaggedLocally.remove(uuid)
             player.kick(mm("<red>Disconnected"))
-            logger.info { "Kicked ${player.username} (${player.uuid}) for exceeding $type threshold" }
+            logger.info { "Kicked ${player.username} (${player.uuid}) for exceeding $type kick threshold ($total/$kickThreshold)" }
+            return
+        }
+
+        if (total >= flagThreshold && flaggedLocally.add(uuid)) {
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+            val playerName = player?.username ?: uuid.toString()
+
+            val playerFlag = PlayerFlag(
+                checkType = type,
+                serverName = Orbit.serverName,
+                gameMode = Orbit.gameMode,
+                violations = total,
+                timestamp = System.currentTimeMillis(),
+            )
+            FlaggedPlayerStore.executeOnKey(uuid, FlagPlayerProcessor(playerFlag))
+
+            NetworkMessenger.publish(PlayerFlaggedMessage(
+                playerId = uuid,
+                playerName = playerName,
+                checkType = type,
+                violations = total,
+                serverName = Orbit.serverName,
+                gameMode = Orbit.gameMode,
+            ))
+
+            alertStaff(playerName, type, total)
+            logger.info { "Flagged $playerName ($uuid) for $type ($total violations)" }
+        }
+    }
+
+    fun isFlagged(uuid: UUID): Boolean = FlaggedPlayerStore.exists(uuid)
+
+    private fun hasCachedPerm(uuid: UUID, permission: String): Boolean {
+        val perms = PlayerCache.get(uuid)?.get(CacheSlots.PERMISSIONS) ?: return false
+        return "*" in perms || permission in perms
+    }
+
+    private fun alertStaff(playerName: String, checkType: String, violations: Int) {
+        for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
+            if (hasCachedPerm(player.uuid, STAFF_ALERT_PERMISSION)) {
+                player.sendMessage(player.translate("orbit.anticheat.staff_alert",
+                    "player" to playerName,
+                    "check" to checkType,
+                    "violations" to violations.toString()
+                ))
+            }
         }
     }
 
@@ -48,6 +108,7 @@ object AntiCheat {
         node.addListener(PlayerDisconnectEvent::class.java) { event ->
             val uuid = event.player.uuid
             trackers.remove(uuid)
+            flaggedLocally.remove(uuid)
             MovementCheck.cleanup(uuid)
             CombatCheck.cleanup(uuid)
         }
@@ -62,6 +123,7 @@ object AntiCheat {
         node.parent?.removeChild(node)
         eventNode = null
         trackers.clear()
+        flaggedLocally.clear()
         MovementCheck.clearAll()
         CombatCheck.clearAll()
         logger.info { "AntiCheat uninstalled" }

@@ -1,5 +1,6 @@
 package me.nebula.orbit.cosmetic
 
+import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.model.StandaloneModelOwner
 import me.nebula.orbit.utils.modelengine.model.standAloneModel
@@ -22,6 +23,7 @@ data class ActiveCompanion(
 
 object CompanionManager {
 
+    private val logger = logger("CompanionManager")
     private val companions = ConcurrentHashMap<UUID, ActiveCompanion>()
     private val tickCounter = AtomicLong(0L)
     private var task: Task? = null
@@ -52,10 +54,16 @@ object CompanionManager {
 
     fun spawn(player: Player, cosmeticId: String, level: Int) {
         despawn(player.uuid)
-        val definition = CosmeticRegistry[cosmeticId] ?: return
+        val definition = CosmeticRegistry[cosmeticId] ?: run {
+            logger.warn { "Cosmetic definition not found: $cosmeticId for player ${player.uuid}" }
+            return
+        }
         val resolved = definition.resolveData(level)
         val modelId = resolved["modelId"] ?: return
-        if (ModelEngine.blueprintOrNull(modelId) == null) return
+        if (ModelEngine.blueprintOrNull(modelId) == null) {
+            logger.warn { "Blueprint not found: $modelId for cosmetic $cosmeticId" }
+            return
+        }
         val scale = resolved["scale"]?.toFloatOrNull() ?: 1.0f
         val hasCustomIdle = resolved["idleAnimation"] != null
 

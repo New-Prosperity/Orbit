@@ -7,6 +7,7 @@ import me.nebula.orbit.utils.nebulaworld.NebulaWorldReader
 import me.nebula.orbit.utils.nebulaworld.NebulaWorldWriter
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.item.ItemStack
+import net.minestom.server.item.Material
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -244,6 +245,7 @@ object ReplayFormat {
                     buf.putLong(f.uuid.mostSignificantBits)
                     buf.putLong(f.uuid.leastSignificantBits)
                     buf.putVarInt(f.slot)
+                    buf.putString(f.item.material().key().asString())
                 }
                 is ReplayFrame.EntitySpawn -> {
                     buf.putByte(FRAME_ENTITY_SPAWN)
@@ -289,7 +291,13 @@ object ReplayFormat {
             )
             FRAME_BLOCK_CHANGE -> ReplayFrame.BlockChange(tick, buf.int, buf.int, buf.int, readVarInt(buf))
             FRAME_CHAT -> ReplayFrame.Chat(tick, readUuid(buf), readString(buf))
-            FRAME_ITEM_HELD -> ReplayFrame.ItemHeld(tick, readUuid(buf), readVarInt(buf), ItemStack.AIR)
+            FRAME_ITEM_HELD -> {
+                val uuid = readUuid(buf)
+                val slot = readVarInt(buf)
+                val materialKey = readString(buf)
+                val material = Material.fromKey(materialKey) ?: Material.AIR
+                ReplayFrame.ItemHeld(tick, uuid, slot, ItemStack.of(material))
+            }
             FRAME_ENTITY_SPAWN -> ReplayFrame.EntitySpawn(
                 tick, readUuid(buf), readString(buf),
                 readString(buf).ifEmpty { null }, readString(buf).ifEmpty { null },

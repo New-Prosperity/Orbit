@@ -135,10 +135,15 @@ object HudRenderer {
 
     private fun charToSpriteId(ch: Char): String? = when (ch) {
         in '0'..'9' -> "digit_$ch"
+        in 'a'..'z' -> "letter_$ch"
+        in 'A'..'Z' -> "letter_$ch"
         ':' -> "glyph_colon"
         '/' -> "glyph_slash"
         '.' -> "glyph_dot"
         '%' -> "glyph_percent"
+        '-' -> "glyph_dash"
+        '_' -> "glyph_underscore"
+        '>' -> "glyph_arrow"
         else -> null
     }
 }

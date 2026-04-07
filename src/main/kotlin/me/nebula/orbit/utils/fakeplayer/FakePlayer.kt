@@ -1,6 +1,11 @@
 package me.nebula.orbit.utils.fakeplayer
 
 import me.nebula.ether.utils.logging.logger
+import me.nebula.orbit.utils.botai.BotAI
+import me.nebula.orbit.utils.botai.BotMovement
+import me.nebula.orbit.utils.botai.BotPersonalities
+import me.nebula.orbit.utils.botai.ExploreGoal
+import me.nebula.orbit.utils.botai.SurviveGoal
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
@@ -150,6 +155,7 @@ object FakePlayerManager {
 
     fun remove(uuid: UUID) {
         val player = activeBots.remove(uuid) ?: return
+        BotAI.detach(player)
         player.playerConnection.disconnect()
         MinecraftServer.getConnectionManager().removePlayer(player.playerConnection)
     }
@@ -168,10 +174,22 @@ object FakePlayerManager {
     fun all(): Collection<Player> = activeBots.values.toList()
 
     fun setBehavior(player: Player, behavior: BotBehavior) {
+        BotAI.detach(player)
         player.setTag(BOT_BEHAVIOR_TAG, behavior.name)
         if (behavior == BotBehavior.CIRCLE) {
             player.setTag(BOT_ORIGIN_X_TAG, player.position.x())
             player.setTag(BOT_ORIGIN_Z_TAG, player.position.z())
+        }
+        when (behavior) {
+            BotBehavior.IDLE -> {}
+            BotBehavior.WANDER -> BotAI.attachPassiveAI(player)
+            BotBehavior.FOLLOW_NEAREST -> BotAI.attachPassiveAI(player)
+            BotBehavior.CIRCLE -> {}
+            BotBehavior.SPRINT_RANDOM -> BotAI.attach(
+                player, SurviveGoal(), ExploreGoal(),
+                personality = BotPersonalities.EXPLORER.copy(curiosity = 1.0f),
+            )
+            BotBehavior.LOOK_AROUND -> BotAI.attachPassiveAI(player)
         }
     }
 
@@ -229,7 +247,7 @@ object FakePlayerManager {
 
     private fun ensureBehaviorTask() {
         if (behaviorTask != null) return
-        behaviorTask = repeat(4) { tickBehaviors() }
+        behaviorTask = repeat(1) { tickBehaviors() }
     }
 
     private fun tickBehaviors() {
@@ -241,40 +259,9 @@ object FakePlayerManager {
             }
             val behavior = runCatching { BotBehavior.valueOf(bot.getTag(BOT_BEHAVIOR_TAG) ?: "IDLE") }
                 .getOrDefault(BotBehavior.IDLE)
-            when (behavior) {
-                BotBehavior.IDLE -> {}
-                BotBehavior.WANDER -> tickWander(bot)
-                BotBehavior.FOLLOW_NEAREST -> tickFollowNearest(bot)
-                BotBehavior.CIRCLE -> tickCircle(bot)
-                BotBehavior.SPRINT_RANDOM -> tickSprintRandom(bot)
-                BotBehavior.LOOK_AROUND -> tickLookAround(bot)
-            }
+            if (behavior == BotBehavior.CIRCLE) tickCircle(bot)
         }
         dead.forEach { activeBots.remove(it) }
-    }
-
-    private fun tickWander(bot: Player) {
-        val pos = bot.position
-        val angle = Random.nextDouble() * Math.PI * 2
-        val dist = Random.nextDouble() * 1.5
-        val target = pos.add(cos(angle) * dist, 0.0, sin(angle) * dist)
-        val yaw = (-Math.toDegrees(Math.atan2(target.x() - pos.x(), target.z() - pos.z()))).toFloat()
-        bot.teleport(target.withView(yaw, 0f))
-    }
-
-    private fun tickFollowNearest(bot: Player) {
-        val instance = bot.instance ?: return
-        val nearest = instance.players
-            .filter { it !== bot && !isBot(it) }
-            .minByOrNull { it.position.distanceSquared(bot.position) } ?: return
-        val dir = nearest.position.sub(bot.position)
-        val dist = bot.position.distance(nearest.position)
-        if (dist < 3.0) return
-        val speed = 0.3.coerceAtMost(dist * 0.1)
-        val norm = Vec(dir.x() / dist, 0.0, dir.z() / dist)
-        val target = bot.position.add(norm.x() * speed, 0.0, norm.z() * speed)
-        val yaw = (-Math.toDegrees(Math.atan2(norm.x(), norm.z()))).toFloat()
-        bot.teleport(target.withView(yaw, 0f))
     }
 
     private fun tickCircle(bot: Player) {
@@ -284,21 +271,9 @@ object FakePlayerManager {
         bot.setTag(BOT_ANGLE_TAG, angle % 360f)
         val rad = Math.toRadians(angle.toDouble())
         val radius = 5.0
-        val x = originX + cos(rad) * radius
-        val z = originZ + sin(rad) * radius
-        val yaw = (-Math.toDegrees(Math.atan2(cos(rad), -sin(rad)))).toFloat()
-        bot.teleport(Pos(x, bot.position.y(), z, yaw, 0f))
-    }
-
-    private fun tickSprintRandom(bot: Player) {
-        bot.isSprinting = true
-        tickWander(bot)
-    }
-
-    private fun tickLookAround(bot: Player) {
-        val yaw = bot.position.yaw() + Random.nextFloat() * 10f - 5f
-        val pitch = (Random.nextFloat() * 30f - 15f).coerceIn(-45f, 45f)
-        bot.teleport(bot.position.withView(yaw, pitch))
+        val targetX = originX + cos(rad) * radius
+        val targetZ = originZ + sin(rad) * radius
+        BotMovement.moveToward(bot, Pos(targetX, bot.position.y(), targetZ), false)
     }
 
     private fun generateBotName(index: Int): String {

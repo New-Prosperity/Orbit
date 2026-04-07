@@ -16,6 +16,7 @@ import me.nebula.orbit.rankName
 import me.nebula.orbit.rankColor
 import me.nebula.orbit.rankPrefix
 import me.nebula.orbit.level
+import me.nebula.orbit.levelData
 import me.nebula.orbit.rankWeight
 import me.nebula.gravity.session.SessionStore
 import me.nebula.orbit.Orbit
@@ -23,6 +24,7 @@ import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.translation.resolveTranslated
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
+import me.nebula.orbit.cosmetic.CosmeticDataCache
 import me.nebula.orbit.cosmetic.CosmeticMenu
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.placeholderResolver
@@ -62,6 +64,7 @@ import me.nebula.orbit.utils.nameplate.NameplateManager
 import me.nebula.orbit.utils.nameplate.nameplateLayout
 import me.nebula.orbit.utils.sound.playSound
 import me.nebula.orbit.utils.vanish.VanishManager
+import me.nebula.orbit.utils.statue.StatueManager
 import me.nebula.orbit.utils.world.configureWorld
 import net.minestom.server.entity.Player
 import net.minestom.server.timer.Task
@@ -216,6 +219,14 @@ class HubMode : ServerMode {
             translatedLine("orbit.nameplate.level") { player ->
                 arrayOf("level" to player.level.toString())
             }
+            conditionalLine({ p ->
+                val data = CosmeticDataCache.get(p.uuid)
+                data != null && data.equipped.isNotEmpty()
+            }) { p ->
+                val data = CosmeticDataCache.get(p.uuid) ?: return@conditionalLine ""
+                val count = data.equipped.size
+                "<gray>\u2605$count"
+            }
         })
         NameplateManager.install(handler)
 
@@ -288,6 +299,8 @@ class HubMode : ServerMode {
         gameEndSubscription = subscribeSyncForPlayers<GameEndMessage>({ it.playerIds }) { msg, player ->
             player.sendMessage(player.translate("orbit.queue.requeue_prompt", "gamemode" to msg.gameMode))
         }
+
+        StatueManager.install()
 
         logger.info { "Hub mode installed" }
     }
@@ -408,7 +421,7 @@ class HubMode : ServerMode {
         )
 
     private fun syncExperienceBar(player: Player) {
-        val data = player.cached.level
+        val data = player.levelData
         player.level = data.level
         player.exp = LevelFormula.progressPercent(data.xp).toFloat()
     }
@@ -447,6 +460,7 @@ class HubMode : ServerMode {
     }
 
     override fun shutdown() {
+        StatueManager.uninstall()
         tabRefreshTask?.cancel()
         tabRefreshTask = null
         tabSentTo.clear()

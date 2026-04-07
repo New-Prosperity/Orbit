@@ -1,10 +1,15 @@
 package me.nebula.orbit
 
 import me.nebula.gravity.cache.CachedPlayer
+import me.nebula.gravity.cache.CacheSlots
 import me.nebula.gravity.cache.PlayerCache
+import me.nebula.gravity.guild.GuildData
+import me.nebula.gravity.guild.GuildLevelFormula
+import me.nebula.gravity.guild.GuildStore
 import me.nebula.gravity.cosmetic.CosmeticPlayerData
 import me.nebula.gravity.economy.EconomyData
 import me.nebula.gravity.leveling.LevelData
+import me.nebula.gravity.nick.NickData
 import me.nebula.gravity.player.PlayerData
 import me.nebula.gravity.player.PreferenceData
 import me.nebula.gravity.rank.RankData
@@ -25,7 +30,7 @@ val UUID.localeCode: String
     get() = Orbit.localeOf(this)
 
 val Player.rank: RankData?
-    get() = cached.rank
+    get() = cached[CacheSlots.RANK]
 
 val Player.rankName: String
     get() = rank?.name ?: "Member"
@@ -46,47 +51,71 @@ val Player.rankWeight: Int
     get() = rank?.weight ?: 100
 
 val Player.playerData: PlayerData?
-    get() = cached.player
+    get() = cached[CacheSlots.PLAYER]
 
 val Player.levelData: LevelData
-    get() = cached.level
+    get() = cached[CacheSlots.LEVEL] ?: LevelData()
 
 val Player.level: Int
-    get() = cached.level.level
+    get() = levelData.level
 
 val Player.prestige: Int
-    get() = cached.level.prestige
+    get() = levelData.prestige
 
 val Player.economyData: EconomyData
-    get() = cached.economy
+    get() = cached[CacheSlots.ECONOMY] ?: EconomyData()
 
 val Player.statsData: StatsData
-    get() = cached.stats
+    get() = cached[CacheSlots.STATS] ?: StatsData()
 
 val Player.preferencesData: PreferenceData
-    get() = cached.preferences
+    get() = cached[CacheSlots.PREFERENCES] ?: PreferenceData()
 
-val Player.acceptsFriendRequests: Boolean get() = cached.preferences.friendRequests
-val Player.acceptsPrivateMessages: Boolean get() = cached.preferences.privateMessages
-val Player.acceptsPartyInvites: Boolean get() = cached.preferences.partyInvites
-val Player.acceptsDuelRequests: Boolean get() = cached.preferences.duelRequests
-val Player.acceptsTradeRequests: Boolean get() = cached.preferences.tradeRequests
-val Player.profileVisibility: String get() = cached.preferences.profileVisibility
-val Player.appearsOffline: Boolean get() = cached.preferences.appearOffline
-val Player.lastSeenVisible: Boolean get() = cached.preferences.lastSeenVisible
-val Player.statsVisible: Boolean get() = cached.preferences.statsVisible
-val Player.streamerMode: Boolean get() = cached.preferences.streamerMode
-val Player.staffAutoVanish: Boolean get() = cached.preferences.staffAutoVanish
-val Player.cosmeticDisplay: String get() = cached.preferences.cosmeticDisplay
+val Player.acceptsFriendRequests: Boolean get() = preferencesData.friendRequests
+val Player.acceptsPrivateMessages: Boolean get() = preferencesData.privateMessages
+val Player.acceptsPartyInvites: Boolean get() = preferencesData.partyInvites
+val Player.acceptsDuelRequests: Boolean get() = preferencesData.duelRequests
+val Player.acceptsTradeRequests: Boolean get() = preferencesData.tradeRequests
+val Player.profileVisibility: String get() = preferencesData.profileVisibility
+val Player.appearsOffline: Boolean get() = preferencesData.appearOffline
+val Player.lastSeenVisible: Boolean get() = preferencesData.lastSeenVisible
+val Player.statsVisible: Boolean get() = preferencesData.statsVisible
+val Player.streamerMode: Boolean get() = preferencesData.streamerMode
+val Player.staffAutoVanish: Boolean get() = preferencesData.staffAutoVanish
+val Player.cosmeticDisplay: String get() = preferencesData.cosmeticDisplay
 
 val Player.cosmeticsData: CosmeticPlayerData
-    get() = cached.cosmetics
+    get() = cached[CacheSlots.COSMETICS] ?: CosmeticPlayerData()
+
+val Player.nickData: NickData?
+    get() = cached[CacheSlots.NICK]
 
 fun Player.balance(currency: String): Double =
-    cached.economy.balances[currency] ?: 0.0
+    economyData.balances[currency] ?: 0.0
 
 val Player.coins: Double
     get() = balance("coins")
+
+fun Player.hasCachedPermission(permission: String): Boolean {
+    val perms = PlayerCache.get(uuid)?.get(CacheSlots.PERMISSIONS) ?: return false
+    return "*" in perms || permission in perms
+}
+
+val Player.guildId: Long?
+    get() = cached[CacheSlots.GUILD]
+
+val Player.guildData: GuildData?
+    get() = guildId?.let { GuildStore.load(it) }
+
+val Player.guildTag: String
+    get() = guildData?.let { "[${it.tag}] " } ?: ""
+
+val Player.guildTagColored: String
+    get() {
+        val data = guildData ?: return ""
+        val color = GuildLevelFormula.tagColor(data.level)
+        return "<$color>[${data.tag}]</$color> "
+    }
 
 val Player.isNicked: Boolean
     get() = NickManager.isNicked(this)

@@ -1,5 +1,6 @@
 package me.nebula.orbit.cosmetic
 
+import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.modelengine.ModelEngine
@@ -39,6 +40,7 @@ data class ActiveMount(
 
 object CosmeticMountManager {
 
+    private val logger = logger("CosmeticMountManager")
     private val mounts = ConcurrentHashMap<UUID, ActiveMount>()
     private var task: Task? = null
     private var eventNode: EventNode<*>? = null
@@ -74,10 +76,16 @@ object CosmeticMountManager {
 
     fun spawn(player: Player, cosmeticId: String, level: Int) {
         despawn(player.uuid)
-        val definition = CosmeticRegistry[cosmeticId] ?: return
+        val definition = CosmeticRegistry[cosmeticId] ?: run {
+            logger.warn { "Cosmetic definition not found: $cosmeticId for player ${player.uuid}" }
+            return
+        }
         val resolved = definition.resolveData(level)
         val modelId = resolved["modelId"] ?: return
-        if (ModelEngine.blueprintOrNull(modelId) == null) return
+        if (ModelEngine.blueprintOrNull(modelId) == null) {
+            logger.warn { "Blueprint not found: $modelId for cosmetic $cosmeticId" }
+            return
+        }
         val scale = resolved["scale"]?.toFloatOrNull() ?: 1.0f
         val speed = resolved["speed"]?.toDoubleOrNull() ?: 0.2
         val seatBone = resolved["seatBone"] ?: "seat"

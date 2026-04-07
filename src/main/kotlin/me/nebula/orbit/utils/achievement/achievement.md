@@ -1,6 +1,6 @@
 # Achievement
 
-Network-wide achievement system with persistent progress (Gravity `AchievementStore`), categories, stat-based triggers, rewards, prerequisites, and vanilla advancement toast UI.
+Network-wide achievement system with persistent progress (Gravity `AchievementStore`), categories, stat-based triggers, rewards, prerequisites, rarity, tier groups, points, milestones, and vanilla advancement toast UI.
 
 ## DSL
 
@@ -11,9 +11,14 @@ val ach = achievement("first-kill") {
     category = AchievementCategories.COMBAT
     icon = Material.DIAMOND_SWORD
     maxProgress = 1
+    points = 15
+    rarity = AchievementRarity.UNCOMMON
+    tierGroup = "kill_master"
+    tierLevel = 1
     frameType = FrameType.TASK
     reward("coins", 500)
     reward("xp", 100)
+    reward("cosmetic", 0, "kill_effect_blood")
     requires("tutorial-complete")
 }
 AchievementRegistry.register(ach)
@@ -21,16 +26,55 @@ AchievementRegistry.register(ach)
 
 ## Rewards
 
-`AchievementReward(type: String, amount: Int)` — attached to achievements via the builder.
+`AchievementReward(type: String, amount: Int, value: String = "")` — attached to achievements via the builder.
+
+Supported types:
+- `"coins"` — adds coins via `AddBalanceProcessor`
+- `"xp"` — adds battle pass XP via `BattlePassManager.addXpToAll`
+- `"cosmetic"` — unlocks cosmetic via `UnlockCosmeticProcessor(reward.value)`
+
+Rewards are distributed automatically on unlock — no manual handling needed.
+
+## Points
+
+Each achievement has a `points: Int` value. Total points are tracked in `AchievementData.points` and persisted in SQL.
+
+Difficulty-based defaults:
+- Easy (maxProgress 1-10): 5 pts
+- Medium (maxProgress 10-100): 15 pts
+- Hard (maxProgress 100-1000): 50 pts
+- Hidden/Challenge: 100 pts
+
+## Rarity
+
+`AchievementRarity` enum: `COMMON` (gray), `UNCOMMON` (green), `RARE` (blue), `EPIC` (purple), `LEGENDARY` (gold).
+
+Assigned statically per achievement. Displayed in menu with color coding.
+
+## Tier Groups
+
+Achievements with the same `tierGroup` string are displayed together in the menu as a tiered progression (bronze/silver/gold). `tierLevel` determines display order.
 
 ```kotlin
-achievement("master-slayer") {
-    reward("coins", 1000)
-    reward("xp", 250)
+achievement("warrior") {
+    tierGroup = "kill_master"
+    tierLevel = 2
 }
 ```
 
-Access via `achievement.rewards` after registration.
+## Milestones
+
+Point thresholds that award bonus rewards when crossed:
+
+| Threshold | Name | Rewards |
+|---|---|---|
+| 50 | Novice | 100 coins |
+| 150 | Explorer | 250 coins |
+| 300 | Achiever | 500 coins + title_achiever |
+| 500 | Master | 1000 coins + aura_achievement |
+| 750 | Grandmaster | 2000 coins + mount_achievement |
+
+Claimed milestones tracked in `AchievementData.claimedMilestones`.
 
 ## Prerequisites
 
@@ -45,7 +89,7 @@ achievement("advanced-combat") {
 
 Check eligibility:
 ```kotlin
-AchievementRegistry.canUnlock(playerUuid, "advanced-combat") // true if all prerequisites completed
+AchievementRegistry.canUnlock(playerUuid, "advanced-combat")
 ```
 
 ## Categories
@@ -66,9 +110,11 @@ val BR = AchievementCategories.register("battleroyale", "orbit.achievement.categ
 
 ## Persistence
 
-- `AchievementStore` in Gravity — SQL-backed, write-behind 5s
+- `AchievementStore` in Gravity — SQL-backed, write-behind 15s
+- `AchievementData` fields: `progress`, `completed`, `points`, `claimedMilestones`
 - `AchievementRegistry.loadPlayer(uuid)` on join, `unloadPlayer(uuid)` on disconnect
 - `progress()` and `complete()` atomically update via `IncrementAchievementProcessor` / `SetAchievementCompletedProcessor`
+- Points are atomically incremented on completion
 
 ## Triggers
 
@@ -93,24 +139,30 @@ AchievementTriggerManager.bind("first-win", "wins") { uuid, _, value -> value >=
 | `byCategory(category)` | Filter by category |
 | `loadPlayer(uuid)` | Load from store on join |
 | `unloadPlayer(uuid)` | Unload local cache |
-| `progress(player, id, amount)` | Increment + persist |
-| `complete(player, id)` | Force complete + persist |
+| `progress(player, id, amount)` | Increment + persist + auto-distribute rewards |
+| `complete(player, id)` | Force complete + persist + auto-distribute rewards |
 | `isCompleted(player/uuid, id)` | Check completion |
 | `completedCount(player/uuid)` | Count completed |
 | `completedInCategory(uuid, cat)` | Count in category |
 | `totalInCategory(cat)` | Total in category |
+| `points(player/uuid)` | Total achievement points |
+| `pointsInCategory(uuid, cat)` | Points in category |
+| `claimedMilestones(uuid)` | Set of claimed milestone thresholds |
+| `tierGroupMembers(group)` | Get all achievements in a tier group |
+| `totalNonHiddenCount()` | Count of non-hidden achievements |
+| `completedNonHiddenCount(uuid)` | Count of completed non-hidden |
 | `canUnlock(uuid, id)` | Check all prerequisites are completed |
 | `onUnlock(handler)` | Custom unlock handler |
+
+## Unlock Notification
+
+Default: vanilla advancement toast + ENTITY_PLAYER_LEVELUP sound + chat message with name/description/points + reward listing + instance broadcast. Override with `onUnlock { }`.
 
 ## Progress Bar
 
 Standalone helper for rendering text-based progress bars:
 
 ```kotlin
-progressBar(7, 10)       // [██████████████░░░░░░]
-progressBar(3, 10, 10)   // [███░░░░░░░]
+progressBar(7, 10)       // [##############......] 
+progressBar(3, 10, 10)   // [###.......]
 ```
-
-## Unlock Notification
-
-Default: vanilla advancement toast via `player.sendNotification(Notification(...))` + `UI_TOAST_CHALLENGE_COMPLETE` sound. Override with `onUnlock { }`.

@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.rewards
 
 import me.nebula.gravity.economy.AddBalanceProcessor
 import me.nebula.gravity.economy.EconomyStore
+import me.nebula.orbit.progression.PartyBonusCalculator
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.utils.stattracker.StatTracker
@@ -32,21 +33,28 @@ class RewardDistributor @PublishedApi internal constructor(
     private val announcementKey: String?,
 ) {
 
-    fun distribute(result: MatchResult, participants: Set<UUID>) {
+    fun distribute(
+        result: MatchResult,
+        participants: Set<UUID>,
+        partyBonuses: Map<UUID, PartyBonusCalculator.PartyBonus> = emptyMap(),
+    ) {
         for (uuid in participants) {
             val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+            val bonus = partyBonuses[uuid]
+            val multiplier = bonus?.multiplier ?: 1.0f
             val earned = mutableListOf<RewardEntry>()
 
             for (reward in participationRewards) {
-                grantReward(uuid, reward)
-                earned.add(reward)
+                val adjusted = reward.copy(amount = reward.amount * multiplier)
+                grantReward(uuid, adjusted)
+                earned.add(adjusted)
             }
 
             if (perKillRewards.isNotEmpty()) {
                 val kills = StatTracker.get(uuid, "kills")
                 if (kills > 0) {
                     for (reward in perKillRewards) {
-                        val scaled = reward.copy(amount = reward.amount * kills)
+                        val scaled = reward.copy(amount = reward.amount * kills * multiplier)
                         grantReward(uuid, scaled)
                         earned.add(scaled)
                     }
@@ -56,8 +64,9 @@ class RewardDistributor @PublishedApi internal constructor(
             for (rule in rules) {
                 if (rule.condition.evaluate(uuid, result)) {
                     for (reward in rule.rewards) {
-                        grantReward(uuid, reward)
-                        earned.add(reward)
+                        val adjusted = reward.copy(amount = reward.amount * multiplier)
+                        grantReward(uuid, adjusted)
+                        earned.add(adjusted)
                     }
                 }
             }
