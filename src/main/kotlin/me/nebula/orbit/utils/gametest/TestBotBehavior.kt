@@ -11,7 +11,11 @@ import me.nebula.orbit.utils.botai.EquipBestArmorGoal
 import me.nebula.orbit.utils.botai.ExploreGoal
 import me.nebula.orbit.utils.botai.FleeGoal
 import me.nebula.orbit.utils.botai.GatherWoodGoal
+import me.nebula.orbit.utils.botai.LookAt
+import me.nebula.orbit.utils.botai.SprintTo
 import me.nebula.orbit.utils.botai.SurviveGoal
+import me.nebula.orbit.utils.botai.Wait
+import me.nebula.orbit.utils.botai.WalkTo
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
 import java.util.UUID
@@ -118,10 +122,10 @@ class PatrolGoal(private val waypoints: List<Pos>) : BotGoal() {
     override fun shouldActivate(brain: BotBrain): Boolean = waypoints.isNotEmpty()
 
     override fun createActions(brain: BotBrain): List<BotAction> {
-        if (waypoints.isEmpty()) return listOf(BotAction.Wait(20))
+        if (waypoints.isEmpty()) return listOf(Wait(20))
         val target = waypoints[currentIndex % waypoints.size]
         currentIndex = (currentIndex + 1) % waypoints.size
-        return listOf(BotAction.WalkTo(target))
+        return listOf(WalkTo(target))
     }
 }
 
@@ -136,15 +140,15 @@ class FollowGoal(private val targetUuid: UUID, private val stopDistance: Double 
 
     override fun createActions(brain: BotBrain): List<BotAction> {
         val target = brain.findEntityByUuid(targetUuid)
-            ?: return listOf(BotAction.Wait(20))
+            ?: return listOf(Wait(20))
         val dist = brain.player.position.distance(target.position)
         if (dist <= stopDistance) {
-            return listOf(BotAction.LookAt(target.position.add(0.0, target.eyeHeight, 0.0)))
+            return listOf(LookAt(target.position.add(0.0, target.eyeHeight, 0.0)))
         }
         return if (dist > 8.0) {
-            listOf(BotAction.SprintTo(target.position))
+            listOf(SprintTo(target.position))
         } else {
-            listOf(BotAction.WalkTo(target.position))
+            listOf(WalkTo(target.position))
         }
     }
 

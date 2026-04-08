@@ -139,8 +139,7 @@ class Ceremony @PublishedApi internal constructor(
             podiumPositions[3]?.let { pos ->
                 topKillers.getOrNull(1)?.let { third(it, pos) }
             }
-        }
-        podiumDisplay!!.show()
+        }.also { it.show() }
     }
 
     private fun spectateWinner(players: Collection<Player>) {

@@ -3,6 +3,7 @@ package me.nebula.orbit.utils.anticheat.checks
 import me.nebula.gravity.property.NetworkProperties
 import me.nebula.gravity.property.PropertyStore
 import me.nebula.orbit.utils.anticheat.AntiCheat
+import me.nebula.orbit.utils.anticheat.AntiCheatCheck
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
 import net.minestom.server.event.Event
@@ -21,7 +22,10 @@ private data class MovementState(
     val lastGroundY: Double = 0.0,
 )
 
-object MovementCheck {
+object MovementCheck : AntiCheatCheck {
+
+    override val id: String = "movement"
+
 
     private const val FLY_Y_THRESHOLD = 0.5
     private const val SPEED_THRESHOLD = 0.65
@@ -31,7 +35,7 @@ object MovementCheck {
 
     private val states = ConcurrentHashMap<UUID, MovementState>()
 
-    fun install(node: EventNode<Event>) {
+    override fun install(node: EventNode<in Event>) {
         node.addListener(PlayerMoveEvent::class.java) { event ->
             val player = event.player
             val uuid = player.uuid
@@ -113,11 +117,11 @@ object MovementCheck {
         }
     }
 
-    fun cleanup(uuid: UUID) {
+    override fun cleanup(uuid: UUID) {
         states.remove(uuid)
     }
 
-    fun clearAll() {
+    override fun clearAll() {
         states.clear()
     }
 

@@ -77,7 +77,6 @@ fun mirrorBlock(block: Block, axis: MirrorAxis): Block {
                 "west" -> result.withProperty("facing", "east")
                 else -> result
             }
-            else -> result
         }
     }
 

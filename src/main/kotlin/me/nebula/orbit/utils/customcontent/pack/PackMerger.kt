@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.customcontent.pack
 
-import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
+import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
@@ -22,7 +22,7 @@ import javax.imageio.ImageIO
 object PackMerger {
 
     private val logger = logger("PackMerger")
-    private val gson = GsonBuilder().setPrettyPrinting().create()
+    private val gson = GsonProvider.pretty
 
     data class MergeResult(val packBytes: ByteArray, val sha1: String) {
         override fun equals(other: Any?): Boolean {

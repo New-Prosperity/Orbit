@@ -78,7 +78,7 @@ object ArmorGlslGenerator {
                 }
 
                 for (cube in piece.cubes) {
-                    val rotName = rotations[rotationKey(cube.rotationLevels)]!!
+                    val rotName = rotations.getValue(rotationKey(cube.rotationLevels))
                     sb.appendLine("        ${generateCemBox(cube, tex.width, tex.height, armor.colorId, rotName, piece.part, piece.part.isLeft)}")
                 }
 

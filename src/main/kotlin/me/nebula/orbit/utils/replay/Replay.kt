@@ -195,8 +195,9 @@ class ReplayPlayer(private val data: ReplayData) {
     }
 
     fun resume() {
-        if (task == null && onFrame != null) {
-            play(onFrame!!)
+        val frame = onFrame
+        if (task == null && frame != null) {
+            play(frame)
         } else {
             playing = true
         }

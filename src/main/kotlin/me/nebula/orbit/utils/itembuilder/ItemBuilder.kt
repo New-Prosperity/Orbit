@@ -121,9 +121,9 @@ class ItemBuilder @PublishedApi internal constructor(private val material: Mater
             item = item.with(DataComponents.ENCHANTMENTS, enchantList)
         }
 
-        if (skullTextures != null) {
+        skullTextures?.let { textures ->
             val profile = GameProfile(UUID(0, 0), "skull", listOf(
-                GameProfile.Property("textures", skullTextures!!, null)
+                GameProfile.Property("textures", textures, null)
             ))
             item = item.with(DataComponents.PROFILE, ResolvableProfile(profile))
         }

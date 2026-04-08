@@ -195,10 +195,11 @@ class RangedAttackExecutor(
         if (cooldown > 0) { cooldown--; return true }
         cooldown = cooldownTicks
 
+        val instance = entity.instance ?: return false
         val projectile = EntityProjectile(entity, projectileType)
         val eyePos = entity.position.add(0.0, entity.eyeHeight, 0.0)
         val direction = target.position.add(0.0, target.eyeHeight, 0.0).sub(eyePos).asVec().normalize()
-        projectile.setInstance(entity.instance!!, eyePos)
+        projectile.setInstance(instance, eyePos)
         projectile.velocity = direction.mul(projectileSpeed * 20.0)
         onShoot?.invoke(entity, projectile)
         return true
@@ -277,7 +278,7 @@ class StrafeExecutor(
     }
 
     override fun execute(entity: SmartEntity): Boolean {
-        val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) as? Entity ?: return false
+        val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) ?: return false
         if (target.isRemoved) return false
         val dist = entity.position.distance(target.position)
         if (dist > strafeRange * 1.5) return false
@@ -425,7 +426,7 @@ class TeleportBehindExecutor(
     private var cooldown = 0
 
     override fun execute(entity: SmartEntity): Boolean {
-        val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) as? Entity ?: return false
+        val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) ?: return false
         if (target.isRemoved) return false
         if (cooldown > 0) { cooldown--; return false }
 
@@ -616,7 +617,7 @@ class CircleTargetExecutor(
     }
 
     override fun execute(entity: SmartEntity): Boolean {
-        val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) as? Entity ?: return false
+        val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) ?: return false
         if (target.isRemoved) return false
         angle += speed
         val circlePos = target.position.add(cos(angle) * radius, 0.0, sin(angle) * radius)

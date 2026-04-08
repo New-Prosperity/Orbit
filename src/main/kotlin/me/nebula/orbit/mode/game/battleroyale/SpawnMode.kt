@@ -79,6 +79,7 @@ object SpawnModeExecutor {
         mapRadius: Int,
         onPlayerReady: (Player, Pos) -> Unit,
     ): SpawnModeResult {
+        if (players.isEmpty()) return SpawnModeResult(pvpBlocked = false)
         val effectiveRadius = radius.coerceAtMost(mapRadius - 10.0)
         val angleStep = 2 * Math.PI / players.size
         val shuffled = players.shuffled()

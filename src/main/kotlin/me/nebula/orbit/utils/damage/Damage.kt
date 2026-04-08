@@ -37,21 +37,27 @@ object DamageTracker {
         val uuid = if (victim is Player) victim.uuid else return
         val attackerUuid = if (attacker is Player) attacker.uuid else null
         val record = DamageRecord(uuid, attackerUuid, amount, type)
-        history.getOrPut(uuid) { mutableListOf() }.apply {
-            add(record)
-            if (size > MAX_HISTORY) removeFirst()
+        val list = history.getOrPut(uuid) { mutableListOf() }
+        synchronized(list) {
+            list.add(record)
+            if (list.size > MAX_HISTORY) list.removeFirst()
         }
     }
 
-    fun getHistory(player: Player): List<DamageRecord> =
-        history[player.uuid]?.toList() ?: emptyList()
+    fun getHistory(player: Player): List<DamageRecord> {
+        val list = history[player.uuid] ?: return emptyList()
+        synchronized(list) { return list.toList() }
+    }
 
-    fun getLastDamager(player: Player): UUID? =
-        history[player.uuid]?.lastOrNull { it.attackerUuid != null }?.attackerUuid
+    fun getLastDamager(player: Player): UUID? {
+        val list = history[player.uuid] ?: return null
+        synchronized(list) { return list.lastOrNull { it.attackerUuid != null }?.attackerUuid }
+    }
 
     fun getRecentDamage(player: Player, withinMs: Long = 5000L): List<DamageRecord> {
+        val list = history[player.uuid] ?: return emptyList()
         val cutoff = System.currentTimeMillis() - withinMs
-        return history[player.uuid]?.filter { it.timestamp >= cutoff } ?: emptyList()
+        synchronized(list) { return list.filter { it.timestamp >= cutoff } }
     }
 
     fun getTotalDamage(player: Player, withinMs: Long = 5000L): Float =

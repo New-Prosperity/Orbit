@@ -16,6 +16,7 @@ object Patterns {
     fun single(block: Block): Pattern = Pattern { _, _, _ -> block.stateId() }
 
     fun random(vararg entries: Pair<Block, Double>): Pattern {
+        require(entries.isNotEmpty()) { "Pattern.random requires at least one entry" }
         val totalWeight = entries.sumOf { it.second }
         val normalized = entries.map { it.first.stateId() to (it.second / totalWeight) }
         return Pattern { _, _, _ ->

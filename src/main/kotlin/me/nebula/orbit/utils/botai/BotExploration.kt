@@ -28,12 +28,6 @@ sealed interface ExplorationInterest {
     data class DroppedItem(override val pos: Point, override val priority: Float) : ExplorationInterest
 }
 
-private val LOG_BLOCKS = setOf(
-    Block.OAK_LOG, Block.BIRCH_LOG, Block.SPRUCE_LOG,
-    Block.JUNGLE_LOG, Block.ACACIA_LOG, Block.DARK_OAK_LOG,
-    Block.MANGROVE_LOG, Block.CHERRY_LOG,
-)
-
 private val CONTAINER_BLOCKS = setOf(
     Block.CHEST, Block.TRAPPED_CHEST, Block.BARREL,
 )

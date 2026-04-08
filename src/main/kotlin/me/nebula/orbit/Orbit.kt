@@ -5,6 +5,7 @@ import me.nebula.ether.utils.app.appDelegate
 import me.nebula.ether.utils.environment.environment
 import me.nebula.ether.utils.hazelcast.Store
 import me.nebula.ether.utils.hazelcast.hazelcastModule
+import me.nebula.ether.utils.module.moduleRegistry
 import java.util.concurrent.atomic.AtomicBoolean
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.storage.StorageClient
@@ -13,8 +14,11 @@ import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
 import me.nebula.orbit.utils.anticheat.AntiCheat
 import me.nebula.orbit.utils.botai.BotAI
+import me.nebula.orbit.utils.drain.PlayerTransfer
+import me.nebula.orbit.utils.drain.ServerDrainManager
 import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.metrics.MetricsPublisher
+import me.nebula.orbit.utils.replay.PendingReplayFlushes
 import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.gravity.achievement.AchievementStore
 import me.nebula.gravity.audit.AuditStore
@@ -33,10 +37,7 @@ import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.PropertyUpdateMessage
 import me.nebula.gravity.messaging.ServerDeregistrationMessage
 import me.nebula.gravity.messaging.ServerRegistrationMessage
-import me.nebula.gravity.messaging.TransferPlayerMessage
 import me.nebula.gravity.server.ServerStore
-import me.nebula.gravity.server.activeHubPredicate
-import me.nebula.gravity.server.activeLimboPredicate
 import me.nebula.gravity.mission.ActiveMission
 import me.nebula.gravity.mission.MissionData
 import me.nebula.gravity.mission.MissionStore
@@ -144,6 +145,7 @@ import me.nebula.orbit.utils.vanilla.modules.FurnaceModule
 import me.nebula.orbit.utils.vanilla.modules.StonecutterModule
 import me.nebula.orbit.mode.hub.HubMode
 import me.nebula.orbit.progression.BattlePassMenu
+import me.nebula.orbit.progression.ProgressionSubscribers
 import me.nebula.orbit.progression.achievement.AchievementMenu
 import me.nebula.orbit.progression.achievement.registerAchievementContent
 import me.nebula.orbit.progression.mission.MissionMenu
@@ -226,6 +228,7 @@ object Orbit {
         private set
     lateinit var mode: ServerMode
         private set
+    internal val isModeInitialized: Boolean get() = ::mode.isInitialized
     var provisionUuid: String? = null
         private set
     var gameMode: String? = null
@@ -239,6 +242,36 @@ object Orbit {
     var randomMutatorCount: Int = 0
     var storage: StorageClient? = null
         private set
+
+    @Volatile var instance: OrbitInstance? = null
+        private set
+
+    private val moduleRegistry = moduleRegistry {
+        register(ModelEngineModule)
+        register(BotAIModule)
+        register(HudSystemModule)
+        register(CosmeticSystemModule)
+        register(StaffSystemModule)
+        register(AntiCheatModule)
+        register(ObservabilityModule)
+        register(ProgressionModule)
+        register(MarketplaceModule).enableIf { gameMode == null }
+    }
+
+    private fun rebuildInstance() {
+        if (!::serverName.isInitialized || !::mode.isInitialized) return
+        instance = OrbitInstance(
+            serverName = serverName,
+            mode = mode,
+            provisionUuid = provisionUuid,
+            gameMode = gameMode,
+            hostOwner = hostOwner,
+            mapName = mapName,
+            activeMutatorIds = activeMutatorIds,
+            randomMutatorCount = randomMutatorCount,
+            storage = storage,
+        )
+    }
 
     private val logger = logger("Orbit")
     val LOCALE_TAG: Tag<String> = Tag.String("nebula:locale")
@@ -263,6 +296,16 @@ object Orbit {
     fun deserialize(key: String, locale: String, vararg resolvers: TagResolver): Component =
         miniMessage.deserialize(translations.require(key, locale), *resolvers)
 
+    private inline fun <T> bootStep(name: String, block: () -> T): T {
+        val start = System.nanoTime()
+        try {
+            return block()
+        } finally {
+            val ms = (System.nanoTime() - start) / 1_000_000
+            logger.info { "[boot] step=$name duration=${ms}ms" }
+        }
+    }
+
     private fun detectContainerAddress(): String? =
         NetworkInterface.getNetworkInterfaces()
             .asSequence()
@@ -273,6 +316,10 @@ object Orbit {
     @JvmStatic
     fun main(args: Array<String>) {
         Thread.currentThread().contextClassLoader = Orbit::class.java.classLoader
+
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            logger.error(throwable) { "Uncaught exception in thread '${thread.name}'" }
+        }
 
         val env = environment {
             required("VELOCITY_SECRET")
@@ -375,17 +422,19 @@ object Orbit {
         val storageUrl = env.all["STORAGE_URL"]?.ifEmpty { null }
         val storageToken = env.all["STORAGE_TOKEN"]?.ifEmpty { null }
         if (storageUrl != null && storageToken != null) {
-            storage = storageClient {
+            val client = storageClient {
                 url = storageUrl
                 token = storageToken
             }
-            ReplayStorage.initialize(storage!!.scope("replays"))
+            storage = client
+            ReplayStorage.initialize(client.scope("replays"))
         }
 
         var resolvedWorldPath: String? = null
-        if (gameMode != null) {
+        val activeGameMode = gameMode
+        if (activeGameMode != null) {
             val targetMap = mapName
-                ?: PoolConfigStore.load(gameMode!!)?.maps?.randomOrNull()
+                ?: PoolConfigStore.load(activeGameMode)?.maps?.randomOrNull()
             if (targetMap != null) {
                 resolvedWorldPath = runCatching {
                     MapLoader.resolve(targetMap).toString()
@@ -395,7 +444,8 @@ object Orbit {
             }
         }
 
-        val server = MinecraftServer.init(Auth.Velocity(env.all["VELOCITY_SECRET"]!!))
+        val velocitySecret = env.all.getValue("VELOCITY_SECRET")
+        val server = MinecraftServer.init(Auth.Velocity(velocitySecret))
 
         MinecraftServer.getExceptionManager().setExceptionHandler { throwable ->
             val msg = throwable.message ?: ""
@@ -413,17 +463,17 @@ object Orbit {
         val handler = MinecraftServer.getGlobalEventHandler()
 
         app.resources.ensureDirectory("models")
-        ModelEngine.install()
-        BotAI.install()
 
-        TooltipStyleRegistry.registerDefaults()
-        CustomContentRegistry.init(app.resources, handler)
+        bootStep("TooltipStyleRegistry") { TooltipStyleRegistry.registerDefaults() }
+        bootStep("CustomContentRegistry.init") { CustomContentRegistry.init(app.resources, handler) }
 
-        app.resources.list("models", "bbmodel", recursive = true).forEach { path ->
-            val relativePath = path.removePrefix("models/")
-            logger.info { "Loading model: $relativePath" }
-            val raw = ModelGenerator.generateRaw(app.resources, relativePath)
-            ModelEngine.registerRaw(raw.blueprint.name, raw)
+        bootStep("ModelEngine.registerRaw") {
+            app.resources.list("models", "bbmodel", recursive = true).forEach { path ->
+                val relativePath = path.removePrefix("models/")
+                logger.info { "Loading model: $relativePath" }
+                val raw = ModelGenerator.generateRaw(app.resources, relativePath)
+                ModelEngine.registerRaw(raw.blueprint.name, raw)
+            }
         }
 
         CustomContentRegistry.mergePack()
@@ -455,12 +505,6 @@ object Orbit {
                 offset(0f, 0.06f)
             }
         })
-
-        HudManager.install(handler)
-        ActionBarManager.install(handler)
-        AnimatedCounterManager.install(handler)
-        AnimatedBossBarManager.install(handler)
-        TabListManager.install(handler)
 
         val commandManager = MinecraftServer.getCommandManager()
         installBasicCommands(commandManager)
@@ -513,19 +557,9 @@ object Orbit {
         CosmeticRegistry.loadFromDefinitions()
         MutatorRegistry.loadDefinitions()
         registerAchievementContent()
-        CosmeticListener.activeConfig = mode.cosmeticConfig
-        CosmeticListener.install(handler)
-        installCosmeticInteraction(handler)
-        AuraManager.install()
-        CompanionManager.install()
-        PetManager.install()
-        GadgetManager.install()
-        GravestoneManager.install()
-        CosmeticMountManager.install()
 
         mode.install(handler)
-
-        if (gameMode == null) MarketplaceExpiry.install()
+        rebuildInstance()
 
         PlayerCache.install(*CacheSlots.ORBIT)
         PlayerCache.onStoreUpdate {
@@ -546,11 +580,9 @@ object Orbit {
             }
         }
         PlayerCache.installListeners()
-        NickManager.installListeners()
-        VanishManager.installListeners()
-        StaffSpectateManager.installListeners()
-        AntiCheat.install(handler)
-        MetricsPublisher.initialize()
+
+        moduleRegistry.enableAll()
+        runCatching { PendingReplayFlushes.sweepStale() }
 
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
             event.spawningInstance = mode.activeInstance
@@ -561,6 +593,7 @@ object Orbit {
                 event.setSendRegistryData(false)
                 event.setClearChat(false)
             }
+            ServerDrainManager.handleIncomingPlayer(event.player.uuid)
         }
 
         handler.addListener(PlayerSpawnEvent::class.java) { event ->
@@ -691,25 +724,8 @@ object Orbit {
 
             val players = MinecraftServer.getConnectionManager().onlinePlayers.toList()
             if (players.isNotEmpty()) {
-                val hub = runCatching {
-                    ServerStore.entries(activeHubPredicate())
-                        .filter { it.value.name != serverName }
-                        .minByOrNull { it.value.playerCount }
-                        ?.value
-                }.getOrNull()
-
-                val limbo = if (hub == null) runCatching {
-                    ServerStore.entries(activeLimboPredicate())
-                        .firstOrNull()?.value
-                }.getOrNull() else null
-
-                val target = hub ?: limbo
-                if (target != null) {
-                    for (player in players) {
-                        runCatching { NetworkMessenger.publish(TransferPlayerMessage(player.uuid, target.name)) }
-                    }
-                    Thread.sleep(2000)
-                }
+                val transferred = PlayerTransfer.transferAllToHub()
+                if (transferred > 0) Thread.sleep(2000)
 
                 for (player in MinecraftServer.getConnectionManager().onlinePlayers.toList()) {
                     runCatching { player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid))) }
@@ -717,22 +733,9 @@ object Orbit {
             }
             globalTasks.forEach { it.cancel() }
             globalTasks.clear()
-            MetricsPublisher.shutdown()
-            BotAI.uninstall()
-            AntiCheat.uninstall()
-            MarketplaceExpiry.uninstall()
-            NickManager.uninstallListeners()
-            VanishManager.uninstallListeners()
-            StaffSpectateManager.uninstallListeners()
-            CosmeticListener.uninstall()
-            AuraManager.uninstall()
-            CompanionManager.uninstall()
-            PetManager.uninstall()
-            GadgetManager.uninstall()
-            GravestoneManager.uninstall()
-            CosmeticMountManager.uninstall()
-            ModelEngine.uninstall()
+            moduleRegistry.disableAll()
             mode.shutdown()
+            PlayerCache.clear()
             runCatching { Store.flushAll() }
             app.stop().join()
         })
@@ -758,61 +761,25 @@ object Orbit {
             else -> error("Unknown game mode: $gameMode")
         }
 
+    private val vanillaModuleList = listOf(
+        BlockPickModule, FallDamageModule, VoidDamageModule, GravityBlocksModule,
+        HungerModule, NaturalRegenModule, FireDamageModule, DrowningModule,
+        TntExplosionModule, ProjectilesModule, ArmorReductionModule, CriticalHitsModule,
+        AttackCooldownModule, SuffocationModule, ItemPickupModule, FoodConsumptionModule,
+        BlockDropsModule, ToolDurabilityModule, FlintAndSteelModule, BucketModule,
+        ChestModule, WaterFlowModule, LavaFlowModule, SweepAttackModule,
+        ShieldBlockingModule, FireSpreadModule, BedRespawnModule, BoneMealModule,
+        EnderChestModule, CampfireCookingModule, CraftingModule, FurnaceModule,
+        StonecutterModule, NetherPortalModule, DamageIntegrationModule, SwimmingModule,
+        DoorInteractionModule, LeverButtonModule, FarmlandModule, CropGrowthModule,
+        LadderClimbingModule, SlimeBlockModule, ItemDespawnModule, PressurePlateModule,
+        NoteBlockModule, ComposterModule, CauldronModule, RespawnAnchorModule,
+        AnvilModule, BrewingStandModule, JukeboxModule, ShulkerBoxModule,
+        TotemModule, SmithingTableModule,
+    )
+
     private fun registerVanillaModules() {
-        VanillaModules.register(BlockPickModule)
-        VanillaModules.register(FallDamageModule)
-        VanillaModules.register(VoidDamageModule)
-        VanillaModules.register(GravityBlocksModule)
-        VanillaModules.register(HungerModule)
-        VanillaModules.register(NaturalRegenModule)
-        VanillaModules.register(FireDamageModule)
-        VanillaModules.register(DrowningModule)
-        VanillaModules.register(TntExplosionModule)
-        VanillaModules.register(ProjectilesModule)
-        VanillaModules.register(ArmorReductionModule)
-        VanillaModules.register(CriticalHitsModule)
-        VanillaModules.register(AttackCooldownModule)
-        VanillaModules.register(SuffocationModule)
-        VanillaModules.register(ItemPickupModule)
-        VanillaModules.register(FoodConsumptionModule)
-        VanillaModules.register(BlockDropsModule)
-        VanillaModules.register(ToolDurabilityModule)
-        VanillaModules.register(FlintAndSteelModule)
-        VanillaModules.register(BucketModule)
-        VanillaModules.register(ChestModule)
-        VanillaModules.register(WaterFlowModule)
-        VanillaModules.register(LavaFlowModule)
-        VanillaModules.register(SweepAttackModule)
-        VanillaModules.register(ShieldBlockingModule)
-        VanillaModules.register(FireSpreadModule)
-        VanillaModules.register(BedRespawnModule)
-        VanillaModules.register(BoneMealModule)
-        VanillaModules.register(EnderChestModule)
-        VanillaModules.register(CampfireCookingModule)
-        VanillaModules.register(CraftingModule)
-        VanillaModules.register(FurnaceModule)
-        VanillaModules.register(StonecutterModule)
-        VanillaModules.register(NetherPortalModule)
-        VanillaModules.register(DamageIntegrationModule)
-        VanillaModules.register(SwimmingModule)
-        VanillaModules.register(DoorInteractionModule)
-        VanillaModules.register(LeverButtonModule)
-        VanillaModules.register(FarmlandModule)
-        VanillaModules.register(CropGrowthModule)
-        VanillaModules.register(LadderClimbingModule)
-        VanillaModules.register(SlimeBlockModule)
-        VanillaModules.register(ItemDespawnModule)
-        VanillaModules.register(PressurePlateModule)
-        VanillaModules.register(NoteBlockModule)
-        VanillaModules.register(ComposterModule)
-        VanillaModules.register(CauldronModule)
-        VanillaModules.register(RespawnAnchorModule)
-        VanillaModules.register(AnvilModule)
-        VanillaModules.register(BrewingStandModule)
-        VanillaModules.register(JukeboxModule)
-        VanillaModules.register(ShulkerBoxModule)
-        VanillaModules.register(TotemModule)
-        VanillaModules.register(SmithingTableModule)
+        vanillaModuleList.forEach(VanillaModules::register)
     }
 }
 

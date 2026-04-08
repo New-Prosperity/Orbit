@@ -15,7 +15,7 @@ sealed interface PlayerState {
 
 class PlayerTracker {
 
-    private val players = ConcurrentHashMap<UUID, PlayerState>()
+    @PublishedApi internal val players = ConcurrentHashMap<UUID, PlayerState>()
     private val teams = ConcurrentHashMap<UUID, String>()
     private val lives = ConcurrentHashMap<UUID, Int>()
     private val kills = ConcurrentHashMap<UUID, Int>()
@@ -34,6 +34,14 @@ class PlayerTracker {
     val disconnected: Set<UUID> get() = players.entries.filter { it.value is PlayerState.Disconnected }.mapTo(HashSet()) { it.key }
     val respawning: Set<UUID> get() = players.entries.filter { it.value is PlayerState.Respawning }.mapTo(HashSet()) { it.key }
     val all: Set<UUID> get() = players.keys.toSet()
+
+    inline fun forEachAlive(action: (UUID) -> Unit) {
+        for ((uuid, state) in players) if (state is PlayerState.Alive) action(uuid)
+    }
+
+    inline fun forEachSpectating(action: (UUID) -> Unit) {
+        for ((uuid, state) in players) if (state is PlayerState.Spectating) action(uuid)
+    }
 
     val aliveCount: Int get() = players.values.count { it is PlayerState.Alive }
     val effectiveAliveCount: Int get() = players.values.count { it !is PlayerState.Spectating }

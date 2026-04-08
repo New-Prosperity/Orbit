@@ -50,6 +50,7 @@ class LiveTabList @PublishedApi internal constructor(
 ) {
 
     private val viewers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+    private val lastSent: ConcurrentHashMap<UUID, Int> = ConcurrentHashMap()
     private val eventNode = EventNode.all("live-tablist-${System.nanoTime()}")
     private val refreshTask: Task
 
@@ -59,6 +60,7 @@ class LiveTabList @PublishedApi internal constructor(
         }
         eventNode.addListener(PlayerDisconnectEvent::class.java) { event ->
             viewers.remove(event.player.uuid)
+            lastSent.remove(event.player.uuid)
         }
         MinecraftServer.getGlobalEventHandler().addChild(eventNode)
         refreshTask = repeat(JavaDuration.ofMillis(refreshInterval.inWholeMilliseconds)) { refreshAll() }
@@ -79,15 +81,30 @@ class LiveTabList @PublishedApi internal constructor(
         refreshTask.cancel()
         MinecraftServer.getGlobalEventHandler().removeChild(eventNode)
         viewers.clear()
+        lastSent.clear()
     }
 
     private fun send(player: Player) {
-        val header = headerSections
-            .filter { it.visibleWhen?.invoke(player) != false }
-            .joinToString("\n") { it.provider(player) }
-        val footer = footerSections
-            .filter { it.visibleWhen?.invoke(player) != false }
-            .joinToString("\n") { it.provider(player) }
+        val headerBuilder = StringBuilder()
+        for (section in headerSections) {
+            if (section.visibleWhen?.invoke(player) == false) continue
+            if (headerBuilder.isNotEmpty()) headerBuilder.append('\n')
+            headerBuilder.append(section.provider(player))
+        }
+        val footerBuilder = StringBuilder()
+        for (section in footerSections) {
+            if (section.visibleWhen?.invoke(player) == false) continue
+            if (footerBuilder.isNotEmpty()) footerBuilder.append('\n')
+            footerBuilder.append(section.provider(player))
+        }
+
+        val header = headerBuilder.toString()
+        val footer = footerBuilder.toString()
+        val digest = 31 * header.hashCode() + footer.hashCode()
+
+        if (lastSent[player.uuid] == digest) return
+        lastSent[player.uuid] = digest
+
         player.sendPlayerListHeaderAndFooter(
             miniMessage.deserialize(header),
             miniMessage.deserialize(footer),

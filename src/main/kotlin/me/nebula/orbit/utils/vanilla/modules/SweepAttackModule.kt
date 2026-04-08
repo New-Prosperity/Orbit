@@ -35,7 +35,7 @@ object SweepAttackModule : VanillaModule {
         node.addListener(EntityDamageEvent::class.java) { event ->
             val attacker = event.damage.attacker as? Player ?: return@addListener
             if (attacker.isCreativeOrSpectator) return@addListener
-            val target = event.entity as? LivingEntity ?: return@addListener
+            val target = event.entity
             if (!attacker.isOnGround) return@addListener
             if (attacker.isSprinting) return@addListener
 

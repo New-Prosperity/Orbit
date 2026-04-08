@@ -82,8 +82,9 @@ object AchievementMenu {
     private fun openCategory(player: Player, category: AchievementCategory) {
         val achievements = AchievementRegistry.byCategory(category)
 
-        val tierGroups = achievements.filter { it.tierGroup != null }
-            .groupBy { it.tierGroup!! }
+        val tierGroups = achievements
+            .mapNotNull { ach -> ach.tierGroup?.let { it to ach } }
+            .groupBy({ it.first }, { it.second })
         val standalone = achievements.filter { it.tierGroup == null }
         val processed = mutableSetOf<String>()
 

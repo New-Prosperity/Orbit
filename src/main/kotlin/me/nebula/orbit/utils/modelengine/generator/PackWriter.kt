@@ -1,15 +1,15 @@
 package me.nebula.orbit.utils.modelengine.generator
 
-import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import me.nebula.ether.utils.gson.GsonProvider
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 object PackWriter {
 
-    private val gson = GsonBuilder().setPrettyPrinting().create()
+    private val gson = GsonProvider.pretty
 
     fun write(
         packName: String,

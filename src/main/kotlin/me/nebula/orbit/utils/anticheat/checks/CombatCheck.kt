@@ -3,6 +3,7 @@ package me.nebula.orbit.utils.anticheat.checks
 import me.nebula.gravity.property.NetworkProperties
 import me.nebula.gravity.property.PropertyStore
 import me.nebula.orbit.utils.anticheat.AntiCheat
+import me.nebula.orbit.utils.anticheat.AntiCheatCheck
 import net.minestom.server.entity.GameMode
 import net.minestom.server.entity.Player
 import net.minestom.server.event.Event
@@ -14,7 +15,9 @@ import java.util.concurrent.ConcurrentLinkedDeque
 
 private data class AttackTimestamp(val time: Long)
 
-object CombatCheck {
+object CombatCheck : AntiCheatCheck {
+
+    override val id: String = "combat"
 
     private const val REACH_THRESHOLD = 4.5
     private const val MAX_CPS = 20
@@ -23,7 +26,7 @@ object CombatCheck {
 
     private val attackHistory = ConcurrentHashMap<UUID, ConcurrentLinkedDeque<AttackTimestamp>>()
 
-    fun install(node: EventNode<Event>) {
+    override fun install(node: EventNode<in Event>) {
         node.addListener(EntityAttackEvent::class.java) { event ->
             val player = event.entity as? Player ?: return@addListener
             if (player.gameMode == GameMode.CREATIVE) return@addListener
@@ -52,11 +55,11 @@ object CombatCheck {
         }
     }
 
-    fun cleanup(uuid: UUID) {
+    override fun cleanup(uuid: UUID) {
         attackHistory.remove(uuid)
     }
 
-    fun clearAll() {
+    override fun clearAll() {
         attackHistory.clear()
     }
 }

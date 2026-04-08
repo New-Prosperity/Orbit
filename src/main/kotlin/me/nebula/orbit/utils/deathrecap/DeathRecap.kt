@@ -32,14 +32,16 @@ class DeathRecapTracker {
 
     fun recordDamage(victim: UUID, entry: DamageEntry) {
         val list = damageHistory.computeIfAbsent(victim) { mutableListOf() }
-        list.add(entry)
-        if (list.size > maxEntries) list.removeFirst()
+        synchronized(list) {
+            list.add(entry)
+            if (list.size > maxEntries) list.removeFirst()
+        }
     }
 
     fun buildRecap(victim: Player): DeathRecap? {
         val list = damageHistory[victim.uuid] ?: return null
         val cutoff = System.currentTimeMillis() - windowMillis
-        val recent = list.filter { it.timestamp >= cutoff }
+        val recent = synchronized(list) { list.filter { it.timestamp >= cutoff } }
         if (recent.isEmpty()) return null
 
         val totalDamage = recent.sumOf { it.amount.toDouble() }.toFloat()

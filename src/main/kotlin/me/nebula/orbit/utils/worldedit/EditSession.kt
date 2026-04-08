@@ -31,7 +31,7 @@ class EditSession(
     }
 
     fun setBlock(x: Int, y: Int, z: Int, pattern: Pattern) {
-        setBlock(x, y, z, Block.fromStateId(pattern.apply(x, y, z).toInt()) ?: Block.AIR)
+        setBlock(x, y, z, Block.fromStateId(pattern.apply(x, y, z)) ?: Block.AIR)
     }
 
     fun setBlockFast(x: Int, y: Int, z: Int, stateId: Int) {
@@ -45,7 +45,7 @@ class EditSession(
 
     fun getBlock(x: Int, y: Int, z: Int): Block {
         val buffered = queue.getBuffered(x, y, z)
-        if (buffered >= 0) return Block.fromStateId(buffered.toInt()) ?: Block.AIR
+        if (buffered >= 0) return Block.fromStateId(buffered) ?: Block.AIR
         return instance.getBlock(x, y, z)
     }
 

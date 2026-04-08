@@ -100,22 +100,24 @@ object AntiCheat {
     }
 
     fun install(eventNode: EventNode<Event>) {
-        val node = EventNode.all("anticheat")
+        if (AntiCheatRegistry.all().isEmpty()) {
+            AntiCheatRegistry.register(MovementCheck)
+            AntiCheatRegistry.register(CombatCheck)
+        }
 
-        MovementCheck.install(node)
-        CombatCheck.install(node)
+        val node = EventNode.all("anticheat")
+        for (check in AntiCheatRegistry.all()) check.install(node)
 
         node.addListener(PlayerDisconnectEvent::class.java) { event ->
             val uuid = event.player.uuid
             trackers.remove(uuid)
             flaggedLocally.remove(uuid)
-            MovementCheck.cleanup(uuid)
-            CombatCheck.cleanup(uuid)
+            for (check in AntiCheatRegistry.all()) check.cleanup(uuid)
         }
 
         eventNode.addChild(node)
         this.eventNode = node
-        logger.info { "AntiCheat installed" }
+        logger.info { "AntiCheat installed (${AntiCheatRegistry.all().size} checks)" }
     }
 
     fun uninstall() {
@@ -124,8 +126,7 @@ object AntiCheat {
         eventNode = null
         trackers.clear()
         flaggedLocally.clear()
-        MovementCheck.clearAll()
-        CombatCheck.clearAll()
+        for (check in AntiCheatRegistry.all()) check.clearAll()
         logger.info { "AntiCheat uninstalled" }
     }
 }

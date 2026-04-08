@@ -245,7 +245,7 @@ class CaveCarver(
         for (dx in -rInt..rInt) {
             for (dy in -rInt..rInt) {
                 for (dz in -rInt..rInt) {
-                    val dist = sqrt((dx * dx + dy * dy * 0.6 + dz * dz).toDouble())
+                    val dist = sqrt(dx * dx + dy * dy * 0.6 + dz * dz)
                     if (dist > radius) continue
                     val bx = x + dx
                     val by = y + dy

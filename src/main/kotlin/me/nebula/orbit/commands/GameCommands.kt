@@ -4,7 +4,6 @@ import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.game.GameMode
 import me.nebula.orbit.mode.game.GamePhase
 import me.nebula.orbit.translation.translate
-import me.nebula.orbit.utils.chat.sendMM
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.commandbuilder.suggestPlayers
 import me.nebula.orbit.utils.matchresult.matchResult
@@ -39,28 +38,28 @@ private fun eliminateCommand() = command("eliminate") {
     }
     onPlayerExecute {
         val gm = gameMode() ?: run {
-            player.sendMM("<red>Not in a game mode")
+            player.sendMessage(player.translate("orbit.command.game.not_in_game_mode"))
             return@onPlayerExecute
         }
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMM("<red>Usage: /eliminate <player>")
+            player.sendMessage(player.translate("orbit.command.eliminate.usage"))
             return@onPlayerExecute
         }
         val target = resolveOnline(cmdArgs[0]) ?: run {
-            player.sendMM("<red>Player not found: <white>${cmdArgs[0]}")
+            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs[0]))
             return@onPlayerExecute
         }
         if (gm.phase != GamePhase.PLAYING) {
-            player.sendMM("<red>Game is not in PLAYING phase")
+            player.sendMessage(player.translate("orbit.command.game.not_playing"))
             return@onPlayerExecute
         }
         if (!gm.tracker.isAlive(target.uuid)) {
-            player.sendMM("<red>${target.username} is not alive")
+            player.sendMessage(player.translate("orbit.command.eliminate.not_alive", "name" to target.username))
             return@onPlayerExecute
         }
         gm.eliminate(target)
-        player.sendMM("<green>Eliminated <white>${target.username}")
+        player.sendMessage(player.translate("orbit.command.eliminate.success", "name" to target.username))
     }
 }
 
@@ -73,28 +72,28 @@ private fun reviveCommand() = command("revive") {
     }
     onPlayerExecute {
         val gm = gameMode() ?: run {
-            player.sendMM("<red>Not in a game mode")
+            player.sendMessage(player.translate("orbit.command.game.not_in_game_mode"))
             return@onPlayerExecute
         }
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMM("<red>Usage: /revive <player>")
+            player.sendMessage(player.translate("orbit.command.revive.usage"))
             return@onPlayerExecute
         }
         val target = resolveOnline(cmdArgs[0]) ?: run {
-            player.sendMM("<red>Player not found: <white>${cmdArgs[0]}")
+            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs[0]))
             return@onPlayerExecute
         }
         if (gm.phase != GamePhase.PLAYING) {
-            player.sendMM("<red>Game is not in PLAYING phase")
+            player.sendMessage(player.translate("orbit.command.game.not_playing"))
             return@onPlayerExecute
         }
         if (!gm.tracker.isSpectating(target.uuid)) {
-            player.sendMM("<red>${target.username} is not spectating")
+            player.sendMessage(player.translate("orbit.command.revive.not_spectating", "name" to target.username))
             return@onPlayerExecute
         }
         gm.revive(target)
-        player.sendMM("<green>Revived <white>${target.username}")
+        player.sendMessage(player.translate("orbit.command.revive.success", "name" to target.username))
     }
 }
 
@@ -107,28 +106,28 @@ private fun reconnectCommand() = command("reconnect") {
     }
     onPlayerExecute {
         val gm = gameMode() ?: run {
-            player.sendMM("<red>Not in a game mode")
+            player.sendMessage(player.translate("orbit.command.game.not_in_game_mode"))
             return@onPlayerExecute
         }
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMM("<red>Usage: /reconnect <player>")
+            player.sendMessage(player.translate("orbit.command.reconnect.usage"))
             return@onPlayerExecute
         }
         val target = resolveOnline(cmdArgs[0]) ?: run {
-            player.sendMM("<red>Player not found: <white>${cmdArgs[0]}")
+            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs[0]))
             return@onPlayerExecute
         }
         if (gm.phase != GamePhase.PLAYING) {
-            player.sendMM("<red>Game is not in PLAYING phase")
+            player.sendMessage(player.translate("orbit.command.game.not_playing"))
             return@onPlayerExecute
         }
         if (!gm.tracker.isDisconnected(target.uuid)) {
-            player.sendMM("<red>${target.username} is not in disconnected state")
+            player.sendMessage(player.translate("orbit.command.reconnect.not_disconnected", "name" to target.username))
             return@onPlayerExecute
         }
         gm.forceReconnect(target)
-        player.sendMM("<green>Force reconnected <white>${target.username}")
+        player.sendMessage(player.translate("orbit.command.reconnect.success", "name" to target.username))
     }
 }
 
@@ -136,15 +135,15 @@ private fun forceStartCommand() = command("forcestart") {
     permission("orbit.command.forcestart")
     onPlayerExecute {
         val gm = gameMode() ?: run {
-            player.sendMM("<red>Not in a game mode")
+            player.sendMessage(player.translate("orbit.command.game.not_in_game_mode"))
             return@onPlayerExecute
         }
         if (gm.phase != GamePhase.WAITING && gm.phase != GamePhase.STARTING) {
-            player.sendMM("<red>Game is already in ${gm.phase.name} phase")
+            player.sendMessage(player.translate("orbit.command.forcestart.wrong_phase", "phase" to gm.phase.name))
             return@onPlayerExecute
         }
         gm.forceStart()
-        player.sendMM("<green>Game force started")
+        player.sendMessage(player.translate("orbit.command.forcestart.success"))
     }
 }
 
@@ -152,15 +151,15 @@ private fun forceEndCommand() = command("forceend") {
     permission("orbit.command.forceend")
     onPlayerExecute {
         val gm = gameMode() ?: run {
-            player.sendMM("<red>Not in a game mode")
+            player.sendMessage(player.translate("orbit.command.game.not_in_game_mode"))
             return@onPlayerExecute
         }
         if (gm.phase != GamePhase.PLAYING) {
-            player.sendMM("<red>Game is not in PLAYING phase")
+            player.sendMessage(player.translate("orbit.command.game.not_playing"))
             return@onPlayerExecute
         }
         gm.forceEnd(matchResult { draw() })
-        player.sendMM("<green>Game force ended")
+        player.sendMessage(player.translate("orbit.command.forceend.success"))
     }
 }
 
@@ -168,10 +167,10 @@ private fun phaseCommand() = command("phase") {
     permission("orbit.command.phase")
     onPlayerExecute {
         val gm = gameMode() ?: run {
-            player.sendMM("<red>Not in a game mode")
+            player.sendMessage(player.translate("orbit.command.game.not_in_game_mode"))
             return@onPlayerExecute
         }
-        player.sendMM("<green>Current phase: <white>${gm.phase.name}")
+        player.sendMessage(player.translate("orbit.command.phase.current", "phase" to gm.phase.name))
     }
 }
 
@@ -179,23 +178,27 @@ private fun aliveCommand() = command("alive") {
     permission("orbit.command.alive")
     onPlayerExecute {
         val gm = gameMode() ?: run {
-            player.sendMM("<red>Not in a game mode")
+            player.sendMessage(player.translate("orbit.command.game.not_in_game_mode"))
             return@onPlayerExecute
         }
         val alive = gm.tracker.alive
         val disconnected = gm.tracker.disconnected
         val spectating = gm.tracker.spectating
-        player.sendMM("<green>Alive: <white>${alive.size}<gray> | <green>Disconnected: <white>${disconnected.size}<gray> | <green>Spectating: <white>${spectating.size}")
+        player.sendMessage(player.translate("orbit.command.alive.summary",
+            "alive" to alive.size.toString(),
+            "disconnected" to disconnected.size.toString(),
+            "spectating" to spectating.size.toString(),
+        ))
         if (alive.isNotEmpty()) {
             val names = alive.mapNotNull { uuid ->
                 MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.username
                     ?: uuid.toString().take(8)
             }
-            player.sendMM("<green>Alive players: <white>${names.joinToString(", ")}")
+            player.sendMessage(player.translate("orbit.command.alive.list", "names" to names.joinToString(", ")))
         }
         if (disconnected.isNotEmpty()) {
             val names = disconnected.map { it.toString().take(8) }
-            player.sendMM("<yellow>Disconnected: <white>${names.joinToString(", ")}")
+            player.sendMessage(player.translate("orbit.command.alive.disconnected", "names" to names.joinToString(", ")))
         }
     }
 }
@@ -203,7 +206,7 @@ private fun aliveCommand() = command("alive") {
 private fun lastDeathCommand() = command("lastdeath") {
     onPlayerExecute {
         val gm = gameMode() ?: run {
-            player.sendMM("<red>Not in a game mode")
+            player.sendMessage(player.translate("orbit.command.game.not_in_game_mode"))
             return@onPlayerExecute
         }
         val tracker = gm.deathRecapTracker

@@ -33,7 +33,7 @@ object DamageIntegrationModule : VanillaModule {
         val node = EventNode.all("vanilla-damage-integration")
 
         node.addListener(EntityDamageEvent::class.java) { event ->
-            val victim = event.entity as? LivingEntity ?: return@addListener
+            val victim = event.entity
             val attacker = event.damage.attacker
 
             if (trackDamage) {

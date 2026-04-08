@@ -1,6 +1,6 @@
 package me.nebula.orbit.utils.statue
 
-import com.google.gson.GsonBuilder
+import me.nebula.ether.utils.gson.GsonProvider
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import me.nebula.ether.utils.logging.logger
@@ -129,7 +129,7 @@ object PlayerModelGenerator {
             })
         }
 
-        return GsonBuilder().setPrettyPrinting().create().toJson(root)
+        return GsonProvider.pretty.toJson(root)
     }
 
     fun exportToFile(outputPath: Path) {

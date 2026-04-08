@@ -3,13 +3,15 @@ package me.nebula.orbit.utils.metrics
 import com.hazelcast.replicatedmap.ReplicatedMap
 import me.nebula.ether.utils.hazelcast.HazelcastStructureProvider
 import me.nebula.ether.utils.logging.logger
+import me.nebula.ether.utils.observability.ErrorAggregator
+import me.nebula.ether.utils.observability.errorAggregator
+import me.nebula.ether.utils.scheduling.ScheduledTask
+import me.nebula.ether.utils.scheduling.TaskScheduler
 import me.nebula.gravity.metrics.ServerMetrics
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.utils.tpsmonitor.TPSMonitor
 import net.minestom.server.MinecraftServer
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 object MetricsPublisher {
 
@@ -18,20 +20,21 @@ object MetricsPublisher {
         HazelcastStructureProvider.replicatedMap("metrics")
     }
     private val startTime = System.currentTimeMillis()
-    @Volatile private var executor: ScheduledExecutorService? = null
+    @Volatile private var publisherTask: ScheduledTask? = null
+
+    private fun errorsKey(): String = "errors:${Orbit.serverName}"
 
     fun initialize() {
-        executor = Executors.newSingleThreadScheduledExecutor {
-            Thread(it, "metrics-publisher").apply { isDaemon = true }
-        }
-        executor?.scheduleAtFixedRate(::publish, 10, 10, TimeUnit.SECONDS)
+        errorAggregator()
+        publisherTask = TaskScheduler.scheduleAtFixedRate("metrics-publisher", 10.seconds, ::publish)
         logger.info { "MetricsPublisher initialized" }
     }
 
     fun shutdown() {
-        executor?.shutdown()
-        executor?.awaitTermination(5, TimeUnit.SECONDS)
+        publisherTask?.cancel()
+        publisherTask = null
         runCatching { metricsMap.remove(Orbit.serverName) }
+        runCatching { metricsMap.remove(errorsKey()) }
         logger.info { "MetricsPublisher shut down" }
     }
 
@@ -54,6 +57,7 @@ object MetricsPublisher {
             )
 
             metricsMap[Orbit.serverName] = metrics
+            metricsMap[errorsKey()] = ErrorAggregator.snapshot(Orbit.serverName)
         } catch (e: Exception) {
             logger.warn { "Failed to publish metrics: ${e.message}" }
         }

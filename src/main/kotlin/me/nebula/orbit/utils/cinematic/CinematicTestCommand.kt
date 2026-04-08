@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.cinematic
 
+import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.commandbuilder.command
 import net.kyori.adventure.text.Component
 import net.minestom.server.command.builder.Command
@@ -20,7 +21,7 @@ fun cinematicTestCommand(): Command = command("cinematic") {
                 node(12f, Pos(o.x(), o.y() + 10, o.z(), o.yaw() + 360f, -30f))
                 fade(20, 20)
                 hideHud()
-                onComplete { player.sendMessage(Component.text("Cinematic complete!")) }
+                onComplete { player.sendMessage(player.translate("orbit.command.cinematic.play.complete")) }
             }
         }
     }
@@ -58,7 +59,7 @@ fun cinematicTestCommand(): Command = command("cinematic") {
                 onTick { p, progress ->
                     p.sendActionBar(Component.text("%.0f%%".format(progress * 100)))
                 }
-                onComplete { player.sendMessage(Component.text("Slow cinematic done!")) }
+                onComplete { player.sendMessage(player.translate("orbit.command.cinematic.slow.complete")) }
             }
         }
     }
@@ -76,7 +77,7 @@ fun cinematicTestCommand(): Command = command("cinematic") {
                 speed(2f)
                 fade(10, 10)
                 hideHud()
-                onComplete { player.sendMessage(Component.text("Fast cinematic done!")) }
+                onComplete { player.sendMessage(player.translate("orbit.command.cinematic.fast.complete")) }
             }
         }
     }
@@ -85,9 +86,9 @@ fun cinematicTestCommand(): Command = command("cinematic") {
         onPlayerExecute {
             if (player.isInCinematic) {
                 player.stopCinematic()
-                player.sendMessage(Component.text("Cinematic stopped."))
+                player.sendMessage(player.translate("orbit.command.cinematic.stop.success"))
             } else {
-                player.sendMessage(Component.text("No active cinematic."))
+                player.sendMessage(player.translate("orbit.command.cinematic.stop.none"))
             }
         }
     }

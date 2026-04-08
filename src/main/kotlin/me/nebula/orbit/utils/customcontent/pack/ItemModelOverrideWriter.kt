@@ -1,13 +1,13 @@
 package me.nebula.orbit.utils.customcontent.pack
 
-import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import me.nebula.ether.utils.gson.GsonProvider
 import net.minestom.server.item.Material
 
 object ItemModelOverrideWriter {
 
-    private val gson = GsonBuilder().setPrettyPrinting().create()
+    private val gson = GsonProvider.pretty
 
     data class OverrideEntry(val customModelData: Int, val modelPath: String)
 

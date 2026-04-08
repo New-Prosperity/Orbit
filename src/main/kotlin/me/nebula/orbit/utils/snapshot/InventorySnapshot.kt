@@ -37,7 +37,7 @@ data class InventorySnapshot(
                 food = player.food,
                 health = player.health,
                 experience = player.exp,
-                level = player.level.toInt(),
+                level = player.level,
             )
         }
     }

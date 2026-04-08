@@ -19,6 +19,7 @@ dependencies {
     implementation("net.minestom:minestom:dev")
     implementation("net.kyori:adventure-text-minimessage:4.20.0")
     implementation("com.github.luben:zstd-jni:1.5.7-1")
+    testImplementation(kotlin("test"))
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

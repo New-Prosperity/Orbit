@@ -82,13 +82,13 @@ class KillFeed @PublishedApi internal constructor(
     private fun handleMultiKill(killer: Player, viewers: Collection<Player>) {
         if (multiKillMessages.isEmpty()) return
         val now = System.currentTimeMillis()
-        val state = multiKillTracker.compute(killer.uuid) { _, existing ->
+        val state = checkNotNull(multiKillTracker.compute(killer.uuid) { _, existing ->
             if (existing != null && now - existing.lastKillTime < multiKillWindowMillis) {
                 existing.copy(count = existing.count + 1, lastKillTime = now)
             } else {
                 MultiKillState(1, now)
             }
-        }!!
+        })
 
         val messageKey = multiKillMessages[state.count] ?: return
         for (viewer in viewers) {

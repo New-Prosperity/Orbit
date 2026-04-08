@@ -204,8 +204,8 @@ class DialogOptionBuilder @PublishedApi internal constructor(private val label: 
         currentPages.putAll(optionBuilder.subPages)
 
         val existingTarget = targetPage
-        if (existingTarget != null && currentPages.containsKey(existingTarget)) {
-            val existingPage = currentPages[existingTarget]!!
+        val existingPage = existingTarget?.let { currentPages[it] }
+        if (existingTarget != null && existingPage != null) {
             val updatedOptions = existingPage.options + builtOption
             currentPages[existingTarget] = existingPage.copy(options = updatedOptions)
         }

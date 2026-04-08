@@ -179,11 +179,24 @@ object MiningKnowledge {
         else -> null
     }
 
-    fun isPickaxe(material: Material): Boolean = material in setOf(
+    private val PICKAXE_MATERIALS = setOf(
         Material.WOODEN_PICKAXE, Material.STONE_PICKAXE, Material.IRON_PICKAXE,
         Material.DIAMOND_PICKAXE, Material.NETHERITE_PICKAXE, Material.GOLDEN_PICKAXE,
     )
 
-    fun bestPickaxe(materials: Set<Material>): Material? =
-        materials.filter { isPickaxe(it) }.maxByOrNull { toolTier(it) }
+    fun isPickaxe(material: Material): Boolean = material in PICKAXE_MATERIALS
+
+    fun bestPickaxe(materials: Set<Material>): Material? {
+        var best: Material? = null
+        var bestTier = -1
+        for (material in materials) {
+            if (!isPickaxe(material)) continue
+            val tier = toolTier(material)
+            if (tier > bestTier) {
+                best = material
+                bestTier = tier
+            }
+        }
+        return best
+    }
 }

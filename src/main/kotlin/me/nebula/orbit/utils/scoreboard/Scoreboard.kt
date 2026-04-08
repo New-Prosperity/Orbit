@@ -557,7 +557,7 @@ class LiveScoreboard @PublishedApi internal constructor(
 
     fun refresh(player: Player) {
         val visible = resolveVisible(player)
-        val visibleIndices = visible.map { it.first }.toSet()
+        val visibleIndices = visible.mapTo(HashSet(visible.size)) { it.first }
         val state = states[player.uuid]
 
         if (state == null || state.visibleIndices != visibleIndices) {

@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.customcontent.pack
 
-import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
+import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.orbit.utils.customcontent.block.BlockHitbox
 import me.nebula.orbit.utils.customcontent.block.CustomBlock
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
@@ -9,7 +9,7 @@ import net.minestom.server.instance.block.Block
 
 object BlockStateWriter {
 
-    private val gson = GsonBuilder().setPrettyPrinting().create()
+    private val gson = GsonProvider.pretty
 
     private val INSTRUMENTS = listOf(
         "banjo", "bass", "basedrum", "bell", "bit", "chime", "cow_bell",
@@ -76,7 +76,7 @@ object BlockStateWriter {
         vanillaModel: String,
         byStateId: Map<Int, CustomBlock>,
     ): ByteArray {
-        val base = Block.fromKey(blockName)!!
+        val base = checkNotNull(Block.fromKey(blockName)) { "Unknown block key: $blockName" }
         val variants = JsonObject()
         for (combo in 0 until 64) {
             var state = base

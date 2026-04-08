@@ -516,7 +516,7 @@ class MapPopulator(
         for (dx in -radius..radius) {
             for (dy in 0..radius) {
                 for (dz in -radius..radius) {
-                    val dist = kotlin.math.sqrt((dx * dx + dy * dy * 1.5 + dz * dz).toDouble())
+                    val dist = kotlin.math.sqrt(dx * dx + dy * dy * 1.5 + dz * dz)
                     if (dist > radius - random.nextDouble() * 0.5) continue
                     instance.setBlock(x + dx, y + dy, z + dz, block)
                 }

@@ -80,12 +80,13 @@ object GravityBlocksModule : VanillaModule {
             val block = event.block
             val blockName = block.name()
 
-            if (blockName in CONCRETE_POWDER_TO_CONCRETE) {
+            val concreteForm = CONCRETE_POWDER_TO_CONCRETE[blockName]
+            if (concreteForm != null) {
                 val x = event.blockPosition.blockX()
                 val y = event.blockPosition.blockY()
                 val z = event.blockPosition.blockZ()
                 if (isAdjacentToWater(event.instance, x, y, z)) {
-                    event.block = CONCRETE_POWDER_TO_CONCRETE[blockName]!!
+                    event.block = concreteForm
                     return@addListener
                 }
             }

@@ -289,12 +289,12 @@ class LeaderboardTextDisplayBuilder @PublishedApi internal constructor(
     fun backgroundColor(color: Int) { backgroundColor = color }
 
     @PublishedApi internal fun build(): LeaderboardTextDisplay {
-        requireNotNull(display) { "LeaderboardDisplay must be set" }
+        val resolvedDisplay = requireNotNull(display) { "LeaderboardDisplay must be set" }
         require(statKey.isNotBlank()) { "statKey must be set" }
 
         return LeaderboardTextDisplay(
             instance = instance,
-            display = display!!,
+            display = resolvedDisplay,
             position = position,
             statKey = statKey,
             titleText = titleText,

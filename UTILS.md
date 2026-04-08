@@ -1,0 +1,111 @@
+# Orbit Utils Index
+
+Generated index of `me.nebula.orbit.utils.<feature>/` packages. Each entry links to its `<feature>.md` for full docs.
+
+- **achievement** — Network-wide achievement system with persistent progress (Gravity `AchievementStore`), categories, stat-based triggers, rewards, prerequisites, rarity, tier groups, points, milestones, and vanilla advancement toast UI.
+- **actionbar** — Composable action bar with prioritized slots. Multiple components render left-to-right by priority, joined with a separator. Auto-resend prevents fade-out. Per-slot expiry for timed messages.
+- **afk** — Automatic AFK detection based on player movement and chat activity. State is stored on the Player via `Tag.Long("nebula:afk_last_activity")` and `Tag.Boolean("nebula:afk")`.
+- **animation** — Block and entity animation systems with keyframe support, looping, and interpolation.
+- **anticheat** — Lightweight server-side anti-cheat module. Detects only blatant cheating with generous thresholds. Pluggable via `AntiCheatRegistry`.
+- **anvilloader** — Named Anvil world loading with validation, chunk preloading, and lifecycle management.
+- **areaeffect** — Zone-based potion/gameplay effect application DSL.
+- **arena** — DSL for creating game arenas with spawn points, team spawns, spectator support, and a global registry.
+- **autorestart** — Scheduled server restart with configurable warning broadcasts and player kicks.
+- **biome** — DSL for defining `BiomeDefinition` instances with grouped scopes.
+- **blockindex** — Per-instance spatial index that tracks positions of specific block types. Eliminates O(n^3) cubic scans.
+- **blocksnapshot** — Block capture and restore system with packed Long-keyed storage.
+- **bossbar** — DSL for creating Adventure boss bars with MiniMessage titles.
+- **botai** — Autonomous bot AI system (actions, goals, brain, personality, skill calibration, memory) and pathfinding for Player-type bot entities.
+- **ceremony** — DSL-configured post-game ceremony system. Titles, sounds, podium, fireworks, personal stats, auto-spectate winner.
+- **chat** — MiniMessage utilities for formatting and sending rich text messages.
+- **chunkloader** — Async bulk chunk loading and unloading utilities.
+- **cinematic** — Scripted camera sequences with keyframe-driven interpolation (catmull-rom, bezier, linear, step) and quaternion slerp.
+- **combatarena** — Pre-built 1v1/FFA combat arena management with kill/death/damage tracking, kit application, and timed rounds.
+- **combatlog** — Thread-safe combat tagging system tracking which players are in combat and who attacked them.
+- **combo** — Tracks consecutive hits per player within a configurable tick window. Visual display, threshold callbacks, damage multipliers.
+- **commandbuilder** — Command DSL for Minestom with virtual-thread execution, locale-aware context, typed arguments, sub-commands, tab completion.
+- **compass** — Tracks a target (player or position) for players holding a compass, displaying direction and distance on the action bar.
+- **condition** — Composable conditions for game logic. Functional `Condition<Player>` interface with combinators.
+- **cooldown** — Thread-safe cooldown system with four variants: generic, named player cooldowns, material item cooldowns, skill cooldowns.
+- **countdown** — DSL for creating ticking countdowns with milestones, pause/resume, completion callback.
+- **counter** — Smooth number animations with easing.
+- **customcontent** — Custom item and block system. JSON config or code DSL definitions, Blockbench `.bbmodel` model source, resource pack merging.
+- **customrecipe** — Custom recipe registration and matching for shaped, shapeless, and smelting recipes.
+- **dailyreward** — Persistence-agnostic daily reward / login streak system with DSL configuration and GUI rendering.
+- **damage** — Per-player damage history tracking, floating damage number indicators, per-player per-source damage multipliers.
+- **deathmessage** — Customizable death messages with per-cause templates, placeholder replacement, broadcast scoping.
+- **deathrecap** — Damage tracking and death recap utility. Records all damage dealt and generates a summary on elimination.
+- **drain** — Phase-aware graceful drain for game and hub servers, driven by `ServerData.drain`. Cosmetic-aware transfer to fallback hub.
+- **entityai** — DSL for configuring Minestom entity AI with presets and custom goal/target selectors.
+- **entitybuilder** — Priority-based behavior AI with type-safe memory, spatial sensors, and ModelEngine integration.
+- **entityformation** — Entity formation system for arranging entities in geometric patterns with optional animation.
+- **entityglow** — Per-player and global entity glowing via `EntityMetaDataPacket`.
+- **entitymount** — Entity mounting/riding system with stacking, speed multipliers, player extensions.
+- **fireworkdisplay** — Programmatic firework show builder DSL with timed launches.
+- **freeze** — Player movement freeze system using event cancellation.
+- **gamechat** — Processor-based chat pipeline. Ordered chain of `ChatProcessor`s that modify formatting, filter recipients, or cancel messages.
+- **gamestate** — Generic enum-based state machine with allowed transitions, guards, enter/exit callbacks, timed transitions, history, listener support.
+- **gametest** — In-game minigame testing framework. Spawns fake players, simulates scenarios, reports results.
+- **graceperiod** — Timed invulnerability periods with optional cancel-on-move/attack and callbacks.
+- **gui** — DSL for building chest inventory GUIs with click handlers, fill/border decorations, pagination.
+- **hologram** — Multi-line floating text holograms using TextDisplay entities. Global and per-player variants.
+- **hotbar** — Named hotbar layout with per-slot click handlers, cooldowns, dynamic items, per-player overrides, full inventory protection.
+- **hud** — Boss bar text with custom bitmap font sprites repositioned by a modified `rendertype_text` vertex shader. Resolution-independent.
+- **itembuilder** — DSL for building `ItemStack` instances with name, lore, custom model data, MiniMessage formatting.
+- **itemresolver** — Unified item resolution checking `CustomItemRegistry` before `Material.fromKey()`.
+- **jumppad** — Player launch pad system triggered by proximity to configured block positions.
+- **killfeed** — Configurable kill feed with multi-kill tracking, kill streaks, first blood, custom renderers, effects.
+- **kit** — DSL for defining item kits with inventory slots, armor, offhand, global registry.
+- **knockback** — Configurable knockback profiles with per-player overrides and directional application.
+- **leaderboard** — Query and display rankings from Gravity's `RankingStore`. Chat output, paginated GUI, persistent text display entities.
+- **liquidflow** — Queue-based liquid flow simulation engine. Level-based spreading, draining, falling, infinite source creation.
+- **lobby** — Configurable lobby system with spawn management, block protection, damage/hunger control, void teleport, hotbar items.
+- **loot** — DSL for defining weighted loot tables with configurable roll counts and per-entry amount ranges.
+- **mappool** — DSL for defining map pools with selection strategies (random, rotation, vote), player-count filtering, recent-map exclusion.
+- **matchresult** — Game result tracking, display, and history system with team support.
+- **metadata** — Extension functions for simplified entity tag access plus a typed `EntityPropertyRegistry` system.
+- **metrics** — Publishes `ServerMetrics` and `ServiceErrors` to the shared Hazelcast `ReplicatedMap("metrics")` every 10 seconds.
+- **minigametimer** — Configurable game timer with display modes, milestone callbacks, pause/resume support.
+- **modelengine** — Minestom-native custom entity model system. Renders Blockbench models as `ITEM_DISPLAY` hierarchies. Animations, bone behaviors, mounting, VFX, LOD.
+- **nameplate** — Packet-based TextDisplay entities riding players. Multi-line, per-viewer translations, dynamic content, conditional lines.
+- **nebulaworld** — Custom binary world format. Single-file, Zstd-compressed, palette-based. Replaces Anvil for game maps.
+- **notification** — Multi-channel notification system. Chat, action bar, title, boss bar, and sound simultaneously.
+- **npc** — Packet-based fake NPCs with full skin support, any entity type, model-only mode, TextDisplay name tags, per-player visibility.
+- **particle** — Unified particle system: reusable `ParticleEffect` builder, geometric shapes via `ParticleShape`, convenience extensions.
+- **permissions** — Hierarchical permission group system with inheritance support.
+- **playervault** — Per-player vault storage with configurable vault count, size, title.
+- **profilecard** — Renders formatted player stat cards as chat messages using MiniMessage.
+- **protection** — Unified zone-based protection system. Region, chunk, and radius zones with per-flag control, whitelists, priority.
+- **queue** — Two queue types: `GameQueue` (min/max players, countdown, auto-start) and `SimpleQueue` (lightweight FIFO).
+- **raytrace** — Step-based ray tracing for blocks and entities, plus bounding-box accurate `raycast`.
+- **region** — Sealed region types (cuboid, sphere, cylinder) with global `RegionManager` registry and `RegionTracker` for enter/exit events.
+- **replay** — Game recording, playback, highlight detection, commands. Two recording modes (semantic frames, raw packet capture). MinIO storage via `.nebr` binary format.
+- **respawn** — Per-player and global respawn point management with instance resolution.
+- **rewards** — DSL-configured post-game reward system. Distributes currency based on participation, kills, configurable conditions.
+- **roundmanager** — Multi-round game management framework with automatic round/intermission transitions.
+- **scheduler** — Convenience functions and a DSL for Minestom's scheduler.
+- **schematic** — Sponge schematic (.schem) loader and paster using `AbsoluteBlockBatch`.
+- **scoreboard** — Unified scoreboard system: basic, per-player with placeholders, animated, team, objective tracker, live auto-managed lifecycle.
+- **screen** — Shader-decoded map-based screen renderer. True-color pixels encoded into map data, decoded by GLSL shader for pixel-perfect UIs at 640x384.
+- **snapshot** — Captures and restores a player's full inventory state including health, food, experience, level.
+- **sound** — DSL for creating reusable sound effects and player extensions for quick playback.
+- **spectatortoolkit** — Hotbar + shader-HUD spectator overlay for eliminated players. Player cycling, free camera, click-to-spectate, fly-speed control, target stats.
+- **stattracker** — Per-player in-memory statistics tracking with derived stats, leaderboards, standalone `Leaderboard` class.
+- **statue** — Animated player statues with skins, cosmetics, holograms, click interaction for the hub.
+- **structureblock** — Capture, store, paste, and rotate block structures within instances.
+- **supplydrop** — Falling airdrop system. Descending armor stand entity with trail particles, explosion, interactive loot chest.
+- **tablist** — Section-based header/footer with per-section conditions. Auto-shows on first spawn, refreshes on interval, change-detection.
+- **team** — Named team management via `TeamManager` singleton with DSL builder and player extensions.
+- **teambalance** — Team balancing algorithms using snake-draft distribution and score-based variance minimization.
+- **tooltip** — Custom tooltip borders using MC 1.21.2+ `tooltip_style` data component with generated 9-slice sprite textures.
+- **tpsmonitor** — Server TPS monitoring with a 1200-tick ring buffer (1 minute at 20 TPS).
+- **trail** — Particle trail system that renders particles behind moving players.
+- **vanilla** — Togglable vanilla Minecraft mechanics. Each module is independent, per-instance, with typed configuration.
+- **vanish** — Rank-aware packet-level player hiding. Vanished players invisible to non-staff via `DestroyEntitiesPacket` + `PlayerInfoRemovePacket`.
+- **voidteleport** — Automatically teleport players when they fall below a Y threshold.
+- **vote** — Timed poll system with typed options, tally, completion callbacks.
+- **warmup** — Generic warmup/channel action system with cancel triggers and action bar progress.
+- **weathercontrol** — Per-instance weather override DSL with optional timed duration.
+- **world** — Named instance (world) management via `WorldManager` singleton and DSL builder.
+- **worldborder** — DSL for creating managed world borders with animated shrink/expand transitions.
+- **worldedit** — FAWE-inspired world editing system with chunk-batched operations, compressed delta history, section-level palette manipulation.

@@ -73,8 +73,8 @@ object ReplayHighlights {
         highlights: MutableList<ReplayHighlight>,
     ) {
         val killsByKiller = deathFrames
-            .filter { it.second.killerUuid != null }
-            .groupBy { it.second.killerUuid!! }
+            .mapNotNull { entry -> entry.second.killerUuid?.let { it to entry } }
+            .groupBy({ it.first }, { it.second })
 
         for ((killer, kills) in killsByKiller) {
             val sorted = kills.sortedBy { it.first }

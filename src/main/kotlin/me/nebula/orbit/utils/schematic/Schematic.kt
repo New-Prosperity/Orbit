@@ -231,8 +231,8 @@ class Schematic private constructor(
                     for (x in 0 until w) {
                         val block = instance.getBlock(minX + x, minY + y, minZ + z)
                         blocks[y * w * l + z * w + x] = block
-                        if (block.hasNbt()) {
-                            bes += SchematicBlockEntity(x, y, z, block.name(), block.nbt()!!)
+                        block.nbt()?.let { nbt ->
+                            bes += SchematicBlockEntity(x, y, z, block.name(), nbt)
                         }
                     }
                 }

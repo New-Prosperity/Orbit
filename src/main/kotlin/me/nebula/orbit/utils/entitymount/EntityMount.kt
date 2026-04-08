@@ -36,7 +36,8 @@ object EntityMountManager {
         vehicle.addPassenger(rider)
         val entry = MountEntry(riderUuid, vehicle.entityId, config)
         mounts[riderUuid] = entry
-        vehicleRiders.getOrPut(vehicle.entityId) { mutableListOf() }.add(riderUuid)
+        val riders = vehicleRiders.getOrPut(vehicle.entityId) { mutableListOf() }
+        synchronized(riders) { riders.add(riderUuid) }
 
         if (config.speedMultiplier != 1.0 && vehicle is LivingEntity) {
             val baseSpeed = vehicle.getAttribute(Attribute.MOVEMENT_SPEED).baseValue
@@ -52,9 +53,13 @@ object EntityMountManager {
             else -> UUID(0, rider.entityId.toLong())
         }
         val entry = mounts.remove(riderUuid) ?: return false
-        vehicleRiders[entry.vehicleId]?.remove(riderUuid)
-        if (vehicleRiders[entry.vehicleId]?.isEmpty() == true) {
-            vehicleRiders.remove(entry.vehicleId)
+        val riders = vehicleRiders[entry.vehicleId]
+        if (riders != null) {
+            val empty = synchronized(riders) {
+                riders.remove(riderUuid)
+                riders.isEmpty()
+            }
+            if (empty) vehicleRiders.remove(entry.vehicleId)
         }
         rider.vehicle?.removePassenger(rider)
         return true
@@ -68,8 +73,10 @@ object EntityMountManager {
         return mounts[riderUuid]?.let { rider.vehicle }
     }
 
-    fun getRiders(vehicle: Entity): List<UUID> =
-        vehicleRiders[vehicle.entityId]?.toList() ?: emptyList()
+    fun getRiders(vehicle: Entity): List<UUID> {
+        val riders = vehicleRiders[vehicle.entityId] ?: return emptyList()
+        synchronized(riders) { return riders.toList() }
+    }
 
     fun isMounted(rider: Entity): Boolean {
         val riderUuid = when (rider) {
@@ -107,10 +114,12 @@ object EntityMountManager {
 
     fun cleanup(uuid: UUID) {
         mounts.remove(uuid)?.let { entry ->
-            vehicleRiders[entry.vehicleId]?.remove(uuid)
-            if (vehicleRiders[entry.vehicleId]?.isEmpty() == true) {
-                vehicleRiders.remove(entry.vehicleId)
+            val riders = vehicleRiders[entry.vehicleId] ?: return@let
+            val empty = synchronized(riders) {
+                riders.remove(uuid)
+                riders.isEmpty()
             }
+            if (empty) vehicleRiders.remove(entry.vehicleId)
         }
     }
 }

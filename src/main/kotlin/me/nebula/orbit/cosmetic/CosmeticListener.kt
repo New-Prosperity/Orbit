@@ -204,19 +204,17 @@ object CosmeticListener {
     }
 
     private fun tickProjectileTrails() {
-        MinecraftServer.getInstanceManager().instances.forEach { instance ->
-            val playersByEntityId = instance.players.associateBy { it.entityId }
-            instance.entities
-                .filter { it.entityType == EntityType.ARROW || it.entityType == EntityType.SPECTRAL_ARROW }
-                .forEach { projectile ->
-                    val shooterId = runCatching { projectile.getTag(SHOOTER_TAG) }.getOrNull() ?: return@forEach
-                    val shooter = playersByEntityId[shooterId] ?: return@forEach
-                    val data = CosmeticDataCache.get(shooter.uuid) ?: return@forEach
-                    val trailId = data.equipped[CosmeticCategory.PROJECTILE_TRAIL.name] ?: return@forEach
-                    if (!isAllowed(CosmeticCategory.PROJECTILE_TRAIL, trailId)) return@forEach
-                    val level = data.owned[trailId] ?: 1
-                    CosmeticApplier.spawnProjectileTrailParticle(instance, projectile.position, trailId, level, ownerUuid = shooter.uuid)
-                }
+        for (instance in MinecraftServer.getInstanceManager().instances) {
+            for (entity in instance.entities) {
+                if (entity.entityType != EntityType.ARROW && entity.entityType != EntityType.SPECTRAL_ARROW) continue
+                val shooterId = runCatching { entity.getTag(SHOOTER_TAG) }.getOrNull() ?: continue
+                val shooter = instance.getEntityById(shooterId) as? Player ?: continue
+                val data = CosmeticDataCache.get(shooter.uuid) ?: continue
+                val trailId = data.equipped[CosmeticCategory.PROJECTILE_TRAIL.name] ?: continue
+                if (!isAllowed(CosmeticCategory.PROJECTILE_TRAIL, trailId)) continue
+                val level = data.owned[trailId] ?: 1
+                CosmeticApplier.spawnProjectileTrailParticle(instance, entity.position, trailId, level, ownerUuid = shooter.uuid)
+            }
         }
     }
 

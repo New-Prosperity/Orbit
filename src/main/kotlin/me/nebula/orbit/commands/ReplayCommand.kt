@@ -1,6 +1,6 @@
 package me.nebula.orbit.commands
 
-import me.nebula.orbit.utils.chat.sendMM
+import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.replay.HighlightType
 import me.nebula.orbit.utils.replay.ReplayStorage
@@ -27,7 +27,7 @@ fun replayCommand(): Command = command("replay") {
         stringArrayArgument("args")
         onPlayerExecute {
             if (!ReplayStorage.isInitialized()) {
-                player.sendMM("<red>Replay storage is not available.")
+                player.sendMessage(player.translate("orbit.command.replay.storage_unavailable"))
                 return@onPlayerExecute
             }
             val cmdArgs = args.get("args") as? Array<String>
@@ -40,11 +40,12 @@ fun replayCommand(): Command = command("replay") {
             val end = (start + pageSize).coerceAtMost(replays.size)
 
             if (replays.isEmpty()) {
-                player.sendMM("<gray>No replays found.")
+                player.sendMessage(player.translate("orbit.command.replay.list.empty"))
                 return@onPlayerExecute
             }
 
-            player.sendMM("<gold>--- Replays (Page $clamped/$totalPages) ---")
+            player.sendMessage(player.translate("orbit.command.replay.list.header",
+                "page" to clamped.toString(), "total" to totalPages.toString()))
             for (i in start until end) {
                 val name = replays[i]
                 val clickable = Component.text(" [Play]", NamedTextColor.GREEN)
@@ -71,25 +72,25 @@ fun replayCommand(): Command = command("replay") {
         stringArrayArgument("args")
         onPlayerExecute {
             if (!ReplayStorage.isInitialized()) {
-                player.sendMM("<red>Replay storage is not available.")
+                player.sendMessage(player.translate("orbit.command.replay.storage_unavailable"))
                 return@onPlayerExecute
             }
             val cmdArgs = args.get("args") as? Array<String>
             val name = cmdArgs?.firstOrNull()
             if (name == null) {
-                player.sendMM("<red>Usage: /replay play <name>")
+                player.sendMessage(player.translate("orbit.command.replay.play.usage"))
                 return@onPlayerExecute
             }
             if (activeViewers.containsKey(player.uuid)) {
-                player.sendMM("<red>You are already watching a replay. Use /replay stop first.")
+                player.sendMessage(player.translate("orbit.command.replay.play.already_watching"))
                 return@onPlayerExecute
             }
 
-            player.sendMM("<gray>Loading replay <white>$name<gray>...")
+            player.sendMessage(player.translate("orbit.command.replay.play.loading", "name" to name))
 
             val replayFile = ReplayStorage.loadBinary(name)
             if (replayFile == null) {
-                player.sendMM("<red>Replay not found: <white>$name")
+                player.sendMessage(player.translate("orbit.command.replay.not_found", "name" to name))
                 return@onPlayerExecute
             }
 
@@ -98,8 +99,8 @@ fun replayCommand(): Command = command("replay") {
                 activeViewers[player.uuid] = viewer
                 viewer.addViewer(player)
                 viewer.play()
-                player.sendMM("<green>Replay started. Use <white>/replay stop<green> to exit.")
-                player.sendMM("<gray>Controls: <white>/replay pause<gray>, <white>/replay resume<gray>, <white>/replay speed <0.5|1|2|4>")
+                player.sendMessage(player.translate("orbit.command.replay.play.started"))
+                player.sendMessage(player.translate("orbit.command.replay.play.controls"))
             }
         }
     }
@@ -108,12 +109,12 @@ fun replayCommand(): Command = command("replay") {
         onPlayerExecute {
             val viewer = activeViewers.remove(player.uuid)
             if (viewer == null) {
-                player.sendMM("<red>You are not watching a replay.")
+                player.sendMessage(player.translate("orbit.command.replay.not_watching"))
                 return@onPlayerExecute
             }
             viewer.removeViewer(player)
             viewer.destroy()
-            player.sendMM("<green>Replay stopped.")
+            player.sendMessage(player.translate("orbit.command.replay.stopped"))
         }
     }
 
@@ -121,11 +122,11 @@ fun replayCommand(): Command = command("replay") {
         onPlayerExecute {
             val viewer = activeViewers[player.uuid]
             if (viewer == null) {
-                player.sendMM("<red>You are not watching a replay.")
+                player.sendMessage(player.translate("orbit.command.replay.not_watching"))
                 return@onPlayerExecute
             }
             viewer.pause()
-            player.sendMM("<yellow>Replay paused.")
+            player.sendMessage(player.translate("orbit.command.replay.paused"))
         }
     }
 
@@ -133,11 +134,11 @@ fun replayCommand(): Command = command("replay") {
         onPlayerExecute {
             val viewer = activeViewers[player.uuid]
             if (viewer == null) {
-                player.sendMM("<red>You are not watching a replay.")
+                player.sendMessage(player.translate("orbit.command.replay.not_watching"))
                 return@onPlayerExecute
             }
             viewer.resume()
-            player.sendMM("<green>Replay resumed.")
+            player.sendMessage(player.translate("orbit.command.replay.resumed"))
         }
     }
 
@@ -151,17 +152,17 @@ fun replayCommand(): Command = command("replay") {
         onPlayerExecute {
             val viewer = activeViewers[player.uuid]
             if (viewer == null) {
-                player.sendMM("<red>You are not watching a replay.")
+                player.sendMessage(player.translate("orbit.command.replay.not_watching"))
                 return@onPlayerExecute
             }
             val cmdArgs = args.get("args") as? Array<String>
             val speed = cmdArgs?.firstOrNull()?.toDoubleOrNull()
             if (speed == null || speed !in listOf(0.5, 1.0, 2.0, 4.0)) {
-                player.sendMM("<red>Usage: /replay speed <0.5|1|2|4>")
+                player.sendMessage(player.translate("orbit.command.replay.speed.usage"))
                 return@onPlayerExecute
             }
             viewer.setSpeed(speed)
-            player.sendMM("<green>Playback speed set to <white>${speed}x")
+            player.sendMessage(player.translate("orbit.command.replay.speed.set", "speed" to speed.toString()))
         }
     }
 
@@ -170,30 +171,31 @@ fun replayCommand(): Command = command("replay") {
         onPlayerExecute {
             val viewer = activeViewers[player.uuid]
             if (viewer == null) {
-                player.sendMM("<red>You are not watching a replay.")
+                player.sendMessage(player.translate("orbit.command.replay.not_watching"))
                 return@onPlayerExecute
             }
             val cmdArgs = args.get("args") as? Array<String>
             val input = cmdArgs?.firstOrNull()
             if (input == null) {
-                player.sendMM("<red>Usage: /replay seek <tick|percent%>")
+                player.sendMessage(player.translate("orbit.command.replay.seek.usage"))
                 return@onPlayerExecute
             }
             val tick = if (input.endsWith("%")) {
                 val pct = input.removeSuffix("%").toDoubleOrNull()
                 if (pct == null) {
-                    player.sendMM("<red>Invalid percentage.")
+                    player.sendMessage(player.translate("orbit.command.replay.seek.invalid_percent"))
                     return@onPlayerExecute
                 }
                 (viewer.totalTicks * (pct / 100.0)).toInt()
             } else {
                 input.toIntOrNull() ?: run {
-                    player.sendMM("<red>Invalid tick number.")
+                    player.sendMessage(player.translate("orbit.command.replay.seek.invalid_tick"))
                     return@onPlayerExecute
                 }
             }
             viewer.seekTo(tick)
-            player.sendMM("<green>Seeked to tick <white>$tick <gray>(${viewer.totalTicks} total)")
+            player.sendMessage(player.translate("orbit.command.replay.seek.success",
+                "tick" to tick.toString(), "total" to viewer.totalTicks.toString()))
         }
     }
 
@@ -207,25 +209,25 @@ fun replayCommand(): Command = command("replay") {
         onPlayerExecute {
             val viewer = activeViewers[player.uuid]
             if (viewer == null) {
-                player.sendMM("<red>You are not watching a replay.")
+                player.sendMessage(player.translate("orbit.command.replay.not_watching"))
                 return@onPlayerExecute
             }
             val cmdArgs = args.get("args") as? Array<String>
             val targetName = cmdArgs?.firstOrNull()
             if (targetName == null) {
                 viewer.setPerspective(null)
-                player.sendMM("<green>Switched to free camera.")
+                player.sendMessage(player.translate("orbit.command.replay.pov.free"))
                 return@onPlayerExecute
             }
             val entry = viewer.playerEntries().firstOrNull {
                 it.name.equals(targetName, ignoreCase = true)
             }
             if (entry == null) {
-                player.sendMM("<red>Player not found in replay: <white>$targetName")
+                player.sendMessage(player.translate("orbit.command.replay.pov.not_found", "name" to targetName))
                 return@onPlayerExecute
             }
             viewer.setPerspective(entry.uuid)
-            player.sendMM("<green>Switched to POV of <white>${entry.name}")
+            player.sendMessage(player.translate("orbit.command.replay.pov.set", "name" to entry.name))
         }
     }
 
@@ -233,15 +235,15 @@ fun replayCommand(): Command = command("replay") {
         onPlayerExecute {
             val viewer = activeViewers[player.uuid]
             if (viewer == null) {
-                player.sendMM("<red>You are not watching a replay.")
+                player.sendMessage(player.translate("orbit.command.replay.not_watching"))
                 return@onPlayerExecute
             }
             val highlights = viewer.highlights()
             if (highlights.isEmpty()) {
-                player.sendMM("<gray>No highlights detected in this replay.")
+                player.sendMessage(player.translate("orbit.command.replay.highlights.empty"))
                 return@onPlayerExecute
             }
-            player.sendMM("<gold>--- Replay Highlights ---")
+            player.sendMessage(player.translate("orbit.command.replay.highlights.header"))
             for (highlight in highlights) {
                 val time = ticksToTime(highlight.tick)
                 val color = when (highlight.type) {
@@ -267,32 +269,32 @@ fun replayCommand(): Command = command("replay") {
         stringArrayArgument("args")
         onPlayerExecute {
             if (!ReplayStorage.isInitialized()) {
-                player.sendMM("<red>Replay storage is not available.")
+                player.sendMessage(player.translate("orbit.command.replay.storage_unavailable"))
                 return@onPlayerExecute
             }
             val cmdArgs = args.get("args") as? Array<String>
             val name = cmdArgs?.firstOrNull()
             if (name == null) {
-                player.sendMM("<red>Usage: /replay info <name>")
+                player.sendMessage(player.translate("orbit.command.replay.info.usage"))
                 return@onPlayerExecute
             }
             val replayFile = ReplayStorage.loadBinary(name)
             if (replayFile == null) {
-                player.sendMM("<red>Replay not found: <white>$name")
+                player.sendMessage(player.translate("orbit.command.replay.not_found", "name" to name))
                 return@onPlayerExecute
             }
             val header = replayFile.header
             val date = dateFormat.format(Date(header.recordedAt))
             val duration = ticksToTime(header.durationTicks)
-            player.sendMM("<gold>--- Replay Info: <white>$name <gold>---")
-            player.sendMM("<gray>  Game Mode: <white>${header.gamemode}")
-            player.sendMM("<gray>  Map: <white>${header.mapName}")
-            player.sendMM("<gray>  Duration: <white>$duration")
-            player.sendMM("<gray>  Players: <white>${header.players.size}")
-            player.sendMM("<gray>  Recorded: <white>$date")
+            player.sendMessage(player.translate("orbit.command.replay.info.header", "name" to name))
+            player.sendMessage(player.translate("orbit.command.replay.info.gamemode", "value" to header.gamemode))
+            player.sendMessage(player.translate("orbit.command.replay.info.map", "value" to header.mapName))
+            player.sendMessage(player.translate("orbit.command.replay.info.duration", "value" to duration))
+            player.sendMessage(player.translate("orbit.command.replay.info.players", "value" to header.players.size.toString()))
+            player.sendMessage(player.translate("orbit.command.replay.info.recorded", "value" to date))
             if (header.players.isNotEmpty()) {
                 val names = header.players.joinToString(", ") { it.name }
-                player.sendMM("<gray>  Player list: <white>$names")
+                player.sendMessage(player.translate("orbit.command.replay.info.player_list", "names" to names))
             }
         }
     }

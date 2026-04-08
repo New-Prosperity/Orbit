@@ -58,10 +58,11 @@ fun installEditCommands(commandManager: CommandManager) {
         permission("nebula.worldedit")
         wordArgument("pattern")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
             val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.set(player.instance!!, sel, pattern, player)
+                val (result, cs) = EditOperations.set(instance, sel, pattern, player)
                 EditSessionManager.get(player).pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
             }
@@ -73,11 +74,12 @@ fun installEditCommands(commandManager: CommandManager) {
         wordArgument("mask")
         wordArgument("pattern")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
             val mask = Masks.parse(requireArg("mask") ?: return@onPlayerExecute)
             val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.replace(player.instance!!, sel, mask, pattern, player)
+                val (result, cs) = EditOperations.replace(instance, sel, mask, pattern, player)
                 EditSessionManager.get(player).pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.blocks_replaced", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
             }
@@ -87,9 +89,10 @@ fun installEditCommands(commandManager: CommandManager) {
     commandManager.register(command("/copy") {
         permission("nebula.worldedit")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val session = EditSessionManager.get(player)
             val sel = session.selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
-            session.clipboard = EditOperations.copy(player.instance!!, sel, player.position)
+            session.clipboard = EditOperations.copy(instance, sel, player.position)
             session.clipboardOrigin = player.position
             player.sendMessage(player.translate("orbit.build.copied", "volume" to sel.volume.toString()))
         }
@@ -98,12 +101,13 @@ fun installEditCommands(commandManager: CommandManager) {
     commandManager.register(command("/cut") {
         permission("nebula.worldedit")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val session = EditSessionManager.get(player)
             val sel = session.selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
-            session.clipboard = EditOperations.copy(player.instance!!, sel, player.position)
+            session.clipboard = EditOperations.copy(instance, sel, player.position)
             session.clipboardOrigin = player.position
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.set(player.instance!!, sel, Patterns.single(Block.AIR), player)
+                val (result, cs) = EditOperations.set(instance, sel, Patterns.single(Block.AIR), player)
                 session.pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.copied", "volume" to sel.volume.toString()))
             }
@@ -113,10 +117,11 @@ fun installEditCommands(commandManager: CommandManager) {
     commandManager.register(command("/paste") {
         permission("nebula.worldedit")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val session = EditSessionManager.get(player)
             val clipboard = session.clipboard ?: run { player.sendMessage(player.translate("orbit.build.no_clipboard")); return@onPlayerExecute }
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.paste(player.instance!!, clipboard, player.position)
+                val (result, cs) = EditOperations.paste(instance, clipboard, player.position)
                 session.pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.pasted", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
             }
@@ -126,8 +131,9 @@ fun installEditCommands(commandManager: CommandManager) {
     commandManager.register(command("/undo") {
         permission("nebula.worldedit")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val session = EditSessionManager.get(player)
-            if (session.undo(player.instance!!)) player.sendMessage(player.translate("orbit.build.undone"))
+            if (session.undo(instance)) player.sendMessage(player.translate("orbit.build.undone"))
             else player.sendMessage(player.translate("orbit.build.nothing_to_undo"))
         }
     })
@@ -135,8 +141,9 @@ fun installEditCommands(commandManager: CommandManager) {
     commandManager.register(command("/redo") {
         permission("nebula.worldedit")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val session = EditSessionManager.get(player)
-            if (session.redo(player.instance!!)) player.sendMessage(player.translate("orbit.build.redone"))
+            if (session.redo(instance)) player.sendMessage(player.translate("orbit.build.redone"))
             else player.sendMessage(player.translate("orbit.build.nothing_to_redo"))
         }
     })
@@ -145,10 +152,11 @@ fun installEditCommands(commandManager: CommandManager) {
         permission("nebula.worldedit")
         wordArgument("pattern")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
             val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.walls(player.instance!!, sel, pattern, player)
+                val (result, cs) = EditOperations.walls(instance, sel, pattern, player)
                 EditSessionManager.get(player).pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to "0"))
             }
@@ -159,10 +167,11 @@ fun installEditCommands(commandManager: CommandManager) {
         permission("nebula.worldedit")
         wordArgument("pattern")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
             val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.outline(player.instance!!, sel, pattern, player)
+                val (result, cs) = EditOperations.outline(instance, sel, pattern, player)
                 EditSessionManager.get(player).pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to "0"))
             }
@@ -172,9 +181,10 @@ fun installEditCommands(commandManager: CommandManager) {
     commandManager.register(command("/drain") {
         permission("nebula.worldedit")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.drain(player.instance!!, sel, player)
+                val (result, cs) = EditOperations.drain(instance, sel, player)
                 EditSessionManager.get(player).pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.drained", "count" to result.blocksChanged.toString()))
             }
@@ -185,10 +195,11 @@ fun installEditCommands(commandManager: CommandManager) {
         permission("nebula.worldedit")
         intArgument("iterations")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
             val iterations = argOrNull("iterations")?.toIntOrNull() ?: 1
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.smooth(player.instance!!, sel, iterations, player)
+                val (result, cs) = EditOperations.smooth(instance, sel, iterations, player)
                 EditSessionManager.get(player).pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.smoothed", "count" to result.blocksChanged.toString(), "iterations" to iterations.toString()))
             }
@@ -198,9 +209,10 @@ fun installEditCommands(commandManager: CommandManager) {
     commandManager.register(command("/naturalize") {
         permission("nebula.worldedit")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val sel = EditSessionManager.get(player).selection() ?: run { player.sendMessage(player.translate("orbit.build.no_selection")); return@onPlayerExecute }
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.naturalize(player.instance!!, sel, player)
+                val (result, cs) = EditOperations.naturalize(instance, sel, player)
                 EditSessionManager.get(player).pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.naturalized", "count" to result.blocksChanged.toString()))
             }
@@ -212,10 +224,11 @@ fun installEditCommands(commandManager: CommandManager) {
         wordArgument("pattern")
         intArgument("radius")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
             val radius = requireArg("radius")?.toDoubleOrNull() ?: return@onPlayerExecute
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.sphere(player.instance!!, player.position, radius, pattern, false, player)
+                val (result, cs) = EditOperations.sphere(instance, player.position, radius, pattern, false, player)
                 EditSessionManager.get(player).pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
             }
@@ -227,10 +240,11 @@ fun installEditCommands(commandManager: CommandManager) {
         wordArgument("pattern")
         intArgument("radius")
         onPlayerExecute {
+            val instance = player.instance ?: return@onPlayerExecute
             val pattern = Patterns.parse(requireArg("pattern") ?: return@onPlayerExecute) ?: run { player.sendMessage(player.translate("orbit.build.unknown_block")); return@onPlayerExecute }
             val radius = requireArg("radius")?.toDoubleOrNull() ?: return@onPlayerExecute
             Thread.startVirtualThread {
-                val (result, cs) = EditOperations.sphere(player.instance!!, player.position, radius, pattern, true, player)
+                val (result, cs) = EditOperations.sphere(instance, player.position, radius, pattern, true, player)
                 EditSessionManager.get(player).pushHistory(cs)
                 player.sendMessage(player.translate("orbit.build.blocks_changed", "count" to result.blocksChanged.toString(), "time" to result.durationMs.toString()))
             }

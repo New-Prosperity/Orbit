@@ -89,7 +89,7 @@ class NebulaChunkLoader(
         val resolvedBlocks = nebula.blockPalette.map { parseBlockState(it) }
 
         if (resolvedBlocks.size == 1) {
-            blockPalette.fill(resolvedBlocks[0].stateId().toInt())
+            blockPalette.fill(resolvedBlocks[0].stateId())
         } else {
             for (i in 0 until SECTION_BLOCK_COUNT) {
                 val paletteIndex = if (i < nebula.blockData.size) nebula.blockData[i] else 0
@@ -97,7 +97,7 @@ class NebulaChunkLoader(
                 val y = i / 256
                 val z = (i % 256) / 16
                 val x = i % 16
-                blockPalette.set(x, y, z, block.stateId().toInt())
+                blockPalette.set(x, y, z, block.stateId())
             }
         }
 

@@ -1,12 +1,10 @@
 package me.nebula.orbit.utils.tooltip
 
+import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.commandbuilder.command
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
 import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.component.DataComponents
-import net.minestom.server.item.ItemStack
 
 private val STYLE_ARG = ArgumentType.Word("style").from(*TooltipStyleRegistry.ids().toTypedArray())
 
@@ -17,10 +15,10 @@ fun tooltipCommand(): Command = command("tooltip") {
         onPlayerExecute {
             val styles = TooltipStyleRegistry.ids()
             if (styles.isEmpty()) {
-                player.sendMessage(Component.text("No tooltip styles registered.", NamedTextColor.RED))
+                player.sendMessage(player.translate("orbit.command.tooltip.list.empty"))
                 return@onPlayerExecute
             }
-            player.sendMessage(Component.text("Tooltip styles: ${styles.joinToString(", ")}", NamedTextColor.GRAY))
+            player.sendMessage(player.translate("orbit.command.tooltip.list.styles", "styles" to styles.joinToString(", ")))
         }
     }
 
@@ -30,16 +28,16 @@ fun tooltipCommand(): Command = command("tooltip") {
             val styleId = args.get(STYLE_ARG)
             val style = TooltipStyleRegistry[styleId]
             if (style == null) {
-                player.sendMessage(Component.text("Unknown style: $styleId", NamedTextColor.RED))
+                player.sendMessage(player.translate("orbit.command.tooltip.unknown_style", "id" to styleId))
                 return@onPlayerExecute
             }
             val held = player.getItemInMainHand()
             if (held.isAir) {
-                player.sendMessage(Component.text("Hold an item first.", NamedTextColor.RED))
+                player.sendMessage(player.translate("orbit.command.tooltip.hold_item"))
                 return@onPlayerExecute
             }
             player.setItemInMainHand(held.withTooltipStyle(styleId))
-            player.sendMessage(Component.text("Applied tooltip style: $styleId", NamedTextColor.GREEN))
+            player.sendMessage(player.translate("orbit.command.tooltip.set.applied", "id" to styleId))
         }
     }
 
@@ -47,11 +45,11 @@ fun tooltipCommand(): Command = command("tooltip") {
         onPlayerExecute {
             val held = player.getItemInMainHand()
             if (held.isAir) {
-                player.sendMessage(Component.text("Hold an item first.", NamedTextColor.RED))
+                player.sendMessage(player.translate("orbit.command.tooltip.hold_item"))
                 return@onPlayerExecute
             }
             player.setItemInMainHand(held.without(DataComponents.TOOLTIP_STYLE))
-            player.sendMessage(Component.text("Cleared tooltip style.", NamedTextColor.GREEN))
+            player.sendMessage(player.translate("orbit.command.tooltip.cleared"))
         }
     }
 }

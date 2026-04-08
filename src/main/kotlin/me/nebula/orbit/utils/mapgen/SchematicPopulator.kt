@@ -68,8 +68,9 @@ class SchematicPopulator(
         config.definitions.forEach { def ->
             val stream = SchematicPopulator::class.java.getResourceAsStream("/schematics/${def.schematicPath}")
             if (stream != null) {
-                schematics[def.id] = Schematic.load(stream)
-                logger.info { "Loaded schematic '${def.id}' from ${def.schematicPath} (${schematics[def.id]!!.width}x${schematics[def.id]!!.height}x${schematics[def.id]!!.length})" }
+                val loaded = Schematic.load(stream)
+                schematics[def.id] = loaded
+                logger.info { "Loaded schematic '${def.id}' from ${def.schematicPath} (${loaded.width}x${loaded.height}x${loaded.length})" }
             } else {
                 logger.warn { "Schematic not found for '${def.id}': /schematics/${def.schematicPath}" }
             }

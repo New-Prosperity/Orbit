@@ -26,12 +26,12 @@ object Masks {
     fun air(): Mask = not(existing())
 
     fun solid(): Mask = Mask {
-        val block = Block.fromStateId(it.toInt())
+        val block = Block.fromStateId(it)
         block != null && block.isSolid
     }
 
     fun liquid(): Mask = Mask {
-        val block = Block.fromStateId(it.toInt())
+        val block = Block.fromStateId(it)
         block != null && block.isLiquid
     }
 

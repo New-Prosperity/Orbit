@@ -17,7 +17,7 @@ class BossBarBuilder @PublishedApi internal constructor(private val title: Strin
 inline fun bossBar(title: String, block: BossBarBuilder.() -> Unit = {}): BossBar =
     BossBarBuilder(title).apply(block).build()
 
-fun Player.showBossBar(bar: BossBar): Player = apply { showBossBar(bar as net.kyori.adventure.bossbar.BossBar) }
-fun Player.hideBossBar(bar: BossBar): Player = apply { hideBossBar(bar as net.kyori.adventure.bossbar.BossBar) }
+fun Player.showBossBar(bar: BossBar): Player = apply { showBossBar(bar) }
+fun Player.hideBossBar(bar: BossBar): Player = apply { hideBossBar(bar) }
 
 fun BossBar.updateTitle(title: String): BossBar = name(miniMessage.deserialize(title))

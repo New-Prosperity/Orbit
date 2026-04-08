@@ -1,8 +1,8 @@
 package me.nebula.orbit.utils.hud.font
 
-import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import me.nebula.ether.utils.gson.GsonProvider
 import java.awt.Color
 import java.awt.Graphics2D
 import java.awt.image.BufferedImage
@@ -11,7 +11,7 @@ import javax.imageio.ImageIO
 
 object HudFontProvider {
 
-    private val gson = GsonBuilder().setPrettyPrinting().create()
+    private val gson = GsonProvider.pretty
 
     private const val BITMAP_WIDTH = 5
 

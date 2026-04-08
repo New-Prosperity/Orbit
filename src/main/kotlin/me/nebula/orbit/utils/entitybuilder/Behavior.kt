@@ -54,7 +54,7 @@ class BehaviorBuilder @PublishedApi internal constructor(
     fun executor(exec: BehaviorExecutor) { executor = exec }
 
     @PublishedApi internal fun build(): Behavior {
-        requireNotNull(executor) { "Behavior '$id' must have an executor" }
-        return Behavior(id, priority, weight, period, core, evaluator, executor!!)
+        val exec = requireNotNull(executor) { "Behavior '$id' must have an executor" }
+        return Behavior(id, priority, weight, period, core, evaluator, exec)
     }
 }
