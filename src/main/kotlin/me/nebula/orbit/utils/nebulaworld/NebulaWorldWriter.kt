@@ -5,8 +5,8 @@ import net.kyori.adventure.nbt.BinaryTagIO
 import net.kyori.adventure.nbt.CompoundBinaryTag
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.writeBytes
 
 object NebulaWorldWriter {
 
@@ -31,7 +31,7 @@ object NebulaWorldWriter {
     }
 
     fun write(world: NebulaWorld, path: Path, compression: CompressionType = CompressionType.ZSTD) {
-        Files.write(path, write(world, compression))
+        path.writeBytes(write(world, compression))
     }
 
     private fun writePayload(world: NebulaWorld): ByteArray {

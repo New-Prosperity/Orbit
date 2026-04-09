@@ -14,8 +14,10 @@ import net.minestom.server.instance.block.Block
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.exists
+import kotlin.io.path.inputStream
+import kotlin.io.path.writeBytes
 
 data class StructureBlock(val x: Int, val y: Int, val z: Int, val state: Int, val nbt: CompoundBinaryTag?)
 
@@ -127,14 +129,14 @@ class VanillaStructure private constructor(
     }
 
     fun save(path: Path) {
-        Files.write(path, toBytes())
+        path.writeBytes(toBytes())
     }
 
     companion object {
 
         fun load(path: Path): VanillaStructure {
-            require(Files.exists(path)) { "Structure file not found: $path" }
-            return Files.newInputStream(path).use { load(it) }
+            require(path.exists()) { "Structure file not found: $path" }
+            return path.inputStream().use { load(it) }
         }
 
         fun load(inputStream: InputStream): VanillaStructure {
