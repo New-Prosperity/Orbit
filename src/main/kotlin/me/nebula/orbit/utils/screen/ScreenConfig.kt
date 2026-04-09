@@ -8,6 +8,7 @@ import kotlin.math.atan
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
@@ -163,7 +164,7 @@ private fun computeFrameDepth(eye: Vec, center: Vec, facing: Int): Double {
 
 private fun snapForTileGrid(value: Double, tiles: Int): Double {
     val offset = (tiles % 2) * 0.5
-    return Math.round(value - offset) + offset
+    return (value - offset).roundToLong() + offset
 }
 
 private fun yawToFacing(snappedYaw: Float): Int = when (snappedYaw.roundToInt()) {
