@@ -6,8 +6,10 @@ import me.nebula.ether.utils.environment.environment
 import me.nebula.ether.utils.hazelcast.Store
 import me.nebula.ether.utils.hazelcast.hazelcastModule
 import me.nebula.ether.utils.module.moduleRegistry
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import me.nebula.ether.utils.logging.logger
+import me.nebula.ether.utils.scheduling.TaskScheduler
 import me.nebula.ether.utils.storage.StorageClient
 import me.nebula.ether.utils.storage.storageClient
 import me.nebula.ether.utils.translation.TranslationRegistry
@@ -411,6 +413,19 @@ object Orbit {
         app.resources.ensureDirectory("models")
 
         bootStep("TooltipStyleRegistry") { TooltipStyleRegistry.registerDefaults() }
+
+        val parallelInitFutures = listOf(
+            TaskScheduler.async {
+                bootStep("CosmeticRegistry.loadFromDefinitions") { CosmeticRegistry.loadFromDefinitions() }
+            },
+            TaskScheduler.async {
+                bootStep("MutatorRegistry.loadDefinitions") { MutatorRegistry.loadDefinitions() }
+            },
+            TaskScheduler.async {
+                bootStep("registerAchievementContent") { registerAchievementContent() }
+            },
+        )
+
         bootStep("CustomContentRegistry.init") { CustomContentRegistry.init(app.resources, handler) }
 
         bootStep("ModelEngine.registerRaw") {
@@ -422,7 +437,7 @@ object Orbit {
             }
         }
 
-        CustomContentRegistry.mergePack()
+        bootStep("CustomContentRegistry.mergePack") { CustomContentRegistry.mergePack() }
 
         HudManager.register(hudLayout("test-hud") {
             bar("health") {
@@ -500,9 +515,9 @@ object Orbit {
             }
         })
 
-        CosmeticRegistry.loadFromDefinitions()
-        MutatorRegistry.loadDefinitions()
-        registerAchievementContent()
+        bootStep("parallelInit.join") {
+            CompletableFuture.allOf(*parallelInitFutures.toTypedArray()).join()
+        }
 
         mode.install(handler)
         rebuildInstance()

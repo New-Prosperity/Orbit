@@ -145,7 +145,8 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
 
     override fun onGameSetup(players: List<Player>) {
         for (cat in SeasonConfig.current.voteCategories) {
-            votedValues[cat.id] = BattleRoyaleVoteManager.resolveValue(cat.id)
+            val winningIndex = BattleRoyaleVoteManager.resolveAndRecord(cat.id)
+            votedValues[cat.id] = cat.options.getOrNull(winningIndex)?.value ?: 0
         }
 
         broadcastAll { p ->

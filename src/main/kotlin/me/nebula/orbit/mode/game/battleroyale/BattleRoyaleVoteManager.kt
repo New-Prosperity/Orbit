@@ -28,6 +28,12 @@ object BattleRoyaleVoteManager {
 
     fun resolve(categoryId: String): Int = delegate.resolve(categoryId)
 
+    fun resolveAndRecord(categoryId: String): Int {
+        val index = delegate.resolve(categoryId)
+        delegate.recordSelection(categoryId, index)
+        return index
+    }
+
     fun resolveValue(categoryId: String): Int = delegate.resolveValue(categoryId)
 
     fun resolveOptionName(player: Player, categoryId: String): String =

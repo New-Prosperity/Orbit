@@ -99,7 +99,7 @@ class PacketReplayRecorder {
         eventNode = null
         targetInstance = null
         seenHashes.clear()
-        val result = synchronized(packets) { packets.toList() } // noqa: synchronized-on-local — Collections.synchronizedList iteration contract
+        val result = synchronized(packets) { packets.toList() }
         logger.info { "Packet replay recording stopped: ${result.size} packets over ${currentTick()} ticks" }
         return result
     }

@@ -13,6 +13,9 @@ import me.nebula.gravity.property.PropertyStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.anticheat.checks.CombatCheck
+import me.nebula.orbit.utils.anticheat.checks.GroundSpoofCheck
+import me.nebula.orbit.utils.anticheat.checks.InteractReachCheck
+import me.nebula.orbit.utils.anticheat.checks.KillAuraCheck
 import me.nebula.orbit.utils.anticheat.checks.MovementCheck
 import me.nebula.orbit.utils.chat.mm
 import net.minestom.server.MinecraftServer
@@ -106,6 +109,9 @@ object AntiCheat {
         if (AntiCheatRegistry.all().isEmpty()) {
             AntiCheatRegistry.register(MovementCheck)
             AntiCheatRegistry.register(CombatCheck)
+            AntiCheatRegistry.register(GroundSpoofCheck)
+            AntiCheatRegistry.register(InteractReachCheck)
+            AntiCheatRegistry.register(KillAuraCheck)
         }
 
         val node = EventNode.all("anticheat")

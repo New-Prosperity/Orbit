@@ -9,6 +9,7 @@ import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 data class VoteCategory(
     val id: String,
@@ -26,10 +27,13 @@ data class VoteOption(
 
 class MapVoteManager(
     private val titleKey: String = "orbit.vote.title",
+    private val recentHistorySize: Int = 3,
+    private val recentPenalty: Double = 0.4,
     private val categoriesProvider: () -> List<VoteCategory>,
 ) {
 
     private val votes = ConcurrentHashMap<String, ConcurrentHashMap<UUID, Int>>()
+    private val recentSelections = ConcurrentHashMap<String, AtomicReference<List<Int>>>()
 
     fun vote(player: UUID, categoryId: String, optionIndex: Int) {
         votes.computeIfAbsent(categoryId) { ConcurrentHashMap() }[player] = optionIndex
@@ -38,12 +42,30 @@ class MapVoteManager(
     fun getVote(player: UUID, categoryId: String): Int? =
         votes[categoryId]?.get(player)
 
+    fun recordSelection(categoryId: String, optionIndex: Int) {
+        val ref = recentSelections.computeIfAbsent(categoryId) { AtomicReference(emptyList()) }
+        while (true) {
+            val current = ref.get()
+            val updated = (current + optionIndex).takeLast(recentHistorySize)
+            if (ref.compareAndSet(current, updated)) return
+        }
+    }
+
+    fun recentSelections(categoryId: String): List<Int> =
+        recentSelections[categoryId]?.get() ?: emptyList()
+
     fun resolve(categoryId: String): Int {
         val cat = categoriesProvider().firstOrNull { it.id == categoryId } ?: return 0
         val categoryVotes = votes[categoryId]
         if (categoryVotes.isNullOrEmpty()) return cat.defaultIndex
-        val tally = categoryVotes.values.groupingBy { it }.eachCount()
-        return tally.maxByOrNull { it.value }?.key ?: cat.defaultIndex
+
+        val recent = recentSelections(categoryId).toSet()
+        val weightedTally = HashMap<Int, Double>()
+        for ((_, optionIndex) in categoryVotes) {
+            val weight = if (optionIndex in recent) recentPenalty else 1.0
+            weightedTally.merge(optionIndex, weight, Double::plus)
+        }
+        return weightedTally.maxByOrNull { it.value }?.key ?: cat.defaultIndex
     }
 
     fun resolveValue(categoryId: String): Int {
