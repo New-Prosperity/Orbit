@@ -1,7 +1,6 @@
 package me.nebula.orbit.utils.replay
 
 import com.google.gson.Gson
-import com.google.gson.GsonBuilder
 import com.google.gson.JsonDeserializationContext
 import com.google.gson.JsonDeserializer
 import com.google.gson.JsonElement
@@ -9,6 +8,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
 import com.google.gson.reflect.TypeToken
+import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.storage.StorageScope
 import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
@@ -255,7 +255,7 @@ object ReplayManager {
 object ReplayStorage {
 
     @Volatile private var scope: StorageScope? = null
-    private val gson: Gson = GsonBuilder()
+    private val gson: Gson = GsonProvider.builder()
         .registerTypeAdapter(ReplayFrame::class.java, ReplayFrameSerializer())
         .create()
 
