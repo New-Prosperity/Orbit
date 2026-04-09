@@ -15,7 +15,15 @@ object BattleRoyaleVoteManager {
                 nameKey = def.nameKey,
                 material = def.material,
                 defaultIndex = def.defaultIndex,
-                options = def.options.map { VoteOption(it.nameKey, it.material, it.value) },
+                options = def.options.map {
+                    VoteOption(
+                        nameKey = it.nameKey,
+                        material = it.material,
+                        value = it.value,
+                        previewModelId = it.previewModelId,
+                        descriptionKey = it.descriptionKey,
+                    )
+                },
             )
         }
     }

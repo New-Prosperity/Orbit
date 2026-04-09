@@ -23,6 +23,8 @@ data class VoteOption(
     val nameKey: String,
     val material: String,
     val value: Int = 0,
+    val previewModelId: Int? = null,
+    val descriptionKey: String? = null,
 )
 
 class MapVoteManager(
@@ -123,6 +125,8 @@ class MapVoteManager(
                 val material = runCatching { ItemResolver.resolveMaterial(option.material) }.getOrNull() ?: Material.PAPER
                 slot(slotIndex, itemStack(material) {
                     name(player.translateRaw(option.nameKey))
+                    option.previewModelId?.let { customModelData(it) }
+                    option.descriptionKey?.let { lore(player.translateRaw(it)) }
                     if (isSelected) {
                         lore(player.translateRaw("orbit.vote.selected"))
                         glowing()

@@ -59,7 +59,6 @@ import me.nebula.orbit.utils.graceperiod.GracePeriodManager
 import me.nebula.orbit.utils.graceperiod.gracePeriod
 import me.nebula.orbit.utils.hotbar.Hotbar
 import me.nebula.orbit.utils.kit.Kit
-import me.nebula.orbit.utils.lobby.Lobby
 import me.nebula.orbit.utils.lobby.lobby
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.utils.matchresult.MatchResultDisplay
@@ -80,7 +79,6 @@ import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.sound.playSound
 import me.nebula.orbit.progression.BattlePassRegistry
 import me.nebula.orbit.progression.mission.MissionTracker
-import me.nebula.orbit.utils.vanish.VanishManager
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
@@ -307,7 +305,9 @@ abstract class GameMode : ServerMode {
     private val lateJoinManager = LateJoinManager()
     private val activityWatchdog = ActivityWatchdog(this)
     private val overtimeController = OvertimeController()
-    @Volatile private var waitingActionBarTask: Task? = null
+    private val lobbyLifecycle = LobbyLifecycleManager(this)
+    internal fun gameInstanceOrNull(): InstanceContainer? = _gameInstance
+    internal fun buildLobbyHotbarInternal(): Hotbar? = buildLobbyHotbar()
     @Volatile private var survivalMinuteTask: Task? = null
     @Volatile private var walkDistanceTask: Task? = null
     private val lastKnownPositions = ConcurrentHashMap<UUID, Pos>()
@@ -420,8 +420,6 @@ abstract class GameMode : ServerMode {
         }
     }
 
-    @Volatile private var currentLobby: Lobby? = null
-    @Volatile private var currentHotbar: Hotbar? = null
     @Volatile private var startingCountdown: Countdown? = null
     @Volatile private var gameTimer: MinigameTimer? = null
     @Volatile private var endingCountdown: Countdown? = null
@@ -465,8 +463,7 @@ abstract class GameMode : ServerMode {
         startingCountdown?.stop()
         gameTimer?.stop()
         endingCountdown?.stop()
-        currentLobby?.uninstall()
-        currentHotbar?.uninstall()
+        lobbyLifecycle.tearDownLobby()
         scoreboard.uninstall()
         tabList.uninstall()
         GracePeriodManager.uninstall()
@@ -486,8 +483,7 @@ abstract class GameMode : ServerMode {
         coreNode = null
         cleanupGameMechanicsNode()
         cleanupVoidCheck()
-        waitingActionBarTask?.cancel()
-        waitingActionBarTask = null
+        lobbyLifecycle.cancelWaitingActionBarLoop()
         survivalMinuteTask?.cancel()
         survivalMinuteTask = null
         walkDistanceTask?.cancel()
@@ -731,7 +727,7 @@ abstract class GameMode : ServerMode {
 
     private fun applyParticipantJoin(player: Player) {
         tracker.join(player.uuid)
-        currentHotbar?.apply(player)
+        lobbyLifecycle.applyHotbarTo(player)
         onPlayerJoinWaiting(player)
         if (phase == GamePhase.WAITING) {
             if (Orbit.hostOwner == player.uuid && tracker.aliveCount < settings.timing.minPlayers) {
@@ -799,7 +795,7 @@ abstract class GameMode : ServerMode {
 
     private fun applyCleanRemove(player: Player) {
         tracker.remove(player.uuid)
-        currentHotbar?.remove(player)
+        lobbyLifecycle.removeHotbarFrom(player)
         onPlayerLeaveWaiting(player)
         if (phase == GamePhase.STARTING && tracker.aliveCount < settings.timing.minPlayers) {
             startingCountdown?.stop()
@@ -1038,13 +1034,13 @@ abstract class GameMode : ServerMode {
 
     private fun enterWaiting() {
         resetSubsystemsForNewRound()
-        installLobbyAndHotbar()
-        teleportPlayersToLobby()
+        lobbyLifecycle.installLobbyAndHotbar()
+        lobbyLifecycle.teleportPlayersToLobby()
 
         onWaitingStart()
         onGameReset()
         checkMinPlayersThreshold()
-        startWaitingActionBarLoop()
+        lobbyLifecycle.startWaitingActionBarLoop()
 
         assertInvariants(GamePhase.WAITING)
     }
@@ -1094,63 +1090,11 @@ abstract class GameMode : ServerMode {
         totalKillCount = 0
     }
 
-    private fun installLobbyAndHotbar() {
-        currentLobby = lobby {
-            instance = lobbyInstance
-            spawnPoint = lobbySpawnPoint
-            gameMode = MinestomGameMode.valueOf(settings.lobby.gameMode)
-            protectBlocks = settings.lobby.protectBlocks
-            disableDamage = settings.lobby.disableDamage
-            disableHunger = settings.lobby.disableHunger
-            lockInventory = settings.lobby.lockInventory
-            voidTeleportY = settings.lobby.voidTeleportY
-        }.also { it.install() }
-
-        currentHotbar = buildLobbyHotbar()
-        currentHotbar?.install()
-    }
-
-    private fun teleportPlayersToLobby() {
-        if (isDualInstance) {
-            val gameInst = _gameInstance
-            if (gameInst != null) {
-                val transfers = gameInst.players.toList().map { player ->
-                    player.setInstance(lobbyInstance, lobbySpawnPoint)
-                }
-                CompletableFuture.allOf(*transfers.toTypedArray()).join()
-            }
-        }
-
-        for (player in lobbyInstance.players) {
-            if (VanishManager.isVanished(player)) {
-                player.gameMode = MinestomGameMode.SPECTATOR
-                continue
-            }
-            tracker.join(player.uuid)
-            player.gameMode = MinestomGameMode.valueOf(settings.lobby.gameMode)
-            if (!isDualInstance) player.teleport(lobbySpawnPoint)
-            currentHotbar?.apply(player)
-        }
-    }
-
-    private fun startWaitingActionBarLoop() {
-        waitingActionBarTask = repeat(40) {
-            if (phase != GamePhase.WAITING) return@repeat
-            val current = tracker.aliveCount
-            val needed = settings.timing.minPlayers
-            for (player in lobbyInstance.players) {
-                player.sendActionBar(player.translate("orbit.game.waiting",
-                    "current" to current.toString(),
-                    "needed" to needed.toString()))
-            }
-        }
-    }
-
     private fun assertInvariants(expected: GamePhase) {
         if (!ASSERTIONS_ENABLED) return
         when (expected) {
             GamePhase.WAITING -> {
-                check(currentLobby != null) { "WAITING: currentLobby must be set" }
+                check(lobbyLifecycle.hasLobby()) { "WAITING: lobby must be installed" }
                 check(freezeEventNode == null) { "WAITING: freezeEventNode must be cleared" }
                 check(gameMechanicsNode == null) { "WAITING: gameMechanicsNode must be cleared" }
                 check(gameStartTime == 0L) { "WAITING: gameStartTime must be reset" }
@@ -1171,8 +1115,7 @@ abstract class GameMode : ServerMode {
     }
 
     private fun enterStarting() {
-        waitingActionBarTask?.cancel()
-        waitingActionBarTask = null
+        lobbyLifecycle.cancelWaitingActionBarLoop()
 
         installFreezeNode()
 
@@ -1228,10 +1171,7 @@ abstract class GameMode : ServerMode {
     }
 
     private fun tearDownLobbyAndCountdown() {
-        currentLobby?.uninstall()
-        currentLobby = null
-        currentHotbar?.uninstall()
-        currentHotbar = null
+        lobbyLifecycle.tearDownLobby()
         startingCountdown?.stop()
         startingCountdown = null
         cleanupFreezeNode()

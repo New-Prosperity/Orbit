@@ -49,6 +49,8 @@ data class VoteOptionDef(
     val nameKey: String,
     val material: String,
     val value: Int,
+    val previewModelId: Int? = null,
+    val descriptionKey: String? = null,
 )
 
 object SeasonConfig {
