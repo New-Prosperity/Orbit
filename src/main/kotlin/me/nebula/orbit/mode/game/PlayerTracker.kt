@@ -189,19 +189,22 @@ class PlayerTracker {
         val now = System.currentTimeMillis()
         lastCombatTime[attacker] = now
         lastCombatTime[victim] = now
-        val records = recentDamagers.computeIfAbsent(victim) { mutableListOf() }
-        synchronized(records) {
+        recentDamagers.compute(victim) { _, existing ->
+            val records = existing ?: mutableListOf()
             records.removeAll { it.attacker == attacker }
             records.add(DamageRecord(attacker, now))
+            records
         }
     }
 
     fun recentDamagersOf(victim: UUID, windowMillis: Long): List<UUID> {
-        val records = recentDamagers[victim] ?: return emptyList()
         val cutoff = System.currentTimeMillis() - windowMillis
-        synchronized(records) {
-            return records.filter { it.timestamp >= cutoff }.map { it.attacker }
+        val result = mutableListOf<UUID>()
+        recentDamagers.computeIfPresent(victim) { _, records ->
+            for (record in records) if (record.timestamp >= cutoff) result.add(record.attacker)
+            records
         }
+        return result
     }
 
     fun lastCombatTimeOf(uuid: UUID): Long = lastCombatTime[uuid] ?: 0L

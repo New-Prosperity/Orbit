@@ -28,8 +28,9 @@ class MapPoolTest {
     @Test
     fun `getMap finds by name`() {
         val pool = samplePool()
-        assertNotNull(pool.getMap("alpha"))
-        assertEquals("Alpha", pool.getMap("alpha")!!.displayName)
+        val map = pool.getMap("alpha")
+        assertNotNull(map)
+        assertEquals("Alpha", map.displayName)
     }
 
     @Test

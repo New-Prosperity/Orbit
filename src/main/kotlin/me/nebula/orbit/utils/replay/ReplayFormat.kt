@@ -10,9 +10,10 @@ import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
-import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
+import kotlin.io.path.readBytes
+import kotlin.io.path.writeBytes
 
 private const val REPLAY_MAGIC = 0x4E655272
 private const val REPLAY_VERSION: Short = 1
@@ -59,7 +60,7 @@ object ReplayFormat {
         replay: ReplayFile,
         path: Path,
     ) {
-        Files.write(path, write(replay))
+        path.writeBytes(write(replay))
     }
 
     fun write(replay: ReplayFile): ByteArray {
@@ -128,7 +129,7 @@ object ReplayFormat {
         return result
     }
 
-    fun read(path: Path): ReplayFile = read(Files.readAllBytes(path))
+    fun read(path: Path): ReplayFile = read(path.readBytes())
 
     fun read(data: ByteArray): ReplayFile {
         val buf = ByteBuffer.wrap(data)

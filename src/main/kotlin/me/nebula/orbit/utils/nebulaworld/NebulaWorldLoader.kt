@@ -5,10 +5,10 @@ import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.instance.block.Block
-import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.readBytes
 
 object NebulaWorldLoader {
 
@@ -18,7 +18,7 @@ object NebulaWorldLoader {
     fun load(name: String, path: Path): InstanceContainer {
         require(!loaded.containsKey(name)) { "World '$name' already loaded" }
 
-        val bytes = Files.readAllBytes(path)
+        val bytes = path.readBytes()
         val world = NebulaWorldReader.read(bytes)
 
         val instance = MinecraftServer.getInstanceManager().createInstanceContainer()

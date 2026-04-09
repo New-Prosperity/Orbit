@@ -5,12 +5,12 @@ import net.kyori.adventure.nbt.BinaryTagIO
 import net.kyori.adventure.nbt.CompoundBinaryTag
 import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.readBytes
 
 object NebulaWorldReader {
 
-    fun read(path: Path): NebulaWorld = read(Files.readAllBytes(path))
+    fun read(path: Path): NebulaWorld = read(path.readBytes())
 
     fun read(data: ByteArray): NebulaWorld {
         val buf = ByteBuffer.wrap(data)
