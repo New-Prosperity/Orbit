@@ -4,6 +4,7 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
+import java.security.MessageDigest
 import javax.imageio.ImageIO
 import me.nebula.orbit.utils.customcontent.armor.ArmorShaderPack
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
@@ -151,6 +152,24 @@ object CustomContentRegistry {
 
     fun mergePack(): PackMerger.MergeResult {
         val modelFiles = resources.list("models", "bbmodel")
+        val inputHash = computeInputHash(modelFiles)
+        val cacheHashPath = "$BASE_DIR/pack.hash"
+        val cachePackPath = "$BASE_DIR/pack.zip"
+        val cachedHash = if (resources.exists(cacheHashPath)) resources.readText(cacheHashPath).trim() else null
+
+        if (cachedHash == inputHash && resources.exists(cachePackPath)) {
+            val packBytes = resources.readBytes(cachePackPath)
+            logger.info { "Pack cache hit: ${packBytes.size / 1024}KB, hash=$inputHash — skipping merge" }
+            modelFiles.forEach { path ->
+                val fileName = path.substringAfterLast('/')
+                val raw = ModelGenerator.generateRaw(resources, fileName)
+                ModelEngine.registerRaw(raw.blueprint.name, raw)
+            }
+            val cachedResult = PackMerger.MergeResult(packBytes, hexSha1(packBytes))
+            mergeResult = cachedResult
+            return cachedResult
+        }
+
         val generated = modelFiles.map { path ->
             val fileName = path.substringAfterLast('/')
             logger.info { "Generating model from $fileName" }
@@ -188,15 +207,50 @@ object CustomContentRegistry {
         val result = PackMerger.merge(resources, MODELS_DIR, allRaw, allShaderEntries)
         mergeResult = result
 
-        resources.writeBytes("$BASE_DIR/pack.zip", result.packBytes)
+        resources.writeBytes(cachePackPath, result.packBytes)
+        resources.writeText(cacheHashPath, inputHash)
 
         logger.info {
-            "Pack merged: ${result.packBytes.size / 1024}KB, SHA-1=${result.sha1}, " +
+            "Pack merged: ${result.packBytes.size / 1024}KB, SHA-1=${result.sha1}, hash=$inputHash, " +
                 "models=${allRaw.size}, items=${CustomItemRegistry.all().size}, " +
                 "blocks=${CustomBlockRegistry.all().size}, armors=${CustomArmorRegistry.all().size}"
         }
         return result
     }
+
+    private fun computeInputHash(modelFiles: List<String>): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        digest.update("models:".toByteArray())
+        for (path in modelFiles.sorted()) {
+            digest.update(path.toByteArray())
+            digest.update(0)
+            digest.update(resources.readBytes(path))
+            digest.update(0)
+        }
+        digest.update("items:".toByteArray())
+        for (item in CustomItemRegistry.all().sortedBy { it.id }) {
+            digest.update(item.id.toByteArray())
+            digest.update(0)
+            digest.update(item.customModelDataId.toString().toByteArray())
+            digest.update(0)
+        }
+        digest.update("blocks:".toByteArray())
+        for (block in CustomBlockRegistry.all().sortedBy { it.id }) {
+            digest.update(block.id.toByteArray())
+            digest.update(0)
+            digest.update(block.customModelDataId.toString().toByteArray())
+            digest.update(0)
+        }
+        digest.update("armors:".toByteArray())
+        for (armor in CustomArmorRegistry.all().sortedBy { it.id }) {
+            digest.update(armor.id.toByteArray())
+            digest.update(0)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun hexSha1(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
 
     private fun loadSprites() {
         val files = resources.list(SPRITES_DIR, "png")

@@ -103,6 +103,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     private val brDeathRecapTracker = DeathRecapTracker()
     private val lastAttackerTag = Tag.UUID("br_last_attacker")
     private val lastAttackerTimeTag = Tag.Long("br_last_attacker_time")
+    private val killPipeline = BattleRoyaleKillPipeline(this, brDeathRecapTracker, lastAttackerTag, lastAttackerTimeTag)
     private var worldBorder: ManagedWorldBorder? = null
     private var borderDamageTask: Task? = null
     private val borderPhasesTasks = CopyOnWriteArrayList<Task>()
@@ -269,58 +270,23 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
         ))
 
         if (victim.health - amount <= 0) {
-            event.isCancelled = true
-            victim.health = victim.getAttributeValue(Attribute.MAX_HEALTH).toFloat()
-            if (attacker != null && attacker.uuid != victim.uuid) {
-                MissionTracker.onDamageDealt(attacker, amount.toInt())
-            }
-
-            val killerUuid = resolveKiller(victim)
-            val killer = killerUuid?.let { MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(it) }
-
-            if (killer != null && tracker.isAlive(killer.uuid)) {
-                StatTracker.increment(killer, "kills")
-                BattleRoyaleKitManager.awardXp(killer, "kill")
-                LegendaryListener.notifyKill(killer, victim)
-                MissionTracker.onKill(killer)
-                BattlePassManager.addXpToAll(killer, applyPartyBonus(killer.uuid, 10L), activeSeasonPasses)
-
-                val killStreak = StatTracker.get(killer, "kills").toInt()
-                if (killStreak == 2) AchievementRegistry.complete(killer, "double_trouble")
-                if (killStreak == 5) AchievementRegistry.complete(killer, "unstoppable")
-                if (killStreak == 10) AchievementRegistry.complete(killer, "rampage")
-
-                if (season.goldenHead.enabled) {
-                    val headName = { key: String -> killer.translateRaw(key) }
-                    killer.inventory.addItemStack(GoldenHeadManager.createStack(headName))
-                }
-            }
-
-            brDeathRecapTracker.sendRecap(victim)
-            val recap = brDeathRecapTracker.buildRecap(victim)
-
-            eliminate(victim)
-
-            if (recap?.killerUuid != null) {
-                val killerTarget = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(recap.killerUuid)
-                if (killerTarget != null) {
-                    victim.spectate(killerTarget)
-                    delay(60) {
-                        if (victim.gameMode == net.minestom.server.entity.GameMode.SPECTATOR) {
-                            victim.stopSpectating()
-                        }
-                    }
-                }
-            }
-
-            brDeathRecapTracker.clearPlayer(victim.uuid)
-            victim.removeTag(lastAttackerTag)
-            victim.removeTag(lastAttackerTimeTag)
-            return false
+            return killPipeline.handleLethal(victim, attacker, amount, event)
         }
 
         return true
     }
+
+    internal fun resolveKillerForVictim(victim: Player): UUID? = resolveKiller(victim)
+
+    internal fun isKillerAlive(uuid: UUID): Boolean = tracker.isAlive(uuid)
+
+    internal fun eliminatePlayer(victim: Player) = eliminate(victim)
+
+    internal fun applyPartyBonusToKiller(uuid: UUID, base: Long): Long = applyPartyBonus(uuid, base)
+
+    internal fun activeBattlePasses() = activeSeasonPasses
+
+    internal fun goldenHeadEnabled(): Boolean = season.goldenHead.enabled
 
     override fun onGameReset() {
         borderPhasesTasks.forEach { it.cancel() }

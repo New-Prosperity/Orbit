@@ -4,12 +4,14 @@ import me.nebula.gravity.reconnection.ReconnectionData
 import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.utils.graceperiod.GracePeriodManager
+import me.nebula.orbit.utils.graceperiod.gracePeriod
 import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.timer.Task
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 class RespawnManager(private val gameMode: GameMode) {
 
@@ -31,6 +33,18 @@ class RespawnManager(private val gameMode: GameMode) {
         val ticks = gameMode.settings.respawn?.invincibilityTicks ?: return
         if (ticks <= 0) return
         GracePeriodManager.apply(player, GameMode.RESPAWN_GRACE_NAME)
+    }
+
+    fun applyInitialPlayingState() {
+        val config = gameMode.settings.respawn ?: return
+        if (config.maxLives > 0) {
+            gameMode.tracker.forEachAlive { uuid -> gameMode.tracker.setLives(uuid, config.maxLives) }
+        }
+        if (config.invincibilityTicks > 0) {
+            gracePeriod(GameMode.RESPAWN_GRACE_NAME) {
+                duration((config.invincibilityTicks * 50L).milliseconds)
+            }
+        }
     }
 
     fun cleanup() {

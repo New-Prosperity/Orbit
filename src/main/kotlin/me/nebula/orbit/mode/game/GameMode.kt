@@ -1204,7 +1204,7 @@ abstract class GameMode : ServerMode {
         initializeGameSession()
         consumeHostTicketIfNeeded()
         applyTeamAssignments()
-        applyRespawnConfig()
+        respawnManager.applyInitialPlayingState()
 
         val alivePlayers = collectAlivePlayers()
         transferAlivePlayersToGameInstance(alivePlayers)
@@ -1261,18 +1261,6 @@ abstract class GameMode : ServerMode {
         for ((uuid, team) in assignments) tracker.assignTeam(uuid, team)
         val grouped = assignments.entries.groupBy({ it.value }, { it.key })
         onTeamsAssigned(grouped)
-    }
-
-    private fun applyRespawnConfig() {
-        val respawnConfig = settings.respawn ?: return
-        if (respawnConfig.maxLives > 0) {
-            tracker.forEachAlive { uuid -> tracker.setLives(uuid, respawnConfig.maxLives) }
-        }
-        if (respawnConfig.invincibilityTicks > 0) {
-            gracePeriod(RESPAWN_GRACE_NAME) {
-                duration((respawnConfig.invincibilityTicks * 50L).milliseconds)
-            }
-        }
     }
 
     private fun collectAlivePlayers(): List<Player> {
