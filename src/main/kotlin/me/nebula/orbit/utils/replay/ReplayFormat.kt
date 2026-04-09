@@ -180,7 +180,7 @@ object ReplayFormat {
         for ((_, offset, size) in chunks) {
             val compressed = ByteArray(size)
             System.arraycopy(data, offset, compressed, 0, size)
-            val origSize = Zstd.decompressedSize(compressed)
+            val origSize = Zstd.getFrameContentSize(compressed)
             val output = ByteArray(if (origSize > 0) origSize.toInt() else size * 20)
             Zstd.decompress(output, compressed)
             val decompressed = output
