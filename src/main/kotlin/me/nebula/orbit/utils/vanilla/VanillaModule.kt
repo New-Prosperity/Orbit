@@ -92,6 +92,10 @@ object VanillaModules {
         registry[module.id] = module
     }
 
+    fun registerAll() {
+        for (module in ALL_VANILLA_MODULES) register(module)
+    }
+
     fun get(id: String): VanillaModule? = registry[id]
 
     fun all(): Collection<VanillaModule> = registry.values

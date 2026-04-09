@@ -88,18 +88,18 @@ object MovementCheck : AntiCheatCheck {
 
             if (dy > FLY_Y_THRESHOLD && !player.isOnGround && newAirTicks > 3
                 && PropertyStore[NetworkProperties.AC_CHECK_FLY_ENABLED]) {
-                AntiCheat.flag(uuid, "fly", WEIGHT, AntiCheat.MOVEMENT_FLAG_THRESHOLD, AntiCheat.MOVEMENT_KICK_THRESHOLD)
+                AntiCheat.flag(uuid, "fly", WEIGHT, AntiCheat.movementFlagThreshold, AntiCheat.movementKickThreshold)
             }
 
             if (horizontalDist > SPEED_THRESHOLD
                 && PropertyStore[NetworkProperties.AC_CHECK_SPEED_ENABLED]) {
-                AntiCheat.flag(uuid, "speed", WEIGHT, AntiCheat.MOVEMENT_FLAG_THRESHOLD, AntiCheat.MOVEMENT_KICK_THRESHOLD)
+                AntiCheat.flag(uuid, "speed", WEIGHT, AntiCheat.movementFlagThreshold, AntiCheat.movementKickThreshold)
             }
 
             val fallDistance = state.lastGroundY - newPos.y()
             if (fallDistance > NOFALL_DISTANCE && player.isOnGround && !wasOnGround(state)
                 && PropertyStore[NetworkProperties.AC_CHECK_NOFALL_ENABLED]) {
-                AntiCheat.flag(uuid, "nofall", WEIGHT, AntiCheat.MOVEMENT_FLAG_THRESHOLD, AntiCheat.MOVEMENT_KICK_THRESHOLD)
+                AntiCheat.flag(uuid, "nofall", WEIGHT, AntiCheat.movementFlagThreshold, AntiCheat.movementKickThreshold)
             }
 
             states[uuid] = MovementState(

@@ -1,6 +1,8 @@
 package me.nebula.orbit.mode.game
 
 import me.nebula.ether.utils.logging.logger
+import me.nebula.ether.utils.logging.withTrace
+import me.nebula.orbit.traceId
 import me.nebula.ether.utils.hazelcast.Store
 import net.minestom.server.entity.GameMode as MinestomGameMode
 import me.nebula.orbit.progression.PartyBonusCalculator
@@ -649,7 +651,7 @@ abstract class GameMode : ServerMode {
     }
 
     fun broadcastAlive(action: (Player) -> Unit) {
-        for (uuid in tracker.alive.toSet()) {
+        tracker.forEachAlive { uuid ->
             MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.let(action)
         }
     }
@@ -713,7 +715,7 @@ abstract class GameMode : ServerMode {
         }
     }
 
-    private fun handlePlayerJoin(player: Player) {
+    private fun handlePlayerJoin(player: Player) = withTrace(player.traceId) {
         when (JoinPolicy.decide(player, this)) {
             JoinDecision.Spectator -> applySpectatorJoin(player)
             JoinDecision.Participant -> applyParticipantJoin(player)
@@ -784,7 +786,7 @@ abstract class GameMode : ServerMode {
         onLateJoin(player)
     }
 
-    private fun handlePlayerDisconnect(player: Player) {
+    private fun handlePlayerDisconnect(player: Player) = withTrace(player.traceId) {
         killFeed?.removePlayer(player.uuid)
         when (val action = DisconnectPolicy.decide(player, this)) {
             DisconnectAction.CleanRemove -> applyCleanRemove(player)
@@ -1199,9 +1201,7 @@ abstract class GameMode : ServerMode {
 
         val respawnConfig = settings.respawn
         if (respawnConfig != null && respawnConfig.maxLives > 0) {
-            for (uuid in tracker.alive.toSet()) {
-                tracker.setLives(uuid, respawnConfig.maxLives)
-            }
+            tracker.forEachAlive { uuid -> tracker.setLives(uuid, respawnConfig.maxLives) }
         }
 
         if (respawnConfig != null && respawnConfig.invincibilityTicks > 0) {
@@ -1210,8 +1210,9 @@ abstract class GameMode : ServerMode {
             }
         }
 
-        val alivePlayers = tracker.alive.toSet().mapNotNull { uuid ->
-            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+        val alivePlayers = mutableListOf<Player>()
+        tracker.forEachAlive { uuid ->
+            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.let(alivePlayers::add)
         }
 
         if (isDualInstance) {
@@ -1346,7 +1347,7 @@ abstract class GameMode : ServerMode {
         cleanupGameMechanicsNode()
         cleanupVoidCheck()
 
-        for (uuid in tracker.alive.toSet()) {
+        tracker.forEachAlive { uuid ->
             placements[uuid] = 1
             val winner = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
             if (winner != null) ProgressionEventBus.publish(ProgressionEvent.TopPlacement(winner))
@@ -1492,8 +1493,9 @@ abstract class GameMode : ServerMode {
     }
 
     protected fun autoBalanceTeams(teamNames: List<String>) {
-        val alivePlayers = tracker.alive.toSet().mapNotNull { uuid ->
-            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+        val alivePlayers = mutableListOf<Player>()
+        tracker.forEachAlive { uuid ->
+            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.let(alivePlayers::add)
         }
         val balanced = TeamBalance.balance(alivePlayers, teamNames.size)
         for ((teamIndex, players) in balanced) {

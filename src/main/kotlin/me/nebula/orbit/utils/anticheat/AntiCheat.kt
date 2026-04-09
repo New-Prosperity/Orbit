@@ -8,6 +8,8 @@ import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.PlayerFlaggedMessage
 import me.nebula.gravity.cache.CacheSlots
 import me.nebula.gravity.cache.PlayerCache
+import me.nebula.gravity.property.NetworkProperties
+import me.nebula.gravity.property.PropertyStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.anticheat.checks.CombatCheck
@@ -27,10 +29,11 @@ object AntiCheat {
     private val flaggedLocally = ConcurrentHashMap.newKeySet<UUID>()
     private var eventNode: EventNode<Event>? = null
 
-    const val MOVEMENT_FLAG_THRESHOLD = 20
-    const val MOVEMENT_KICK_THRESHOLD = 60
-    const val COMBAT_FLAG_THRESHOLD = 15
-    const val COMBAT_KICK_THRESHOLD = 45
+    val movementFlagThreshold: Int get() = PropertyStore[NetworkProperties.AC_MOVEMENT_FLAG_THRESHOLD]
+    val movementKickThreshold: Int get() = PropertyStore[NetworkProperties.AC_MOVEMENT_KICK_THRESHOLD]
+    val combatFlagThreshold: Int get() = PropertyStore[NetworkProperties.AC_COMBAT_FLAG_THRESHOLD]
+    val combatKickThreshold: Int get() = PropertyStore[NetworkProperties.AC_COMBAT_KICK_THRESHOLD]
+
     const val BYPASS_PERMISSION = "orbit.anticheat.bypass"
     private const val STAFF_ALERT_PERMISSION = "staff.inspect"
 

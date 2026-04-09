@@ -525,7 +525,7 @@ class LiveScoreboard @PublishedApi internal constructor(
 
     private class SidebarState(
         var sidebar: Sidebar,
-        var visibleIndices: Set<Int>,
+        var visibleIndices: IntArray,
     )
 
     private val states = ConcurrentHashMap<UUID, SidebarState>()
@@ -548,7 +548,7 @@ class LiveScoreboard @PublishedApi internal constructor(
         val visible = resolveVisible(player)
         val sidebar = buildSidebar(player, visible)
         sidebar.addViewer(player)
-        states[player.uuid] = SidebarState(sidebar, visible.map { it.first }.toSet())
+        states[player.uuid] = SidebarState(sidebar, IntArray(visible.size) { visible[it].first })
     }
 
     fun hide(player: Player) {
@@ -557,14 +557,13 @@ class LiveScoreboard @PublishedApi internal constructor(
 
     fun refresh(player: Player) {
         val visible = resolveVisible(player)
-        val visibleIndices = visible.mapTo(HashSet(visible.size)) { it.first }
         val state = states[player.uuid]
 
-        if (state == null || state.visibleIndices != visibleIndices) {
+        if (state == null || !visibleIndicesMatch(state.visibleIndices, visible)) {
             state?.sidebar?.removeViewer(player)
             val sidebar = buildSidebar(player, visible)
             sidebar.addViewer(player)
-            states[player.uuid] = SidebarState(sidebar, visibleIndices)
+            states[player.uuid] = SidebarState(sidebar, IntArray(visible.size) { visible[it].first })
         } else {
             state.sidebar.setTitle(miniMessage.deserialize(titleProvider(player)))
             visible.forEachIndexed { displayIndex, (_, line) ->
@@ -575,6 +574,12 @@ class LiveScoreboard @PublishedApi internal constructor(
                 state.sidebar.updateLineContent("line_$displayIndex", miniMessage.deserialize(content))
             }
         }
+    }
+
+    private fun visibleIndicesMatch(cached: IntArray, fresh: List<Pair<Int, LiveLine>>): Boolean {
+        if (cached.size != fresh.size) return false
+        for (i in cached.indices) if (cached[i] != fresh[i].first) return false
+        return true
     }
 
     fun refreshAll() {

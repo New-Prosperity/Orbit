@@ -46,9 +46,13 @@ class PlayerTracker {
     val aliveCount: Int get() = players.values.count { it is PlayerState.Alive }
     val effectiveAliveCount: Int get() = players.values.count { it !is PlayerState.Spectating }
 
-    fun visibleAliveCount(): Int = alive.count { uuid ->
-        val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: return@count true
-        !VanishManager.isVanished(player)
+    fun visibleAliveCount(): Int {
+        var count = 0
+        forEachAlive { uuid ->
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
+            if (player == null || !VanishManager.isVanished(player)) count++
+        }
+        return count
     }
     val size: Int get() = players.size
 

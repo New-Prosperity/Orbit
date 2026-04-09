@@ -1,8 +1,10 @@
 package me.nebula.orbit.mode.game
 
+import me.nebula.ether.utils.logging.withTrace
 import me.nebula.orbit.displayUsername
 import me.nebula.orbit.progression.ProgressionEvent
 import me.nebula.orbit.progression.ProgressionEventBus
+import me.nebula.orbit.traceId
 import me.nebula.orbit.utils.achievement.AchievementTriggerManager
 import me.nebula.orbit.utils.deathrecap.DamageEntry
 import net.minestom.server.entity.Player
@@ -14,7 +16,10 @@ import java.util.concurrent.atomic.AtomicLong
 class DamageRouter(private val gameMode: GameMode) {
 
     fun install(parent: EventNode<in EntityDamageEvent>) {
-        parent.addListener(EntityDamageEvent::class.java) { event -> handle(event) }
+        parent.addListener(EntityDamageEvent::class.java) { event ->
+            val victim = event.entity as? Player ?: return@addListener
+            withTrace(victim.traceId) { handle(event) }
+        }
     }
 
     private fun handle(event: EntityDamageEvent) {

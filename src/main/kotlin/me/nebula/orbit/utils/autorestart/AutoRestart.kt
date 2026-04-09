@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.autorestart
 
 import me.nebula.ether.utils.duration.DurationFormatter
-import me.nebula.orbit.utils.chat.miniMessage
+import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
 import net.minestom.server.timer.Task
@@ -12,14 +12,14 @@ class AutoRestartConfig @PublishedApi internal constructor() {
 
     @PublishedApi internal var delay: Duration = Duration.ofHours(6)
     @PublishedApi internal val warningIntervals = mutableListOf<Duration>()
-    @PublishedApi internal var warningTemplate: String = "<red>Server restarting in {time}!"
-    @PublishedApi internal var kickMessage: String = "<red>Server is restarting."
+    @PublishedApi internal var warningKey: String = "orbit.autorestart.warning"
+    @PublishedApi internal var kickKey: String = "orbit.autorestart.kick"
     @PublishedApi internal var restartAction: () -> Unit = { MinecraftServer.stopCleanly() }
 
     fun after(duration: Duration) { delay = duration }
     fun warnings(vararg intervals: Duration) { warningIntervals.addAll(intervals) }
-    fun warningMessage(template: String) { warningTemplate = template }
-    fun kickMessage(message: String) { kickMessage = message }
+    fun warningKey(key: String) { warningKey = key }
+    fun kickKey(key: String) { kickKey = key }
     fun onRestart(action: () -> Unit) { restartAction = action }
 }
 
@@ -76,14 +76,16 @@ object AutoRestartManager {
     private fun broadcastWarning(remaining: Duration) {
         val cfg = config ?: return
         val timeStr = DurationFormatter.format(remaining.toMillis())
-        val message = miniMessage.deserialize(cfg.warningTemplate.replace("{time}", timeStr))
-        MinecraftServer.getConnectionManager().onlinePlayers.forEach { it.sendMessage(message) }
+        MinecraftServer.getConnectionManager().onlinePlayers.forEach { player ->
+            player.sendMessage(player.translate(cfg.warningKey, "time" to timeStr))
+        }
     }
 
     private fun executeRestart() {
         val cfg = config ?: return
-        val kickComponent = miniMessage.deserialize(cfg.kickMessage)
-        MinecraftServer.getConnectionManager().onlinePlayers.forEach { it.kick(kickComponent) }
+        MinecraftServer.getConnectionManager().onlinePlayers.forEach { player ->
+            player.kick(player.translate(cfg.kickKey))
+        }
         cfg.restartAction()
         cancel()
     }

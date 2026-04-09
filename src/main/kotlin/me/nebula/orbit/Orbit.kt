@@ -89,60 +89,6 @@ import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.game.battleroyale.BattleRoyaleMode
 import me.nebula.orbit.mode.build.BuildMode
 import me.nebula.orbit.utils.vanilla.VanillaModules
-import me.nebula.orbit.utils.vanilla.modules.BlockPickModule
-import me.nebula.orbit.utils.vanilla.modules.DrowningModule
-import me.nebula.orbit.utils.vanilla.modules.FallDamageModule
-import me.nebula.orbit.utils.vanilla.modules.FireDamageModule
-import me.nebula.orbit.utils.vanilla.modules.GravityBlocksModule
-import me.nebula.orbit.utils.vanilla.modules.ArmorReductionModule
-import me.nebula.orbit.utils.vanilla.modules.AttackCooldownModule
-import me.nebula.orbit.utils.vanilla.modules.BlockDropsModule
-import me.nebula.orbit.utils.vanilla.modules.BucketModule
-import me.nebula.orbit.utils.vanilla.modules.ChestModule
-import me.nebula.orbit.utils.vanilla.modules.CriticalHitsModule
-import me.nebula.orbit.utils.vanilla.modules.FlintAndSteelModule
-import me.nebula.orbit.utils.vanilla.modules.FoodConsumptionModule
-import me.nebula.orbit.utils.vanilla.modules.HungerModule
-import me.nebula.orbit.utils.vanilla.modules.ItemPickupModule
-import me.nebula.orbit.utils.vanilla.modules.ToolDurabilityModule
-import me.nebula.orbit.utils.vanilla.modules.NaturalRegenModule
-import me.nebula.orbit.utils.vanilla.modules.ProjectilesModule
-import me.nebula.orbit.utils.vanilla.modules.SuffocationModule
-import me.nebula.orbit.utils.vanilla.modules.TntExplosionModule
-import me.nebula.orbit.utils.vanilla.modules.VoidDamageModule
-import me.nebula.orbit.utils.vanilla.modules.WaterFlowModule
-import me.nebula.orbit.utils.vanilla.modules.LavaFlowModule
-import me.nebula.orbit.utils.vanilla.modules.NetherPortalModule
-import me.nebula.orbit.utils.vanilla.modules.DamageIntegrationModule
-import me.nebula.orbit.utils.vanilla.modules.SwimmingModule
-import me.nebula.orbit.utils.vanilla.modules.DoorInteractionModule
-import me.nebula.orbit.utils.vanilla.modules.LeverButtonModule
-import me.nebula.orbit.utils.vanilla.modules.FarmlandModule
-import me.nebula.orbit.utils.vanilla.modules.CropGrowthModule
-import me.nebula.orbit.utils.vanilla.modules.LadderClimbingModule
-import me.nebula.orbit.utils.vanilla.modules.SlimeBlockModule
-import me.nebula.orbit.utils.vanilla.modules.ItemDespawnModule
-import me.nebula.orbit.utils.vanilla.modules.PressurePlateModule
-import me.nebula.orbit.utils.vanilla.modules.NoteBlockModule
-import me.nebula.orbit.utils.vanilla.modules.ComposterModule
-import me.nebula.orbit.utils.vanilla.modules.CauldronModule
-import me.nebula.orbit.utils.vanilla.modules.RespawnAnchorModule
-import me.nebula.orbit.utils.vanilla.modules.AnvilModule
-import me.nebula.orbit.utils.vanilla.modules.BrewingStandModule
-import me.nebula.orbit.utils.vanilla.modules.JukeboxModule
-import me.nebula.orbit.utils.vanilla.modules.ShulkerBoxModule
-import me.nebula.orbit.utils.vanilla.modules.TotemModule
-import me.nebula.orbit.utils.vanilla.modules.SmithingTableModule
-import me.nebula.orbit.utils.vanilla.modules.SweepAttackModule
-import me.nebula.orbit.utils.vanilla.modules.ShieldBlockingModule
-import me.nebula.orbit.utils.vanilla.modules.FireSpreadModule
-import me.nebula.orbit.utils.vanilla.modules.BedRespawnModule
-import me.nebula.orbit.utils.vanilla.modules.BoneMealModule
-import me.nebula.orbit.utils.vanilla.modules.EnderChestModule
-import me.nebula.orbit.utils.vanilla.modules.CampfireCookingModule
-import me.nebula.orbit.utils.vanilla.modules.CraftingModule
-import me.nebula.orbit.utils.vanilla.modules.FurnaceModule
-import me.nebula.orbit.utils.vanilla.modules.StonecutterModule
 import me.nebula.orbit.mode.hub.HubMode
 import me.nebula.orbit.progression.BattlePassMenu
 import me.nebula.orbit.progression.ProgressionSubscribers
@@ -761,25 +707,8 @@ object Orbit {
             else -> error("Unknown game mode: $gameMode")
         }
 
-    private val vanillaModuleList = listOf(
-        BlockPickModule, FallDamageModule, VoidDamageModule, GravityBlocksModule,
-        HungerModule, NaturalRegenModule, FireDamageModule, DrowningModule,
-        TntExplosionModule, ProjectilesModule, ArmorReductionModule, CriticalHitsModule,
-        AttackCooldownModule, SuffocationModule, ItemPickupModule, FoodConsumptionModule,
-        BlockDropsModule, ToolDurabilityModule, FlintAndSteelModule, BucketModule,
-        ChestModule, WaterFlowModule, LavaFlowModule, SweepAttackModule,
-        ShieldBlockingModule, FireSpreadModule, BedRespawnModule, BoneMealModule,
-        EnderChestModule, CampfireCookingModule, CraftingModule, FurnaceModule,
-        StonecutterModule, NetherPortalModule, DamageIntegrationModule, SwimmingModule,
-        DoorInteractionModule, LeverButtonModule, FarmlandModule, CropGrowthModule,
-        LadderClimbingModule, SlimeBlockModule, ItemDespawnModule, PressurePlateModule,
-        NoteBlockModule, ComposterModule, CauldronModule, RespawnAnchorModule,
-        AnvilModule, BrewingStandModule, JukeboxModule, ShulkerBoxModule,
-        TotemModule, SmithingTableModule,
-    )
-
     private fun registerVanillaModules() {
-        vanillaModuleList.forEach(VanillaModules::register)
+        VanillaModules.registerAll()
     }
 }
 

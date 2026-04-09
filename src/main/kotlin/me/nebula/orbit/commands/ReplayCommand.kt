@@ -1,14 +1,13 @@
 package me.nebula.orbit.commands
 
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.replay.HighlightType
 import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.orbit.utils.replay.ReplayViewer
-import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
-import net.kyori.adventure.text.format.NamedTextColor
 import net.minestom.server.command.builder.Command
 import net.minestom.server.entity.Player
 import java.text.SimpleDateFormat
@@ -48,20 +47,20 @@ fun replayCommand(): Command = command("replay") {
                 "page" to clamped.toString(), "total" to totalPages.toString()))
             for (i in start until end) {
                 val name = replays[i]
-                val clickable = Component.text(" [Play]", NamedTextColor.GREEN)
+                val clickable = player.translate("orbit.command.replay.list.play")
                     .clickEvent(ClickEvent.runCommand("/replay play $name"))
-                    .hoverEvent(HoverEvent.showText(Component.text("Click to play $name")))
-                val infoClick = Component.text(" [Info]", NamedTextColor.AQUA)
+                    .hoverEvent(HoverEvent.showText(player.translate("orbit.command.replay.list.play_hover", "name" to name)))
+                val infoClick = player.translate("orbit.command.replay.list.info")
                     .clickEvent(ClickEvent.runCommand("/replay info $name"))
-                    .hoverEvent(HoverEvent.showText(Component.text("Click for info")))
+                    .hoverEvent(HoverEvent.showText(player.translate("orbit.command.replay.list.info_hover")))
                 player.sendMessage(
-                    Component.text("  $name", NamedTextColor.YELLOW)
+                    player.translate("orbit.command.replay.list.entry", "name" to name)
                         .append(clickable)
                         .append(infoClick)
                 )
             }
             if (clamped < totalPages) {
-                val next = Component.text("[Next Page]", NamedTextColor.GOLD)
+                val next = player.translate("orbit.command.replay.list.next_page")
                     .clickEvent(ClickEvent.runCommand("/replay list ${clamped + 1}"))
                 player.sendMessage(next)
             }
@@ -246,19 +245,14 @@ fun replayCommand(): Command = command("replay") {
             player.sendMessage(player.translate("orbit.command.replay.highlights.header"))
             for (highlight in highlights) {
                 val time = ticksToTime(highlight.tick)
-                val color = when (highlight.type) {
-                    HighlightType.MULTI_KILL -> NamedTextColor.RED
-                    HighlightType.FINAL_KILL -> NamedTextColor.GOLD
-                    HighlightType.CLUTCH -> NamedTextColor.LIGHT_PURPLE
-                    HighlightType.FIRST_BLOOD -> NamedTextColor.GREEN
-                    HighlightType.LONG_RANGE_KILL -> NamedTextColor.AQUA
-                }
-                val msg = Component.text("  [$time] ", NamedTextColor.GRAY)
-                    .append(Component.text("[${highlight.type.name}] ", color))
-                    .append(Component.text(highlight.description, NamedTextColor.WHITE))
-                    .append(Component.text(" [Seek]", NamedTextColor.YELLOW)
-                        .clickEvent(ClickEvent.runCommand("/replay seek ${highlight.tick}"))
-                        .hoverEvent(HoverEvent.showText(Component.text("Jump to tick ${highlight.tick}"))))
+                val typeKey = "orbit.command.replay.highlights.type.${highlight.type.name.lowercase()}"
+                val msg = player.translate("orbit.command.replay.highlights.entry",
+                    "time" to time,
+                    "type" to player.translateRaw(typeKey),
+                    "description" to highlight.description,
+                ).append(player.translate("orbit.command.replay.highlights.seek")
+                    .clickEvent(ClickEvent.runCommand("/replay seek ${highlight.tick}"))
+                    .hoverEvent(HoverEvent.showText(player.translate("orbit.command.replay.highlights.seek_hover", "tick" to highlight.tick.toString()))))
                 player.sendMessage(msg)
             }
         }

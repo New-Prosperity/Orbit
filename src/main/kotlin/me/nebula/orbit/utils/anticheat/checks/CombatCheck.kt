@@ -36,7 +36,7 @@ object CombatCheck : AntiCheatCheck {
 
             val distance = player.position.distance(target.position)
             if (distance > REACH_THRESHOLD && PropertyStore[NetworkProperties.AC_CHECK_REACH_ENABLED]) {
-                AntiCheat.flag(uuid, "reach", WEIGHT, AntiCheat.COMBAT_FLAG_THRESHOLD, AntiCheat.COMBAT_KICK_THRESHOLD)
+                AntiCheat.flag(uuid, "reach", WEIGHT, AntiCheat.combatFlagThreshold, AntiCheat.combatKickThreshold)
             }
 
             val now = System.currentTimeMillis()
@@ -50,7 +50,7 @@ object CombatCheck : AntiCheatCheck {
             }
 
             if (history.size > MAX_CPS && PropertyStore[NetworkProperties.AC_CHECK_ATTACKRATE_ENABLED]) {
-                AntiCheat.flag(uuid, "attackrate", WEIGHT, AntiCheat.COMBAT_FLAG_THRESHOLD, AntiCheat.COMBAT_KICK_THRESHOLD)
+                AntiCheat.flag(uuid, "attackrate", WEIGHT, AntiCheat.combatFlagThreshold, AntiCheat.combatKickThreshold)
             }
         }
     }

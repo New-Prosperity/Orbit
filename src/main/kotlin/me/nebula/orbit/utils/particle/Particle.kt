@@ -82,9 +82,13 @@ fun Instance.spawnBlockBreakParticle(position: Point, count: Int = 10) {
 }
 
 fun Instance.spawnParticleAt(particle: Particle, position: Point, count: Int = 1, spread: Float = 0f, speed: Float = 0f) {
+    spawnParticleXyz(particle, position.x(), position.y(), position.z(), count, spread, speed)
+}
+
+fun Instance.spawnParticleXyz(particle: Particle, x: Double, y: Double, z: Double, count: Int = 1, spread: Float = 0f, speed: Float = 0f) {
     val packet = ParticlePacket(
         particle, false, false,
-        position.x(), position.y(), position.z(),
+        x, y, z,
         spread, spread, spread,
         speed, count,
     )
@@ -102,27 +106,27 @@ fun Player.spawnParticle(particle: Particle, position: Point, count: Int = 1, sp
 }
 
 fun Instance.spawnParticleLine(particle: Particle, from: Point, to: Point, density: Double = 0.5, count: Int = 1) {
-    val dx = to.x() - from.x()
-    val dy = to.y() - from.y()
-    val dz = to.z() - from.z()
+    val fx = from.x()
+    val fy = from.y()
+    val fz = from.z()
+    val dx = to.x() - fx
+    val dy = to.y() - fy
+    val dz = to.z() - fz
     val dist = from.distance(to)
     val steps = (dist / density).toInt().coerceAtLeast(1)
     for (i in 0..steps) {
         val t = i.toDouble() / steps
-        val pos = Pos(from.x() + dx * t, from.y() + dy * t, from.z() + dz * t)
-        spawnParticleAt(particle, pos, count)
+        spawnParticleXyz(particle, fx + dx * t, fy + dy * t, fz + dz * t, count)
     }
 }
 
 fun Instance.spawnParticleCircle(particle: Particle, center: Point, radius: Double, points: Int = 20, count: Int = 1) {
+    val cx = center.x()
+    val cy = center.y()
+    val cz = center.z()
     for (i in 0 until points) {
         val angle = 2.0 * PI * i / points
-        val pos = Pos(
-            center.x() + radius * cos(angle),
-            center.y(),
-            center.z() + radius * sin(angle),
-        )
-        spawnParticleAt(particle, pos, count)
+        spawnParticleXyz(particle, cx + radius * cos(angle), cy, cz + radius * sin(angle), count)
     }
 }
 
