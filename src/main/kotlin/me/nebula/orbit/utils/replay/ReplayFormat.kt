@@ -99,7 +99,6 @@ object ReplayFormat {
 
         val tickChunks = buildTickChunks(replay.data.frames)
         buf.putVarInt(tickChunks.size)
-        @Suppress("UNUSED_VARIABLE") val chunkDataStart = buf.position()
 
         val placeholders = mutableListOf<Int>()
         for (chunk in tickChunks) {
