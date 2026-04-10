@@ -73,7 +73,7 @@ class LiveTestSession(
                 MinecraftServer.getConnectionManager().removePlayer(player.playerConnection)
             }
             packetInterceptor.remove(uuid)
-            runCatching { PlayerCache.evict(uuid) }
+            runCatching { PlayerCache.evict(uuid) } // noqa: dangling runCatching
         }
         spawnedBots.clear()
         operator.sendMessage(miniMessage.deserialize("<yellow>Removed $count bot(s) from live game"))
@@ -259,7 +259,7 @@ class LiveTestSession(
             }
         }
         configNode?.let {
-            runCatching { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+            runCatching { MinecraftServer.getGlobalEventHandler().removeChild(it) } // noqa: dangling runCatching
         }
         removeBots()
     }

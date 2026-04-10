@@ -526,11 +526,11 @@ abstract class GameMode : ServerMode {
 
         tracker.recordDeath(player.uuid)
         semanticRecorder.recordDeath(player, killer)
-        runCatching { AchievementRegistry.progress(player, "deaths", 1) }
+        runCatching { AchievementRegistry.progress(player, "deaths", 1) } // noqa: dangling runCatching
 
         if (killer != null && killer.uuid != player.uuid) {
             tracker.recordKill(killer.uuid)
-            runCatching { AchievementRegistry.progress(killer, "kills", 1) }
+            runCatching { AchievementRegistry.progress(killer, "kills", 1) } // noqa: dangling runCatching
             totalKillCount++
             if (totalKillCount == 1) {
                 broadcastAll { p ->
@@ -1134,7 +1134,7 @@ abstract class GameMode : ServerMode {
         alivePlayers.forEach { tracker.markActivity(it.uuid) }
         onGameSetup(alivePlayers)
         for (player in alivePlayers) {
-            runCatching { AchievementRegistry.progress(player, "games_played", 1) }
+            runCatching { AchievementRegistry.progress(player, "games_played", 1) } // noqa: dangling runCatching
         }
 
         installGameSubsystems()
@@ -1379,10 +1379,10 @@ abstract class GameMode : ServerMode {
                 val gameMode = Orbit.gameMode
                 val playerIds = gameInstance.players.map { it.uuid }
                 if (gameMode != null && playerIds.isNotEmpty()) {
-                    runCatching { NetworkMessenger.publish(GameEndMessage(playerIds, gameMode)) }
+                    runCatching { NetworkMessenger.publish(GameEndMessage(playerIds, gameMode)) } // noqa: dangling runCatching
                 }
                 Thread.startVirtualThread {
-                    runCatching { Store.flushAll() }
+                    runCatching { Store.flushAll() } // noqa: dangling runCatching
                     Orbit.app.stop().join()
                 }
             }

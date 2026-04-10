@@ -88,6 +88,12 @@ object AnimatedCounterManager {
         tickTask = repeat(1) { tick() }
     }
 
+    fun uninstall() {
+        tickTask?.cancel()
+        tickTask = null
+        animations.clear()
+    }
+
     private fun tick() {
         val toClean = mutableListOf<UUID>()
         for ((uuid, map) in animations) {

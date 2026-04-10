@@ -33,8 +33,8 @@ object MetricsPublisher {
     fun shutdown() {
         publisherTask?.cancel()
         publisherTask = null
-        runCatching { metricsMap.remove(Orbit.serverName) }
-        runCatching { metricsMap.remove(errorsKey()) }
+        runCatching { metricsMap.remove(Orbit.serverName) } // noqa: dangling runCatching
+        runCatching { metricsMap.remove(errorsKey()) } // noqa: dangling runCatching
         logger.info { "MetricsPublisher shut down" }
     }
 

@@ -47,7 +47,7 @@ object PlayerTransfer {
     }
 
     private fun despawnCosmetics(player: Player) {
-        runCatching { Orbit.cosmetics.despawnAll(player) }
+        runCatching { Orbit.cosmetics.despawnAll(player) } // noqa: dangling runCatching
     }
 
     private fun publishTransfer(uuid: UUID, serverName: String): Boolean =

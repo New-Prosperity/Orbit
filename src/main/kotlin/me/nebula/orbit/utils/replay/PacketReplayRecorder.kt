@@ -15,9 +15,9 @@ import net.minestom.server.network.packet.server.play.ChunkDataPacket
 import net.minestom.server.network.packet.server.play.PlayerInfoRemovePacket
 import net.minestom.server.network.packet.server.play.PlayerInfoUpdatePacket
 import net.minestom.server.network.packet.server.play.UpdateLightPacket
-import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 
 private val logger = logger("PacketReplayRecorder")
 
@@ -35,7 +35,7 @@ data class RecordedPacket(val tickOffset: Int, val packetBytes: ByteArray) {
 
 class PacketReplayRecorder {
 
-    private val packets = Collections.synchronizedList(mutableListOf<RecordedPacket>())
+    private val packets = ConcurrentLinkedQueue<RecordedPacket>()
     private val seenHashes = ConcurrentHashMap.newKeySet<Long>()
     private var startTimeMillis = 0L
     @Volatile private var recording = false
@@ -84,7 +84,7 @@ class PacketReplayRecorder {
             val hash = tick.toLong() shl 32 or bytes.contentHashCode().toLong()
             if (!seenHashes.add(hash)) return@addListener
 
-            packets += RecordedPacket(tick, bytes)
+            packets.add(RecordedPacket(tick, bytes))
         }
 
         MinecraftServer.getGlobalEventHandler().addChild(node)
@@ -99,7 +99,7 @@ class PacketReplayRecorder {
         eventNode = null
         targetInstance = null
         seenHashes.clear()
-        val result = synchronized(packets) { packets.toList() }
+        val result = packets.toList()
         logger.info { "Packet replay recording stopped: ${result.size} packets over ${currentTick()} ticks" }
         return result
     }

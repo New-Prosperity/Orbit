@@ -106,6 +106,12 @@ object AnimatedBossBarManager {
         tickTask = repeat(1) { tick() }
     }
 
+    fun uninstall() {
+        tickTask?.cancel()
+        tickTask = null
+        bars.clear()
+    }
+
     private fun tick() {
         for ((_, map) in bars) {
             for ((_, instance) in map) {

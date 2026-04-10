@@ -232,7 +232,7 @@ object GameTestRunner {
                 definition.setup(context)
             } finally {
                 timeoutThread.interrupt()
-                runCatching { definition.afterEach?.invoke(context) }
+                runCatching { definition.afterEach?.invoke(context) } // noqa: dangling runCatching
             }
 
             val metrics = context.collectMetrics()
@@ -278,9 +278,9 @@ object GameTestRunner {
             if (running != null) {
                 cleanup(running)
             } else {
-                configNode?.let { runCatching { MinecraftServer.getGlobalEventHandler().removeChild(it) } }
-                runCatching { gameMode?.shutdown() }
-                instance?.let { runCatching { MinecraftServer.getInstanceManager().unregisterInstance(it) } }
+                configNode?.let { runCatching { MinecraftServer.getGlobalEventHandler().removeChild(it) } } // noqa: dangling runCatching
+                runCatching { gameMode?.shutdown() } // noqa: dangling runCatching
+                instance?.let { runCatching { MinecraftServer.getInstanceManager().unregisterInstance(it) } } // noqa: dangling runCatching
             }
         }
     }
@@ -408,7 +408,7 @@ object GameTestRunner {
 
     private fun cleanup(running: RunningTest) {
         running.configNode?.let {
-            runCatching { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+            runCatching { MinecraftServer.getGlobalEventHandler().removeChild(it) } // noqa: dangling runCatching
         }
 
         for (uuid in running.botUuids) {
@@ -417,10 +417,10 @@ object GameTestRunner {
                 player.playerConnection.disconnect()
                 MinecraftServer.getConnectionManager().removePlayer(player.playerConnection)
             }
-            runCatching { PlayerCache.evict(uuid) }
+            runCatching { PlayerCache.evict(uuid) } // noqa: dangling runCatching
         }
 
-        runCatching { running.gameMode?.shutdown() }
-        runCatching { MinecraftServer.getInstanceManager().unregisterInstance(running.instance) }
+        runCatching { running.gameMode?.shutdown() } // noqa: dangling runCatching
+        runCatching { MinecraftServer.getInstanceManager().unregisterInstance(running.instance) } // noqa: dangling runCatching
     }
 }

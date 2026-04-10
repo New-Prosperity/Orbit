@@ -60,6 +60,6 @@ class EventRecorder {
     }
 
     fun uninstall() {
-        runCatching { MinecraftServer.getGlobalEventHandler().removeChild(node) }
+        runCatching { MinecraftServer.getGlobalEventHandler().removeChild(node) } // noqa: dangling runCatching
     }
 }

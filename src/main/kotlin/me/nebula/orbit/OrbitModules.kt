@@ -42,13 +42,24 @@ object BotAIModule : Module("bot-ai") {
 }
 
 object HudSystemModule : Module("hud-system") {
+    private var eventNode: net.minestom.server.event.EventNode<*>? = null
+
     override fun onEnable() {
-        val handler = MinecraftServer.getGlobalEventHandler()
-        HudManager.install(handler)
-        ActionBarManager.install(handler)
-        AnimatedCounterManager.install(handler)
-        AnimatedBossBarManager.install(handler)
-        TabListManager.install(handler)
+        val node = net.minestom.server.event.EventNode.all("hud-system")
+        HudManager.install(node)
+        ActionBarManager.install(node)
+        AnimatedCounterManager.install(node)
+        AnimatedBossBarManager.install(node)
+        TabListManager.install(node)
+        MinecraftServer.getGlobalEventHandler().addChild(node)
+        eventNode = node
+    }
+
+    override fun onDisable() {
+        AnimatedCounterManager.uninstall()
+        AnimatedBossBarManager.uninstall()
+        eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        eventNode = null
     }
 }
 

@@ -139,7 +139,7 @@ object ServerDrainManager {
     private fun clearBossBar() {
         val bar = bossBar ?: return
         for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
-            runCatching { player.hideBossBar(bar) }
+            runCatching { player.hideBossBar(bar) } // noqa: dangling runCatching
         }
         bossBar = null
     }

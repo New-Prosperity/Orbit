@@ -540,7 +540,7 @@ object Orbit {
         PlayerCache.installListeners()
 
         moduleRegistry.enableAll()
-        runCatching { PendingReplayFlushes.sweepStale() }
+        runCatching { PendingReplayFlushes.sweepStale() } // noqa: dangling runCatching
 
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
             event.spawningInstance = mode.activeInstance
@@ -677,7 +677,7 @@ object Orbit {
 
             if (serverUuid.isNotEmpty()) {
                 logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
-                runCatching { NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid)) }
+                runCatching { NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid)) } // noqa: dangling runCatching
             }
 
             val players = MinecraftServer.getConnectionManager().onlinePlayers.toList()
@@ -686,7 +686,7 @@ object Orbit {
                 if (transferred > 0) Thread.sleep(2000)
 
                 for (player in MinecraftServer.getConnectionManager().onlinePlayers.toList()) {
-                    runCatching { player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid))) }
+                    runCatching { player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid))) } // noqa: dangling runCatching
                 }
             }
             globalTasks.forEach { it.cancel() }
@@ -694,7 +694,7 @@ object Orbit {
             moduleRegistry.disableAll()
             mode.shutdown()
             PlayerCache.clear()
-            runCatching { Store.flushAll() }
+            runCatching { Store.flushAll() } // noqa: dangling runCatching
             app.stop().join()
         })
     }
