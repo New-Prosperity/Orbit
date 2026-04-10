@@ -164,6 +164,12 @@ object TabListManager {
         }
     }
 
+    fun uninstall() {
+        fakeEntries.clear()
+        playerFormats.clear()
+        globalFormat = null
+    }
+
     fun tick() {
         for (viewer in MinecraftServer.getConnectionManager().onlinePlayers) {
             val entries = fakeEntries[viewer.uuid] ?: continue

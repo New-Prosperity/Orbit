@@ -145,11 +145,7 @@ object ServerDrainManager {
     }
 
     private fun currentPhase(): GamePhase? {
-        val mode = try {
-            Orbit.mode
-        } catch (_: UninitializedPropertyAccessException) {
-            return null
-        }
-        return (mode as? GameMode)?.phase
+        if (!Orbit.isModeInitialized) return null
+        return (Orbit.mode as? GameMode)?.phase
     }
 }

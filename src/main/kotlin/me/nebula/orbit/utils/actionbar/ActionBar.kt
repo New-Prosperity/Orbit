@@ -100,6 +100,10 @@ object ActionBarManager {
         }
     }
 
+    fun uninstall() {
+        state.clear()
+    }
+
     fun tick() {
         val now = System.currentTimeMillis()
         val toRemove = mutableListOf<UUID>()

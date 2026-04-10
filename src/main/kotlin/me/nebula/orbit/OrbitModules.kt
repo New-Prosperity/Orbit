@@ -56,8 +56,11 @@ object HudSystemModule : Module("hud-system") {
     }
 
     override fun onDisable() {
+        HudManager.uninstall()
+        ActionBarManager.uninstall()
         AnimatedCounterManager.uninstall()
         AnimatedBossBarManager.uninstall()
+        TabListManager.uninstall()
         eventNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
         eventNode = null
     }

@@ -107,6 +107,10 @@ object HudManager {
         }
     }
 
+    fun uninstall() {
+        playerLayers.clear()
+    }
+
     fun tick() {
         for (layers in playerLayers.values) {
             for (hud in layers.values) {
