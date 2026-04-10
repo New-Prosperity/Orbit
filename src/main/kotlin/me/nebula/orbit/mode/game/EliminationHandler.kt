@@ -73,7 +73,9 @@ class EliminationHandler(private val gameMode: GameMode) {
 
         creditAssists(player.uuid, killer?.uuid)
 
-        gameMode.killFeedInternal?.reportKill(KillEvent(killer = killer, victim = player))
+        val weaponKey = killer?.itemInMainHand?.material()?.key()?.value()
+        val distance = if (killer != null) killer.position.distance(player.position) else null
+        gameMode.killFeedInternal?.reportKill(KillEvent(killer = killer, victim = player, weaponKey = weaponKey, distance = distance))
         gameMode.deathRecapTracker?.sendRecap(player)
 
         gameMode.onPlayerDeath(player, killer)

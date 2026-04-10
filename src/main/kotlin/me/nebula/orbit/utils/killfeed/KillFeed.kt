@@ -15,7 +15,28 @@ data class KillEvent(
     val killer: Player?,
     val victim: Player,
     val weaponKey: String? = null,
+    val distance: Double? = null,
 )
+
+object WeaponIcons {
+    private val icons = mapOf(
+        "wooden_sword" to "\u2694",
+        "stone_sword" to "\u2694",
+        "iron_sword" to "\u2694",
+        "diamond_sword" to "\u2694",
+        "netherite_sword" to "\u2694",
+        "bow" to "\uD83C\uDFF9",
+        "crossbow" to "\uD83C\uDFF9",
+        "trident" to "\uD83D\uDD31",
+    )
+
+    private const val DEFAULT_ICON = "\u2620"
+
+    fun resolve(weaponKey: String?): String {
+        if (weaponKey == null) return DEFAULT_ICON
+        return icons[weaponKey] ?: DEFAULT_ICON
+    }
+}
 
 fun interface KillFeedRenderer {
     fun render(event: KillEvent, viewer: Player): net.kyori.adventure.text.Component
@@ -114,9 +135,11 @@ class KillFeedBuilder @PublishedApi internal constructor() {
     @PublishedApi internal var tracker: PlayerTracker? = null
     @PublishedApi internal var renderer: KillFeedRenderer = KillFeedRenderer { event, viewer ->
         val killerName = event.killer?.username ?: "?"
+        val icon = WeaponIcons.resolve(event.weaponKey)
         viewer.translate("orbit.killfeed.default",
             "killer" to killerName,
             "victim" to event.victim.username,
+            "weapon" to icon,
         )
     }
     @PublishedApi internal val effects = mutableListOf<KillFeedEffect>()
