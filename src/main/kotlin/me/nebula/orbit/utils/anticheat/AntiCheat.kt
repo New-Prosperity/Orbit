@@ -6,10 +6,6 @@ import me.nebula.gravity.anticheat.FlaggedPlayerStore
 import me.nebula.gravity.anticheat.PlayerFlag
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.PlayerFlaggedMessage
-import me.nebula.gravity.sanction.AddSanctionProcessor
-import me.nebula.gravity.sanction.Sanction
-import me.nebula.gravity.sanction.SanctionStore
-import me.nebula.gravity.sanction.SanctionType
 import me.nebula.gravity.cache.CacheSlots
 import me.nebula.gravity.cache.PlayerCache
 import me.nebula.gravity.property.NetworkProperties
@@ -43,10 +39,6 @@ object AntiCheat {
 
     const val BYPASS_PERMISSION = "orbit.anticheat.bypass"
     private const val STAFF_ALERT_PERMISSION = "staff.inspect"
-    private const val AUTO_BAN_FLAG_COUNT = 3
-    private const val AUTO_BAN_WINDOW_MS = 24 * 60 * 60 * 1000L
-    private const val AUTO_BAN_DURATION_MS = 60 * 60 * 1000L
-    private val CONSOLE_UUID = UUID(0, 0)
 
     fun tracker(uuid: UUID): ViolationTracker =
         trackers.computeIfAbsent(uuid) { ViolationTracker() }
@@ -57,15 +49,6 @@ object AntiCheat {
         tracker.addViolation(type, weight)
         val total = tracker.totalViolations()
         logger.debug { "Flag: $uuid | $type (weight=$weight, total=$total)" }
-
-        if (total >= kickThreshold) {
-            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: return
-            trackers.remove(uuid)
-            flaggedLocally.remove(uuid)
-            player.kick(mm("<red>Disconnected"))
-            logger.info { "Kicked ${player.username} (${player.uuid}) for exceeding $type kick threshold ($total/$kickThreshold)" }
-            return
-        }
 
         if (total >= flagThreshold && flaggedLocally.add(uuid)) {
             val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
@@ -91,30 +74,7 @@ object AntiCheat {
 
             alertStaff(playerName, type, total)
             logger.info { "Flagged $playerName ($uuid) for $type ($total violations)" }
-
-            checkAutoBan(uuid, playerName, type)
         }
-    }
-
-    private fun checkAutoBan(uuid: UUID, playerName: String, checkType: String) {
-        val data = FlaggedPlayerStore.load(uuid) ?: return
-        val cutoff = System.currentTimeMillis() - AUTO_BAN_WINDOW_MS
-        val recentSameCheck = data.flags.count { it.checkType == checkType && it.timestamp >= cutoff }
-        if (recentSameCheck < AUTO_BAN_FLAG_COUNT) return
-
-        SanctionStore.executeOnKey(uuid, AddSanctionProcessor(Sanction(
-            type = SanctionType.BAN,
-            reason = "Anti-cheat: $AUTO_BAN_FLAG_COUNT+ flags on $checkType within 24h",
-            issuer = CONSOLE_UUID,
-            issuedAt = System.currentTimeMillis(),
-            duration = AUTO_BAN_DURATION_MS,
-        )))
-
-        val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
-        player?.kick(mm("<red>You have been temporarily banned for suspicious activity."))
-        trackers.remove(uuid)
-        flaggedLocally.remove(uuid)
-        logger.warn { "Auto-banned $playerName ($uuid) for $AUTO_BAN_FLAG_COUNT+ flags on $checkType within 24h (duration: ${AUTO_BAN_DURATION_MS / 60000}min)" }
     }
 
     fun isFlagged(uuid: UUID): Boolean = FlaggedPlayerStore.exists(uuid)
