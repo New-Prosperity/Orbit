@@ -195,9 +195,9 @@ abstract class GameMode : ServerMode {
 
     val tracker = PlayerTracker()
     internal var gameStartTime: Long = 0L
-        private set
+        internal set
     var initialPlayerCount: Int = 0
-        private set
+        internal set
 
     @Volatile protected var gamePartySnapshot: Map<UUID, Set<UUID>> = emptyMap()
         private set
@@ -254,8 +254,26 @@ abstract class GameMode : ServerMode {
     private val playerLifecycle = PlayerLifecycleHandler(this)
     private val replayFlusher = ReplayFlusher(this)
     private val gameEventInstaller = GameEventInstaller(this)
+    private val eliminationHandler = EliminationHandler(this)
+    private val gameInitializer = GameInitializer(this)
     internal val damageRouterInternal get() = damageRouter
     internal val chatPipelineInternal get() = chatPipeline
+    internal val gameEventInstallerInternal get() = gameEventInstaller
+    internal var startingCountdownInternal: Countdown?
+        get() = startingCountdown
+        set(value) { startingCountdown = value }
+    internal var gameTimerInternal: MinigameTimer?
+        get() = gameTimer
+        set(value) { gameTimer = value }
+    internal var gamePartySnapshotInternal: Map<UUID, Set<UUID>>
+        get() = gamePartySnapshot
+        set(value) { gamePartySnapshot = value }
+    internal var partyBonusesInternal: Map<UUID, PartyBonusCalculator.PartyBonus>
+        get() = partyBonuses
+        set(value) { partyBonuses = value }
+    internal fun assignTeamsInternal(players: List<UUID>) = assignTeams(players)
+    internal fun autoSpectateInternal(player: Player) = spectatorManager.autoSpectateOnEliminate(player)
+    internal fun handleTimerExpiredInternal() = handleTimerExpired()
     internal fun checkMinPlayersInternal() = checkMinPlayersThreshold()
     internal fun forceBackToWaitingInternal() {
         startingCountdown?.stop()
@@ -283,7 +301,7 @@ abstract class GameMode : ServerMode {
     private val replayRecorder = PacketReplayRecorder()
     private val semanticRecorder = ReplayRecorder()
     @Volatile var activeSeasonPasses: List<BattlePassDefinition> = emptyList()
-        private set
+        internal set
 
     override val spawnPoint: Pos by lazy { settings.spawn.toPos() }
 
@@ -419,109 +437,31 @@ abstract class GameMode : ServerMode {
         spectatorToolkit?.uninstall()
         comboCounter?.uninstall()
         comboCounter = null
-        cleanupReconnectionState()
-        cleanupRespawnTimers()
-        cleanupLateJoinState()
-        cleanupGameEvents()
-        cleanupAfkCheck()
-        cleanupOvertime()
-        cleanupFreezeNode()
+        reconnectionManager.cleanup()
+        for (uuid in tracker.disconnected) ReconnectionStore.delete(uuid)
+        respawnManager.cleanup()
+        lateJoinManager.cleanup()
+        gameEvents.values.forEach { it.cancel() }
+        gameEvents.clear()
+        activityWatchdog.cleanupAfkCheck()
+        overtimeController.cleanup()
+        gameEventInstaller.cleanupFreezeNode()
         MutatorEngine.cleanup(activeInstance)
         coreNode?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
         coreNode = null
-        cleanupGameMechanicsNode()
-        cleanupVoidCheck()
+        gameEventInstaller.cleanupGameMechanicsNode()
+        activityWatchdog.cleanupVoidCheck()
         lobbyLifecycle.cancelWaitingActionBarLoop()
         activityWatchdog.cleanupGameplayLoops()
         damageTakenCounters.clear()
         stateMachine.destroy()
     }
 
-    fun eliminate(player: Player) {
-        if (phase != GamePhase.PLAYING) return
-        if (!tracker.isAlive(player.uuid) && !tracker.isRespawning(player.uuid)) return
+    fun eliminate(player: Player) = eliminationHandler.eliminate(player)
 
-        respawnManager.cancelFor(player.uuid)
-        tracker.eliminate(player.uuid)
-        player.gameMode = MinestomGameMode.SPECTATOR
-        player.teleport(spawnPoint)
+    fun revive(player: Player, position: Pos = spawnPoint) = eliminationHandler.revive(player, position)
 
-        eliminationOrder++
-        val placement = initialPlayerCount - eliminationOrder + 1
-        placements[player.uuid] = placement
-        if (placement in 1..3) ProgressionEventBus.publish(ProgressionEvent.TopPlacement(player))
-        player.sendMessage(player.translate("orbit.game.placement",
-            "place" to placement.toString(),
-            "total" to initialPlayerCount.toString()))
-
-        autoSpectateOnEliminate(player)
-        spectatorToolkit?.apply(player)
-        onPlayerEliminated(player)
-        checkGameEnd()
-    }
-
-    fun revive(player: Player, position: Pos = spawnPoint) {
-        if (phase != GamePhase.PLAYING) return
-        if (!tracker.isSpectating(player.uuid)) return
-
-        spectatorToolkit?.remove(player)
-        player.removeTag(spectatorTargetTag)
-        player.stopSpectating()
-        tracker.revive(player.uuid)
-        player.gameMode = MinestomGameMode.SURVIVAL
-        player.teleport(position)
-    }
-
-    fun handleDeath(player: Player, killer: Player? = null) {
-        if (phase != GamePhase.PLAYING) return
-        if (!tracker.isAlive(player.uuid)) return
-
-        tracker.recordDeath(player.uuid)
-        semanticRecorder.recordDeath(player, killer)
-        runCatching { AchievementRegistry.progress(player, "deaths", 1) } // noqa: dangling runCatching
-
-        if (killer != null && killer.uuid != player.uuid) {
-            tracker.recordKill(killer.uuid)
-            runCatching { AchievementRegistry.progress(killer, "kills", 1) } // noqa: dangling runCatching
-            totalKillCount++
-            if (totalKillCount == 1) {
-                broadcastAll { p ->
-                    p.sendMessage(p.translate("orbit.game.first_blood", "player" to killer.displayUsername))
-                }
-            }
-            val streak = tracker.streakOf(killer.uuid)
-            if (streak > 1) onKillStreak(killer, streak)
-            if (streak >= 3) ProgressionEventBus.publish(ProgressionEvent.KillStreak(killer))
-        }
-
-        creditAssists(player.uuid, killer?.uuid)
-
-        killFeed?.reportKill(KillEvent(killer = killer, victim = player))
-        deathRecapTracker?.sendRecap(player)
-
-        onPlayerDeath(player, killer)
-
-        if (overtimeController.isSuddenDeath) {
-            eliminate(player)
-            return
-        }
-
-        val respawnConfig = settings.respawn
-        if (respawnConfig != null) {
-            val livesRemaining = if (respawnConfig.maxLives > 0) {
-                tracker.decrementLives(player.uuid)
-            } else {
-                1
-            }
-
-            if (livesRemaining > 0) {
-                scheduleRespawn(player, respawnConfig)
-                return
-            }
-        }
-
-        eliminate(player)
-    }
+    fun handleDeath(player: Player, killer: Player? = null) = eliminationHandler.handleDeath(player, killer)
 
     fun forceReconnect(player: Player) {
         if (phase != GamePhase.PLAYING) return
@@ -598,20 +538,6 @@ abstract class GameMode : ServerMode {
     protected fun lastPlayerStandingUuid(): UUID? =
         if (tracker.aliveCount <= 1) tracker.alive.firstOrNull() else null
 
-    private fun autoSpectateOnEliminate(eliminated: Player) =
-        spectatorManager.autoSpectateOnEliminate(eliminated)
-
-    private fun creditAssists(victimUuid: UUID, killerUuid: UUID?) {
-        val damagers = tracker.recentDamagersOf(victimUuid, ASSIST_WINDOW_MILLIS)
-        for (damager in damagers) {
-            if (damager != killerUuid && damager != victimUuid) {
-                tracker.recordAssist(damager)
-                val assister = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(damager)
-                if (assister != null) ProgressionEventBus.publish(ProgressionEvent.Assist(assister))
-            }
-        }
-    }
-
     private fun handlePlayerJoin(player: Player) = playerLifecycle.handleJoin(player)
 
     private fun handlePlayerDisconnect(player: Player) = playerLifecycle.handleDisconnect(player)
@@ -638,27 +564,9 @@ abstract class GameMode : ServerMode {
         }
     }
 
-    private fun scheduleRespawn(player: Player, config: RespawnConfig) {
-        respawnManager.schedule(player, config)
-    }
-
-    private fun applyRespawnInvincibility(player: Player) {
-        respawnManager.applyInvincibility(player)
-    }
-
-    private fun tryClaimLateJoinSlot(): Boolean {
+    internal fun tryClaimLateJoinSlotInternal(): Boolean {
         val config = settings.lateJoin ?: return false
         return lateJoinManager.tryClaimSlot(config.maxLateJoiners)
-    }
-
-    internal fun tryClaimLateJoinSlotInternal(): Boolean = tryClaimLateJoinSlot()
-
-    private fun startAfkCheck() {
-        activityWatchdog.startAfkCheck()
-    }
-
-    private fun startVoidCheck() {
-        activityWatchdog.startVoidCheck()
     }
 
     private fun startOvertime() {
@@ -670,59 +578,21 @@ abstract class GameMode : ServerMode {
         }
     }
 
-    private fun installFreezeNode() = gameEventInstaller.installFreezeNode()
-
-    private fun installGameMechanicsNode() = gameEventInstaller.installGameMechanicsNode()
-
-    private fun cleanupReconnectionState() {
-        reconnectionManager.cleanup()
-        for (uuid in tracker.disconnected) {
-            ReconnectionStore.delete(uuid)
-        }
-    }
-
-    private fun cleanupRespawnTimers() {
-        respawnManager.cleanup()
-    }
-
-    private fun cleanupLateJoinState() {
-        lateJoinManager.cleanup()
-    }
-
-    private fun cleanupGameEvents() {
-        gameEvents.values.forEach { it.cancel() }
-        gameEvents.clear()
-    }
-
-    private fun cleanupAfkCheck() {
-        activityWatchdog.cleanupAfkCheck()
-    }
-
-    private fun cleanupOvertime() {
-        overtimeController.cleanup()
-    }
-
-    private fun cleanupFreezeNode() = gameEventInstaller.cleanupFreezeNode()
-
-    private fun cleanupGameMechanicsNode() = gameEventInstaller.cleanupGameMechanicsNode()
-
     private fun stopGameplayTimersAndCleanup() {
         BotLobbyFiller.stopFilling(Orbit.serverName)
         gameTimer?.stop()
         gameTimer = null
         activityWatchdog.cleanupGameplayLoops()
         GracePeriodManager.clearAll()
-        cleanupReconnectionState()
-        cleanupRespawnTimers()
-        cleanupLateJoinState()
-        cleanupGameEvents()
-        cleanupAfkCheck()
-        cleanupOvertime()
-        cleanupGameMechanicsNode()
-        cleanupVoidCheck()
-    }
-
-    private fun cleanupVoidCheck() {
+        reconnectionManager.cleanup()
+        for (uuid in tracker.disconnected) ReconnectionStore.delete(uuid)
+        respawnManager.cleanup()
+        lateJoinManager.cleanup()
+        gameEvents.values.forEach { it.cancel() }
+        gameEvents.clear()
+        activityWatchdog.cleanupAfkCheck()
+        overtimeController.cleanup()
+        gameEventInstaller.cleanupGameMechanicsNode()
         activityWatchdog.cleanupVoidCheck()
     }
 
@@ -742,15 +612,17 @@ abstract class GameMode : ServerMode {
     private fun resetSubsystemsForNewRound() {
         startingCountdown?.stop()
         startingCountdown = null
-        cleanupFreezeNode()
-        cleanupReconnectionState()
-        cleanupRespawnTimers()
-        cleanupLateJoinState()
-        cleanupGameEvents()
-        cleanupAfkCheck()
-        cleanupOvertime()
-        cleanupGameMechanicsNode()
-        cleanupVoidCheck()
+        gameEventInstaller.cleanupFreezeNode()
+        reconnectionManager.cleanup()
+        for (uuid in tracker.disconnected) ReconnectionStore.delete(uuid)
+        respawnManager.cleanup()
+        lateJoinManager.cleanup()
+        gameEvents.values.forEach { it.cancel() }
+        gameEvents.clear()
+        activityWatchdog.cleanupAfkCheck()
+        overtimeController.cleanup()
+        gameEventInstaller.cleanupGameMechanicsNode()
+        activityWatchdog.cleanupVoidCheck()
         chatPipeline?.uninstall()
         chatPipeline = null
         spectatorToolkit?.uninstall()
@@ -805,7 +677,7 @@ abstract class GameMode : ServerMode {
     private fun enterStarting() {
         lobbyLifecycle.cancelWaitingActionBarLoop()
 
-        installFreezeNode()
+        gameEventInstaller.installFreezeNode()
 
         startingCountdown = countdown(settings.timing.countdownSeconds.seconds) {
             onTick { remaining ->
@@ -823,7 +695,7 @@ abstract class GameMode : ServerMode {
             }
             onComplete {
                 startingCountdown = null
-                cleanupFreezeNode()
+                gameEventInstaller.cleanupFreezeNode()
                 stateMachine.transition(GamePhase.PLAYING)
             }
         }.also { it.start() }
@@ -858,52 +730,12 @@ abstract class GameMode : ServerMode {
         assertInvariants(GamePhase.PLAYING)
     }
 
-    private fun tearDownLobbyAndCountdown() {
-        lobbyLifecycle.tearDownLobby()
-        startingCountdown?.stop()
-        startingCountdown = null
-        cleanupFreezeNode()
-    }
-
-    private fun initializeGameSession() {
-        gameStartTime = System.currentTimeMillis()
-        initialPlayerCount = tracker.aliveCount
-        activeSeasonPasses = BattlePassRegistry.activePasses()
-        gamePartySnapshot = PartyBonusCalculator.buildPartySnapshot(tracker.all)
-        partyBonuses = tracker.all.associateWith {
-            PartyBonusCalculator.calculateBonus(it, gamePartySnapshot)
-        }
-    }
-
-    private fun consumeHostTicketIfNeeded() {
-        val owner = Orbit.hostOwner ?: return
-        if (RankManager.hasPermission(owner, "*")) return
-        val consumed = HostTicketStore.executeOnKey(owner, ConsumeTicketProcessor())
-        if (!consumed) logger.warn { "Failed to consume host ticket for $owner (balance may be zero)" }
-    }
-
-    private fun applyTeamAssignments() {
-        val teamConfig = settings.teams ?: return
-        if (teamConfig.teamCount <= 0) return
-        val assignments = assignTeams(tracker.alive.toList())
-        for ((uuid, team) in assignments) tracker.assignTeam(uuid, team)
-        val grouped = assignments.entries.groupBy({ it.value }, { it.key })
-        onTeamsAssigned(grouped)
-    }
-
-    private fun collectAlivePlayers(): List<Player> {
-        val alivePlayers = mutableListOf<Player>()
-        tracker.forEachAlive { uuid ->
-            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)?.let(alivePlayers::add)
-        }
-        return alivePlayers
-    }
-
-    private fun transferAlivePlayersToGameInstance(alivePlayers: List<Player>) {
-        if (!isDualInstance) return
-        val transfers = alivePlayers.map { it.setInstance(gameInstance, spawnPoint) }
-        CompletableFuture.allOf(*transfers.toTypedArray()).join()
-    }
+    private fun tearDownLobbyAndCountdown() = gameInitializer.tearDownLobbyAndCountdown()
+    private fun initializeGameSession() = gameInitializer.initializeGameSession()
+    private fun consumeHostTicketIfNeeded() = gameInitializer.consumeHostTicketIfNeeded()
+    private fun applyTeamAssignments() = gameInitializer.applyTeamAssignments()
+    private fun collectAlivePlayers(): List<Player> = gameInitializer.collectAlivePlayers()
+    private fun transferAlivePlayersToGameInstance(alivePlayers: List<Player>) = gameInitializer.transferAlivePlayersToGameInstance(alivePlayers)
 
     private fun installGameSubsystems() {
         comboCounter = buildComboCounter()
@@ -912,9 +744,9 @@ abstract class GameMode : ServerMode {
         chatPipeline = buildChatPipeline()
         chatPipeline?.install()
 
-        installGameMechanicsNode()
-        startAfkCheck()
-        startVoidCheck()
+        gameEventInstaller.installGameMechanicsNode()
+        activityWatchdog.startAfkCheck()
+        activityWatchdog.startVoidCheck()
 
         spectatorToolkit = buildSpectatorToolkit()
         spectatorToolkit?.install()
@@ -924,28 +756,8 @@ abstract class GameMode : ServerMode {
         rewardDistributor = buildRewardDistributor()
     }
 
-    private fun applyGracePeriodIfConfigured(alivePlayers: List<Player>) {
-        if (settings.timing.gracePeriodSeconds <= 0) return
-        val config = gracePeriod("game-grace") {
-            duration(settings.timing.gracePeriodSeconds.seconds)
-        }
-        alivePlayers.forEach { GracePeriodManager.apply(it, config.name) }
-    }
-
-    private fun startGameTimerIfConfigured(alivePlayers: List<Player>) {
-        val resolvedDuration = resolveGameDuration()
-        if (resolvedDuration <= 0) return
-        gameTimer = minigameTimer("game-timer") {
-            duration(resolvedDuration.seconds)
-            onEnd {
-                gameTimer = null
-                handleTimerExpired()
-            }
-        }.also {
-            it.addAllViewers(alivePlayers)
-            it.start()
-        }
-    }
+    private fun applyGracePeriodIfConfigured(alivePlayers: List<Player>) = gameInitializer.applyGracePeriodIfConfigured(alivePlayers)
+    private fun startGameTimerIfConfigured(alivePlayers: List<Player>) = gameInitializer.startGameTimerIfConfigured(alivePlayers)
 
     private fun startReplayAndProgressionTasks(alivePlayers: List<Player>) {
         replayRecorder.start(gameInstance)
