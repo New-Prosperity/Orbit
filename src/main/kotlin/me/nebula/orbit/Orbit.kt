@@ -65,6 +65,7 @@ import me.nebula.orbit.commands.orbitCommand
 import me.nebula.orbit.commands.cleanupReplayViewer
 import me.nebula.orbit.commands.replayCommand
 import me.nebula.orbit.commands.settingsCommand
+import me.nebula.orbit.commands.ticketCommand
 import me.nebula.orbit.commands.vanishCommand
 import me.nebula.orbit.cosmetic.CosmeticContext
 import me.nebula.orbit.cosmetic.CosmeticRegistry
@@ -474,6 +475,7 @@ object Orbit {
         commandManager.register(replayCommand())
         commandManager.register(cosmeticsCommand())
         commandManager.register(previewCommand())
+        commandManager.register(ticketCommand())
         commandManager.register(marketplaceCommand())
         commandManager.register(sellCommand())
         commandManager.register(tradeCommand())
