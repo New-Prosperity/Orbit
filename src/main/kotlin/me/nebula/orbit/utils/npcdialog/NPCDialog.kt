@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.npcdialog
 
+import me.nebula.orbit.translation.translateDefault
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.chat.mm
 import net.kyori.adventure.text.Component
@@ -152,7 +153,7 @@ object DialogManager {
             }
             commandHandlers[commandId] = handler
 
-            val optionComponent = miniMessage.deserialize("<yellow> > ${option.label}")
+            val optionComponent = translateDefault("orbit.dialog.option_label", "text" to option.label)
                 .clickEvent(ClickEvent.runCommand("/dialogresponse $commandId"))
                 .hoverEvent(HoverEvent.showText(mm("<gray>Click to select")))
             player.sendMessage(optionComponent)

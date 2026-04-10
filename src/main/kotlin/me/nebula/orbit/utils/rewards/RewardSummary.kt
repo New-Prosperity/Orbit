@@ -65,10 +65,10 @@ fun Player.showRewardSummary(block: RewardSummaryBuilder.() -> Unit) {
 
     val chatParts = builder.lines.map { entry ->
         val display = if (entry.animate) "+${entry.amount}" else "${entry.amount}"
-        miniMessage.deserialize("<${entry.color.toString().lowercase()}>${entry.icon} $display ${entry.label}")
+        translateDefault("orbit.reward.entry", "color" to entry.color.toString().lowercase(), "icon" to entry.icon, "amount" to display, "label" to entry.label)
     }
 
-    val headerLine = miniMessage.deserialize(builder.header)
+    val headerLine = translateDefault("orbit.reward.header")
     val rewardLine = Component.join(
         JoinConfiguration.separator(miniMessage.deserialize(" <dark_gray>\u2502 ")),
         chatParts,

@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.npc
 
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.localeCode
+import me.nebula.orbit.translation.translateDefault
 import net.kyori.adventure.text.Component
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.scheduler.repeat
@@ -128,7 +129,7 @@ class NpcSpeechManager(
 
     fun showBubbleTo(player: Player, bubble: ActiveBubble, line: SpeechLine) {
         val text = resolveText(player, line)
-        val bubbleText = miniMessage.deserialize("<white>\u2709 $text")
+        val bubbleText = translateDefault("orbit.npc.speech_bubble", "text" to text)
         val pos = npc.position.add(0.0, config.bubbleYOffset.toDouble(), 0.0)
 
         player.sendPacket(SpawnEntityPacket(
