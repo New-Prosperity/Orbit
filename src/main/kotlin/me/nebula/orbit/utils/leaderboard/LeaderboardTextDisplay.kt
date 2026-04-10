@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.leaderboard
 
 import me.nebula.gravity.ranking.Periodicity
 import me.nebula.gravity.ranking.RankedPlayer
+import me.nebula.orbit.translation.translateDefault
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.scheduler.repeat
 import net.kyori.adventure.text.Component
@@ -152,7 +153,7 @@ class LeaderboardTextDisplay @PublishedApi internal constructor(
         val mode = playerModes.getOrDefault(player.uuid, DisplayMode.TOP_LIST)
         updateTextFor(player, next, mode)
 
-        player.sendMessage(miniMessage.deserialize("<yellow>Period: <gold>${next.name}"))
+        player.sendMessage(translateDefault("orbit.leaderboard.period_switch", "period" to next.name))
     }
 
     private fun toggleDisplayMode(player: Player) {
@@ -164,7 +165,7 @@ class LeaderboardTextDisplay @PublishedApi internal constructor(
         updateTextFor(player, periodicity, next)
 
         val label = if (next == DisplayMode.TOP_LIST) "Top $entriesShown" else "Your Position"
-        player.sendMessage(miniMessage.deserialize("<yellow>View: <gold>$label"))
+        player.sendMessage(translateDefault("orbit.leaderboard.view_switch", "view" to label))
     }
 
     private fun updateTextFor(player: Player, periodicity: Periodicity, mode: DisplayMode) {
@@ -178,14 +179,14 @@ class LeaderboardTextDisplay @PublishedApi internal constructor(
 
         builder.append(miniMessage.deserialize("<bold><gold>$titleText</bold>"))
         builder.append(Component.newline())
-        builder.append(miniMessage.deserialize("<dark_gray>${periodicity.name}"))
+        builder.append(translateDefault("orbit.leaderboard.period_label", "period" to periodicity.name))
         builder.append(Component.newline())
         builder.append(Component.newline())
 
         when (mode) {
             DisplayMode.TOP_LIST -> {
                 if (entries.isEmpty()) {
-                    builder.append(miniMessage.deserialize("<gray>No data available"))
+                    builder.append(translateDefault("orbit.leaderboard.no_data"))
                 } else {
                     for ((i, entry) in entries.take(entriesShown).withIndex()) {
                         builder.append(formatEntry(entry))
@@ -195,11 +196,11 @@ class LeaderboardTextDisplay @PublishedApi internal constructor(
             }
             DisplayMode.PERSONAL -> {
                 if (viewerUuid == null) {
-                    builder.append(miniMessage.deserialize("<gray>No player data"))
+                    builder.append(translateDefault("orbit.leaderboard.no_player_data"))
                 } else {
                     val playerEntry = entries.firstOrNull { it.uuid == viewerUuid }
                     if (playerEntry != null) {
-                        builder.append(miniMessage.deserialize("<yellow>Your Position:"))
+                        builder.append(translateDefault("orbit.leaderboard.your_position"))
                         builder.append(Component.newline())
                         builder.append(formatEntry(playerEntry))
 
@@ -208,18 +209,18 @@ class LeaderboardTextDisplay @PublishedApi internal constructor(
                         if (above != null) {
                             builder.append(Component.newline())
                             builder.append(Component.newline())
-                            builder.append(miniMessage.deserialize("<gray>Above you:"))
+                            builder.append(translateDefault("orbit.leaderboard.above_you"))
                             builder.append(Component.newline())
                             builder.append(formatEntry(above))
                         }
                         if (below != null) {
                             builder.append(Component.newline())
-                            builder.append(miniMessage.deserialize("<gray>Below you:"))
+                            builder.append(translateDefault("orbit.leaderboard.below_you"))
                             builder.append(Component.newline())
                             builder.append(formatEntry(below))
                         }
                     } else {
-                        builder.append(miniMessage.deserialize("<gray>You are not ranked yet"))
+                        builder.append(translateDefault("orbit.leaderboard.not_ranked"))
                     }
                 }
             }
@@ -227,7 +228,7 @@ class LeaderboardTextDisplay @PublishedApi internal constructor(
 
         builder.append(Component.newline())
         builder.append(Component.newline())
-        builder.append(miniMessage.deserialize("<dark_gray><italic>Left-click: period | Right-click: view"))
+        builder.append(translateDefault("orbit.leaderboard.controls"))
 
         return builder.build()
     }

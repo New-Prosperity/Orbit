@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.rewards
 
+import me.nebula.orbit.translation.translateDefault
 import me.nebula.orbit.utils.actionbar.ActionBarManager
 import me.nebula.orbit.utils.counter.AnimatedCounterManager
 import me.nebula.orbit.utils.counter.Easing

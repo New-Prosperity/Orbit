@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.combo
 
+import me.nebula.orbit.translation.translateDefault
 import me.nebula.orbit.utils.actionbar.ActionBarManager
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.scheduler.repeat
@@ -133,20 +134,20 @@ object ComboManager {
     private fun updateDisplay(player: Player, state: ComboState, cfg: ComboConfig) {
         when (cfg.display) {
             ComboDisplay.ACTION_BAR -> {
-                val text = "<yellow><bold>${state.count}x <reset><gray>Combo"
-                ActionBarManager.set(player, "combo", 10, miniMessage.deserialize(text), 2000L)
+                ActionBarManager.set(player, "combo", 10, translateDefault("orbit.combo.counter", "count" to state.count.toString()), 2000L)
             }
             ComboDisplay.TITLE -> {
                 val title = Title.title(
-                    miniMessage.deserialize("<yellow><bold>${state.count}x"),
-                    miniMessage.deserialize("<gray>Combo"),
+                    translateDefault("orbit.combo.title_top", "count" to state.count.toString()),
+                    translateDefault("orbit.combo.title_bottom"),
                     Title.Times.times(Duration.ZERO, Duration.ofMillis(500), Duration.ofMillis(200)),
                 )
                 player.showTitle(title)
             }
             ComboDisplay.BOSS_BAR -> {
+                val comboText = translateDefault("orbit.combo.counter", "count" to state.count.toString())
                 val bar = state.bossBar ?: BossBar.bossBar(
-                    miniMessage.deserialize("<yellow><bold>${state.count}x <reset><gray>Combo"),
+                    comboText,
                     1f,
                     BossBar.Color.YELLOW,
                     BossBar.Overlay.PROGRESS,
@@ -154,7 +155,7 @@ object ComboManager {
                     state.bossBar = it
                     player.showBossBar(it)
                 }
-                bar.name(miniMessage.deserialize("<yellow><bold>${state.count}x <reset><gray>Combo"))
+                bar.name(comboText)
                 val elapsed = tickCounter - state.lastHitTick
                 val progress = (1f - elapsed.toFloat() / cfg.windowTicks).coerceIn(0f, 1f)
                 bar.progress(progress)

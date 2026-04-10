@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.replay
 
 import me.nebula.ether.utils.logging.logger
+import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.nebulaworld.NebulaChunkLoader
 import me.nebula.orbit.utils.nebulaworld.NebulaWorldLoader
 import me.nebula.orbit.utils.nebulaworld.NebulaWorldReader
@@ -97,7 +98,7 @@ class ReplayViewer(
 
         player.onComplete {
             logger.info { "Replay ${replayFile.header.matchId} playback complete" }
-            viewers.forEach { it.sendMessage(Component.text("Replay finished.")) }
+            viewers.forEach { it.sendMessage(it.translate("orbit.replay.finished")) }
         }
 
         player.play { frame ->
