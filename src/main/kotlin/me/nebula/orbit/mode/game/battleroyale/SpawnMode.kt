@@ -1,6 +1,7 @@
 package me.nebula.orbit.mode.game.battleroyale
 
 import me.nebula.ether.utils.logging.logger
+import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.entitymount.EntityMountManager
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
@@ -186,6 +187,7 @@ object SpawnModeExecutor {
         val totalDist = sqrt(dx * dx + dz * dz)
         val dirX = dx / totalDist * config.busSpeed
         val dirZ = dz / totalDist * config.busSpeed
+        val busYaw = Math.toDegrees(-atan2(dx, dz)).toFloat()
         var traveled = 0.0
 
         val node = EventNode.all("br-bus-dismount")
@@ -218,12 +220,21 @@ object SpawnModeExecutor {
                 return@repeat
             }
 
+            val progress = (traveled / totalDist * 100).toInt().coerceIn(0, 100)
             val newPos = Pos(
                 startX + dirX * (traveled / config.busSpeed),
                 config.busHeight,
                 startZ + dirZ * (traveled / config.busSpeed),
+                busYaw,
+                0f,
             )
             bus.teleport(newPos)
+
+            for (player in players) {
+                if (player.uuid !in ejected) {
+                    player.sendActionBar(miniMessage.deserialize("<yellow><bold>SHIFT</bold> <gray>to jump | <white>$progress%"))
+                }
+            }
         }
 
         return SpawnModeResult(
