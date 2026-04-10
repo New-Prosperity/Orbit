@@ -42,6 +42,10 @@ data class SpawnModeConfig(
     val busSpeed: Double = 1.5,
     val parachuteDurationTicks: Int = 400,
     val randomMinDistance: Double = 20.0,
+    val edgeMargin: Double = 10.0,
+    val randomEdgeMargin: Double = 20.0,
+    val maxSpawnAttempts: Int = 200,
+    val fallbackSurfaceY: Int = 64,
 )
 
 data class SpawnModeResult(
@@ -65,13 +69,14 @@ object SpawnModeExecutor {
         onPlayerReady: (Player, Pos) -> Unit,
         onBusComplete: (() -> Unit)? = null,
     ): SpawnModeResult = when (config.mode) {
-        SpawnMode.HUNGER_GAMES -> executeRing(config.ringRadius, players, instance, center, mapRadius, onPlayerReady)
-        SpawnMode.EXTENDED_HUNGER_GAMES -> executeRing(config.extendedRingRadius, players, instance, center, mapRadius, onPlayerReady)
+        SpawnMode.HUNGER_GAMES -> executeRing(config, config.ringRadius, players, instance, center, mapRadius, onPlayerReady)
+        SpawnMode.EXTENDED_HUNGER_GAMES -> executeRing(config, config.extendedRingRadius, players, instance, center, mapRadius, onPlayerReady)
         SpawnMode.RANDOM -> executeRandom(config, players, instance, center, mapRadius, onPlayerReady)
         SpawnMode.BATTLE_ROYALE -> executeBus(config, players, instance, center, mapRadius, onPlayerReady, onBusComplete)
     }
 
     private fun executeRing(
+        config: SpawnModeConfig,
         radius: Double,
         players: List<Player>,
         instance: Instance,
@@ -80,7 +85,7 @@ object SpawnModeExecutor {
         onPlayerReady: (Player, Pos) -> Unit,
     ): SpawnModeResult {
         if (players.isEmpty()) return SpawnModeResult(pvpBlocked = false)
-        val effectiveRadius = radius.coerceAtMost(mapRadius - 10.0)
+        val effectiveRadius = radius.coerceAtMost(mapRadius - config.edgeMargin)
         val angleStep = 2 * Math.PI / players.size
         val shuffled = players.shuffled()
 
@@ -106,15 +111,15 @@ object SpawnModeExecutor {
         onPlayerReady: (Player, Pos) -> Unit,
     ): SpawnModeResult {
         val rng = ThreadLocalRandom.current()
-        val effectiveRadius = mapRadius - 20
+        val effectiveRadius = mapRadius - config.randomEdgeMargin.toInt()
         val placed = mutableListOf<Pos>()
         val shuffled = players.shuffled()
 
         for (player in shuffled) {
             var pos: Pos? = null
-            for (attempt in 0 until 200) {
+            for (attempt in 0 until config.maxSpawnAttempts) {
                 val angle = rng.nextDouble(2 * Math.PI)
-                val dist = rng.nextDouble(30.0, effectiveRadius.toDouble())
+                val dist = rng.nextDouble(config.randomMinDistance, effectiveRadius.toDouble())
                 val x = center.x() + cos(angle) * dist
                 val z = center.z() + sin(angle) * dist
                 val height = findSurfaceHeight(instance, x.toInt(), z.toInt())
@@ -128,10 +133,10 @@ object SpawnModeExecutor {
             }
             val spawnPos = pos ?: run {
                 val fallbackAngle = rng.nextDouble(2 * Math.PI)
-                val fallbackDist = rng.nextDouble(30.0, effectiveRadius.toDouble())
+                val fallbackDist = rng.nextDouble(config.randomMinDistance, effectiveRadius.toDouble())
                 val x = center.x() + cos(fallbackAngle) * fallbackDist
                 val z = center.z() + sin(fallbackAngle) * fallbackDist
-                val height = findSurfaceHeight(instance, x.toInt(), z.toInt()).coerceAtLeast(64)
+                val height = findSurfaceHeight(instance, x.toInt(), z.toInt()).coerceAtLeast(config.fallbackSurfaceY)
                 Pos(x, height + 1.0, z, Math.toDegrees(-fallbackAngle + Math.PI).toFloat(), 0f)
             }
             placed.add(spawnPos)
@@ -152,7 +157,7 @@ object SpawnModeExecutor {
     ): SpawnModeResult {
         val rng = ThreadLocalRandom.current()
         val angle = rng.nextDouble(2 * Math.PI)
-        val effectiveRadius = mapRadius - 10.0
+        val effectiveRadius = mapRadius - config.edgeMargin
         val startX = center.x() + cos(angle) * effectiveRadius
         val startZ = center.z() + sin(angle) * effectiveRadius
         val endX = center.x() - cos(angle) * effectiveRadius

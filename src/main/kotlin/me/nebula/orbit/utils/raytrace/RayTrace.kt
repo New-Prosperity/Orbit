@@ -5,6 +5,7 @@ import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
+import net.minestom.server.instance.EntityTracker
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.block.Block
 import kotlin.math.cos
@@ -112,7 +113,8 @@ fun raycast(
         }
 
         if (closestEntity == null) {
-            for (entity in instance.entities) {
+            instance.entityTracker.nearbyEntities(current, 2.0, EntityTracker.Target.ENTITIES) { entity ->
+                if (closestEntity != null) return@nearbyEntities
                 val (min, max) = entityAABB(entity)
                 if (x in min.x()..max.x() && y in min.y()..max.y() && z in min.z()..max.z()) {
                     closestEntity = entity
@@ -120,7 +122,6 @@ fun raycast(
                         closestDist = dist
                         closestPos = current
                     }
-                    break
                 }
             }
         }

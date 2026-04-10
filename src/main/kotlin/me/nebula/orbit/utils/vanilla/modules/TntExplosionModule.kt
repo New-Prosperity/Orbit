@@ -13,6 +13,7 @@ import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.ItemEntity
+import net.minestom.server.instance.EntityTracker
 import net.minestom.server.entity.LivingEntity
 import net.minestom.server.entity.damage.Damage
 import net.minestom.server.entity.damage.DamageType
@@ -203,13 +204,13 @@ private class VanillaExplosion(
         val damageRadius = power * 2
         val damageRadiusSq = damageRadius * damageRadius
 
-        for (entity in instance.entities) {
-            if (entity !is LivingEntity) continue
+        instance.entityTracker.nearbyEntities(Pos(cx, cy, cz), damageRadius, EntityTracker.Target.ENTITIES) { entity ->
+            if (entity !is LivingEntity) return@nearbyEntities
             val edx = entity.position.x() - cx
             val edy = entity.position.y() + entity.getEyeHeight() - cy
             val edz = entity.position.z() - cz
             val distSq = edx * edx + edy * edy + edz * edz
-            if (distSq > damageRadiusSq) continue
+            if (distSq > damageRadiusSq) return@nearbyEntities
 
             val dist = sqrt(distSq)
             val exposure = 1.0 - (dist / damageRadius)
