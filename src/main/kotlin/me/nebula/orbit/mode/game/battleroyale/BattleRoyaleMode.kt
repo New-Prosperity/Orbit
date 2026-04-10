@@ -537,7 +537,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     }
 
     private fun scheduleDeathmatchCheck() {
-        scheduleGameEvent("deathmatch_check", 600 * 20) {
+        scheduleGameEvent("deathmatch_check", season.deathmatch.checkDelaySeconds * 20) {
             if (!deathmatchActive && tracker.aliveCount <= season.deathmatch.triggerAtPlayers) {
                 triggerDeathmatch()
             }

@@ -44,6 +44,7 @@ data class DeathmatchConfig(
     val teleportToCenter: Boolean = true,
     val borderDiameter: Double = 50.0,
     val borderShrinkSeconds: Int = 60,
+    val checkDelaySeconds: Int = 600,
 )
 
 data class KitDefinitionConfig(
