@@ -33,6 +33,8 @@ import me.nebula.gravity.host.HostRequestStore
 import me.nebula.gravity.host.HostTicketStore
 import me.nebula.gravity.map.MapStore
 import me.nebula.gravity.messaging.NetworkMessenger
+import me.nebula.gravity.messaging.PlayerReportMessage
+import me.nebula.orbit.translation.translate
 import me.nebula.gravity.messaging.PropertyUpdateMessage
 import me.nebula.gravity.messaging.ServerDeregistrationMessage
 import me.nebula.gravity.messaging.ServerRegistrationMessage
@@ -65,6 +67,7 @@ import me.nebula.orbit.commands.orbitCommand
 import me.nebula.orbit.commands.cleanupReplayViewer
 import me.nebula.orbit.commands.replayCommand
 import me.nebula.orbit.commands.settingsCommand
+import me.nebula.orbit.commands.reportCommand
 import me.nebula.orbit.commands.ticketCommand
 import me.nebula.orbit.commands.vanishCommand
 import me.nebula.orbit.cosmetic.CosmeticContext
@@ -476,6 +479,7 @@ object Orbit {
         commandManager.register(cosmeticsCommand())
         commandManager.register(previewCommand())
         commandManager.register(ticketCommand())
+        commandManager.register(reportCommand())
         commandManager.register(marketplaceCommand())
         commandManager.register(sellCommand())
         commandManager.register(tradeCommand())
@@ -644,6 +648,19 @@ object Orbit {
             logger.info { "ServerRegistrationMessage published" }
         } else {
             logger.warn { "P_SERVER_UUID is empty, skipping server registration" }
+        }
+
+        NetworkMessenger.subscribe<PlayerReportMessage> { msg ->
+            for (p in MinecraftServer.getConnectionManager().onlinePlayers) {
+                val perms = PlayerCache.get(p.uuid)?.get(CacheSlots.PERMISSIONS) ?: continue
+                if ("*" in perms || "staff.reports" in perms) {
+                    p.sendMessage(p.translate("orbit.report.staff_alert",
+                        "reporter" to msg.reporterName,
+                        "reported" to msg.reportedName,
+                        "reason" to msg.reason,
+                    ))
+                }
+            }
         }
 
         if (gameMode != null) {
