@@ -6,6 +6,9 @@ import me.nebula.orbit.utils.particle.ParticleShapeRenderer
 import me.nebula.orbit.utils.particle.spawnParticle
 import me.nebula.orbit.utils.particle.showParticleShape
 import me.nebula.orbit.utils.particle.ParticleShape
+import me.nebula.orbit.utils.sound.playSound
+import net.kyori.adventure.key.Key
+import net.kyori.adventure.sound.Sound
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
@@ -39,6 +42,7 @@ object CosmeticApplier {
         forEachParticleViewer(instance, ownerUuid) { player ->
             ParticleShapeRenderer.render(player, particleShape)
         }
+        playCosmeticSound(instance, position, resolved, ownerUuid)
     }
 
     fun playWinEffect(instance: Instance, winner: Player, cosmeticId: String, level: Int = 1) {
@@ -87,6 +91,7 @@ object CosmeticApplier {
         forEachParticleViewer(instance, ownerUuid) { player ->
             ParticleShapeRenderer.render(player, particleShape)
         }
+        playCosmeticSound(instance, position, resolved, ownerUuid)
     }
 
     fun playDeathEffect(instance: Instance, position: Pos, cosmeticId: String, level: Int = 1, ownerUuid: UUID) {
@@ -100,6 +105,7 @@ object CosmeticApplier {
         forEachParticleViewer(instance, ownerUuid) { player ->
             ParticleShapeRenderer.render(player, particleShape)
         }
+        playCosmeticSound(instance, position, resolved, ownerUuid)
     }
 
     fun spawnAuraParticles(instance: Instance, position: Pos, cosmeticId: String, level: Int = 1, ownerUuid: UUID) {
@@ -140,6 +146,16 @@ object CosmeticApplier {
             "circle" -> ParticleShape.Circle(position, radius, density * 2, particle)
             else -> ParticleShape.Sphere(position, radius, density, particle)
         }
+
+    private fun playCosmeticSound(instance: Instance, position: Pos, resolved: Map<String, String>, ownerUuid: UUID) {
+        val soundId = resolved["sound"] ?: return
+        val volume = resolved["soundVolume"]?.toFloatOrNull() ?: 1.0f
+        val pitch = resolved["soundPitch"]?.toFloatOrNull() ?: 1.0f
+        val sound = Sound.sound(Key.key(soundId), Sound.Source.PLAYER, volume, pitch)
+        forEachParticleViewer(instance, ownerUuid) { player ->
+            player.playSound(sound, position.x(), position.y(), position.z())
+        }
+    }
 
     private fun resolveParticle(name: String?): Particle? {
         if (name == null) return null
