@@ -38,9 +38,10 @@ object GroundSpoofCheck : AntiCheatCheck {
             val claimsGround = player.isOnGround
 
             val streak = if (claimsGround && airBelow) {
-                states.compute(player.uuid) { _, existing ->
+                val updated = states.compute(player.uuid) { _, existing ->
                     GroundSpoofState((existing?.falseClaimStreak ?: 0) + 1)
-                }!!.falseClaimStreak
+                }
+                updated?.falseClaimStreak ?: 0
             } else {
                 states.remove(player.uuid)
                 0
