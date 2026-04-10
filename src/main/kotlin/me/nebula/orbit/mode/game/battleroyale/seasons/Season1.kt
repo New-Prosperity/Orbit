@@ -251,6 +251,7 @@ fun season1(): Season = season(1) {
         busSpeed = 1.5,
         parachuteDurationTicks = 400,
         randomMinDistance = 20.0,
+        spawnProtectionTicks = 300,
     ))
 
     goldenHead(GoldenHeadConfig(

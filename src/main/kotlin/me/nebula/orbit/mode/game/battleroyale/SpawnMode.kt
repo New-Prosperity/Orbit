@@ -46,6 +46,7 @@ data class SpawnModeConfig(
     val randomEdgeMargin: Double = 20.0,
     val maxSpawnAttempts: Int = 200,
     val fallbackSurfaceY: Int = 64,
+    val spawnProtectionTicks: Int = 0,
 )
 
 data class SpawnModeResult(
@@ -238,6 +239,10 @@ object SpawnModeExecutor {
         ejected.add(player.uuid)
         EntityMountManager.dismount(player)
         player.addEffect(Potion(PotionEffect.SLOW_FALLING, 0, config.parachuteDurationTicks))
+        if (config.spawnProtectionTicks > 0) {
+            player.addEffect(Potion(PotionEffect.RESISTANCE, 4, config.spawnProtectionTicks))
+            player.addEffect(Potion(PotionEffect.GLOWING, 0, config.spawnProtectionTicks))
+        }
     }
 
     fun cleanup(result: SpawnModeResult) {
