@@ -608,7 +608,7 @@ object StatueManager {
     }
 
     private fun fetchSkin(uuid: UUID): PlayerSkin? =
-        runCatching { PlayerSkin.fromUuid(uuid.toString().replace("-", "")) }.getOrNull()
+        runCatching { PlayerSkin.fromUuid(uuid.toString().replace("-", "")) }.getOrNull() // noqa: runCatching{}.getOrNull() as null check
 
     private fun saveConfigs() {
         runCatching {

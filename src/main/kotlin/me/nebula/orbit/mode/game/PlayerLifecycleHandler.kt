@@ -3,7 +3,6 @@ package me.nebula.orbit.mode.game
 import me.nebula.ether.utils.logging.withTrace
 import me.nebula.orbit.traceId
 import me.nebula.orbit.Orbit
-import me.nebula.orbit.displayUsername
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.gravity.reconnection.ReconnectionData

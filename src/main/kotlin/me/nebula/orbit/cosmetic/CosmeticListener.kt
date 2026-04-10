@@ -6,7 +6,6 @@ import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
-import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.GlobalEventHandler
@@ -18,7 +17,6 @@ import net.minestom.server.tag.Tag
 import net.minestom.server.timer.Task
 
 private val TRAIL_TICK_TAG = Tag.Long("cosmetic:trail:last_tick").defaultValue(0L)
-private val SHOOTER_TAG = Tag.Integer("mechanic:projectile:shooter")
 
 object CosmeticListener {
 
@@ -198,17 +196,20 @@ object CosmeticListener {
     }
 
     private fun tickProjectileTrails() {
-        for (instance in MinecraftServer.getInstanceManager().instances) {
-            for (entity in instance.entities) {
-                if (entity.entityType != EntityType.ARROW && entity.entityType != EntityType.SPECTRAL_ARROW) continue
-                val shooterId = runCatching { entity.getTag(SHOOTER_TAG) }.getOrNull() ?: continue
-                val shooter = instance.getEntityById(shooterId) as? Player ?: continue
-                val data = CosmeticDataCache.get(shooter.uuid) ?: continue
-                val trailId = data.equipped[CosmeticCategory.PROJECTILE_TRAIL.name] ?: continue
-                if (!isAllowed(CosmeticCategory.PROJECTILE_TRAIL, trailId)) continue
-                val level = data.owned[trailId] ?: 1
-                CosmeticApplier.spawnProjectileTrailParticle(instance, entity.position, trailId, level, ownerUuid = shooter.uuid)
+        val ctx = context
+        val iterator = ctx.trackedProjectiles.entries.iterator()
+        while (iterator.hasNext()) {
+            val (_, tracked) = iterator.next()
+            if (tracked.entity.isRemoved) {
+                iterator.remove()
+                continue
             }
+            val instance = tracked.entity.instance ?: continue
+            val data = CosmeticDataCache.get(tracked.shooterUuid) ?: continue
+            val trailId = data.equipped[CosmeticCategory.PROJECTILE_TRAIL.name] ?: continue
+            if (!isAllowed(CosmeticCategory.PROJECTILE_TRAIL, trailId)) continue
+            val level = data.owned[trailId] ?: 1
+            CosmeticApplier.spawnProjectileTrailParticle(instance, tracked.entity.position, trailId, level, ownerUuid = tracked.shooterUuid)
         }
     }
 

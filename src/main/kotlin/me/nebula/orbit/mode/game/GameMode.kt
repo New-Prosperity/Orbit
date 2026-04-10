@@ -1,10 +1,7 @@
 package me.nebula.orbit.mode.game
 
 import me.nebula.ether.utils.logging.logger
-import me.nebula.ether.utils.logging.withTrace
-import me.nebula.orbit.traceId
 import me.nebula.ether.utils.hazelcast.Store
-import net.minestom.server.entity.GameMode as MinestomGameMode
 import me.nebula.orbit.progression.PartyBonusCalculator
 import me.nebula.orbit.progression.ProgressionEvent
 import me.nebula.orbit.progression.ProgressionEventBus
@@ -47,7 +44,6 @@ import me.nebula.orbit.utils.matchresult.MatchResultManager
 import me.nebula.orbit.utils.matchresult.matchResult
 import me.nebula.orbit.utils.minigametimer.MinigameTimer
 import me.nebula.orbit.utils.scheduler.delay
-import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.scoreboard.LiveScoreboard
 import me.nebula.orbit.utils.scoreboard.liveScoreboard
 import me.nebula.orbit.utils.tablist.LiveTabList
@@ -55,13 +51,10 @@ import me.nebula.orbit.utils.tablist.liveTabList
 import me.nebula.orbit.utils.teambalance.TeamBalance
 import me.nebula.orbit.translation.resolveTranslated
 import me.nebula.orbit.translation.translate
-import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.sound.playSound
-import me.nebula.orbit.progression.mission.MissionTracker
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
-import net.minestom.server.entity.damage.EntityDamage
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.GlobalEventHandler
 import net.minestom.server.event.entity.EntityDamageEvent
@@ -69,7 +62,6 @@ import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.instance.InstanceContainer
-import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
 import net.minestom.server.tag.Tag
 import net.minestom.server.timer.Task
@@ -77,7 +69,6 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 abstract class GameMode : ServerMode {

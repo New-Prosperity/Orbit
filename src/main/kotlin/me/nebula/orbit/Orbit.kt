@@ -14,12 +14,9 @@ import me.nebula.ether.utils.storage.StorageClient
 import me.nebula.ether.utils.storage.storageClient
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
-import me.nebula.orbit.utils.anticheat.AntiCheat
-import me.nebula.orbit.utils.botai.BotAI
 import me.nebula.orbit.utils.drain.PlayerTransfer
 import me.nebula.orbit.utils.drain.ServerDrainManager
 import me.nebula.orbit.utils.maploader.MapLoader
-import me.nebula.orbit.utils.metrics.MetricsPublisher
 import me.nebula.orbit.utils.replay.PendingReplayFlushes
 import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.gravity.achievement.AchievementStore
@@ -70,17 +67,14 @@ import me.nebula.orbit.commands.replayCommand
 import me.nebula.orbit.commands.settingsCommand
 import me.nebula.orbit.commands.vanishCommand
 import me.nebula.orbit.cosmetic.CosmeticContext
-import me.nebula.orbit.cosmetic.CosmeticListener
 import me.nebula.orbit.cosmetic.CosmeticRegistry
 import me.nebula.orbit.cosmetic.cosmeticsCommand
 import me.nebula.orbit.mutator.MutatorRegistry
 import me.nebula.orbit.guild.guildCommand
-import me.nebula.orbit.marketplace.MarketplaceExpiry
 import me.nebula.orbit.marketplace.TradeManager
 import me.nebula.orbit.marketplace.marketplaceCommand
 import me.nebula.orbit.marketplace.sellCommand
 import me.nebula.orbit.marketplace.tradeCommand
-import me.nebula.orbit.cosmetic.installCosmeticInteraction
 import me.nebula.orbit.cosmetic.previewCommand
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.game.battleroyale.BattleRoyaleMode
@@ -88,7 +82,6 @@ import me.nebula.orbit.mode.build.BuildMode
 import me.nebula.orbit.utils.vanilla.VanillaModules
 import me.nebula.orbit.mode.hub.HubMode
 import me.nebula.orbit.progression.BattlePassMenu
-import me.nebula.orbit.progression.ProgressionSubscribers
 import me.nebula.orbit.progression.achievement.AchievementMenu
 import me.nebula.orbit.progression.achievement.registerAchievementContent
 import me.nebula.orbit.progression.mission.MissionMenu
@@ -113,7 +106,6 @@ import me.nebula.gravity.rating.RatingStore
 import me.nebula.gravity.rank.RankManager
 import me.nebula.orbit.nick.NickManager
 import me.nebula.orbit.nick.nickCommands
-import me.nebula.orbit.staff.StaffSpectateManager
 import me.nebula.orbit.staff.inspectCommand
 import me.nebula.orbit.staff.punishCommand
 import me.nebula.orbit.staff.spectateCommand
@@ -121,8 +113,6 @@ import me.nebula.orbit.staff.unflagCommand
 import me.nebula.orbit.utils.statue.statueCommand
 import me.nebula.orbit.utils.vanish.VanishManager
 import me.nebula.orbit.utils.actionbar.ActionBarManager
-import me.nebula.orbit.utils.bossbar.AnimatedBossBarManager
-import me.nebula.orbit.utils.counter.AnimatedCounterManager
 import me.nebula.orbit.utils.tablist.TabListManager
 import me.nebula.orbit.utils.customcontent.armor.armorTestCommand
 import me.nebula.orbit.utils.tooltip.TooltipStyleRegistry

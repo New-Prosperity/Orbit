@@ -8,7 +8,6 @@ import me.nebula.orbit.utils.replay.HighlightType
 import me.nebula.orbit.utils.replay.PendingReplayFlushes
 import me.nebula.orbit.utils.replay.ReplayHighlights
 import me.nebula.orbit.utils.replay.ReplayMetadata
-import me.nebula.orbit.utils.replay.ReplayRecorder
 import me.nebula.orbit.utils.replay.ReplayStorage
 
 class ReplayFlusher(private val gameMode: GameMode) {
