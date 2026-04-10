@@ -28,6 +28,7 @@ import me.nebula.orbit.utils.customcontent.item.CustomItemDsl
 import me.nebula.orbit.utils.customcontent.item.CustomItemLoader
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.customcontent.pack.PackMerger
+import me.nebula.orbit.utils.customcontent.pack.SpriteItemPack
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.generator.ModelIdRegistry
@@ -203,7 +204,10 @@ object CustomContentRegistry {
 
         val tabListOverrides = generateTabListOverrides()
 
-        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries + tabListOverrides
+        val spriteItemEntries = SpriteItemPack.generate(resources, SPRITES_DIR)
+        logger.info { "Generated sprite item pack: ${spriteItemEntries.size} entries" }
+
+        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries + tabListOverrides + spriteItemEntries
         val result = PackMerger.merge(resources, MODELS_DIR, allRaw, allShaderEntries)
         mergeResult = result
 
@@ -244,6 +248,13 @@ object CustomContentRegistry {
         digest.update("armors:".toByteArray())
         for (armor in CustomArmorRegistry.all().sortedBy { it.id }) {
             digest.update(armor.id.toByteArray())
+            digest.update(0)
+        }
+        digest.update("sprites:".toByteArray())
+        for (path in resources.list(SPRITES_DIR, "png", recursive = true).sorted()) {
+            digest.update(path.toByteArray())
+            digest.update(0)
+            digest.update(resources.readBytes(path))
             digest.update(0)
         }
         return digest.digest().joinToString("") { "%02x".format(it) }

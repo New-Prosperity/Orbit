@@ -5,7 +5,7 @@ import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.timer.Task
 
-object AuraManager {
+class AuraManager(private val listener: CosmeticListener) {
 
     private var task: Task? = null
 
@@ -23,7 +23,7 @@ object AuraManager {
             val instance = player.instance ?: continue
             val data = CosmeticDataCache.get(player.uuid) ?: continue
             val auraId = data.equipped[CosmeticCategory.AURA.name] ?: continue
-            if (!CosmeticListener.isAllowed(CosmeticCategory.AURA, auraId)) continue
+            if (!listener.isAllowed(CosmeticCategory.AURA, auraId)) continue
             val level = data.owned[auraId] ?: 1
             CosmeticApplier.spawnAuraParticles(instance, player.position, auraId, level, ownerUuid = player.uuid)
         }

@@ -308,9 +308,6 @@ abstract class GameMode : ServerMode {
     private val lobbyLifecycle = LobbyLifecycleManager(this)
     internal fun gameInstanceOrNull(): InstanceContainer? = _gameInstance
     internal fun buildLobbyHotbarInternal(): Hotbar? = buildLobbyHotbar()
-    @Volatile private var survivalMinuteTask: Task? = null
-    @Volatile private var walkDistanceTask: Task? = null
-    private val lastKnownPositions = ConcurrentHashMap<UUID, Pos>()
     private val damageTakenCounters = ConcurrentHashMap<UUID, AtomicLong>()
     internal val damageTakenCountersInternal: ConcurrentHashMap<UUID, AtomicLong>
         get() = damageTakenCounters
@@ -333,7 +330,6 @@ abstract class GameMode : ServerMode {
     @Volatile protected var comboCounter: ComboConfig? = null
     private val replayRecorder = PacketReplayRecorder()
     private val semanticRecorder = ReplayRecorder()
-    @Volatile private var positionRecordTask: Task? = null
     @Volatile var activeSeasonPasses: List<BattlePassDefinition> = emptyList()
         private set
 
@@ -484,13 +480,7 @@ abstract class GameMode : ServerMode {
         cleanupGameMechanicsNode()
         cleanupVoidCheck()
         lobbyLifecycle.cancelWaitingActionBarLoop()
-        survivalMinuteTask?.cancel()
-        survivalMinuteTask = null
-        walkDistanceTask?.cancel()
-        walkDistanceTask = null
-        positionRecordTask?.cancel()
-        positionRecordTask = null
-        lastKnownPositions.clear()
+        activityWatchdog.cleanupGameplayLoops()
         damageTakenCounters.clear()
         stateMachine.destroy()
     }
@@ -1012,11 +1002,7 @@ abstract class GameMode : ServerMode {
         BotLobbyFiller.stopFilling(Orbit.serverName)
         gameTimer?.stop()
         gameTimer = null
-        survivalMinuteTask?.cancel()
-        survivalMinuteTask = null
-        walkDistanceTask?.cancel()
-        walkDistanceTask = null
-        lastKnownPositions.clear()
+        activityWatchdog.cleanupGameplayLoops()
         GracePeriodManager.clearAll()
         cleanupReconnectionState()
         cleanupRespawnTimers()
@@ -1072,13 +1058,7 @@ abstract class GameMode : ServerMode {
         comboCounter = null
         lobbyInstance.players.forEach { it.removeTag(spectatorTargetTag) }
         _gameInstance?.players?.forEach { it.removeTag(spectatorTargetTag) }
-        survivalMinuteTask?.cancel()
-        survivalMinuteTask = null
-        walkDistanceTask?.cancel()
-        walkDistanceTask = null
-        positionRecordTask?.cancel()
-        positionRecordTask = null
-        lastKnownPositions.clear()
+        activityWatchdog.cleanupGameplayLoops()
         tracker.clear()
         lastEndResult = null
         gameStartTime = 0L
@@ -1265,33 +1245,7 @@ abstract class GameMode : ServerMode {
         for (player in alivePlayers) {
             semanticRecorder.recordPlayerJoin(player)
         }
-        positionRecordTask = repeat(4) {
-            if (phase != GamePhase.PLAYING) return@repeat
-            tracker.forEachAlive { uuid ->
-                val p = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
-                if (p != null) semanticRecorder.recordPosition(p)
-            }
-        }
-
-        survivalMinuteTask = repeat(1200) {
-            if (phase != GamePhase.PLAYING) return@repeat
-            tracker.forEachAlive { uuid ->
-                val p = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
-                if (p != null) ProgressionEventBus.publish(ProgressionEvent.SurvivalTick(p))
-            }
-        }
-
-        walkDistanceTask = repeat(20) {
-            if (phase != GamePhase.PLAYING) return@repeat
-            tracker.forEachAlive { uuid ->
-                val p = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: return@forEachAlive
-                val last = lastKnownPositions.put(uuid, p.position) ?: return@forEachAlive
-                val dx = p.position.x() - last.x()
-                val dz = p.position.z() - last.z()
-                val dist = kotlin.math.sqrt(dx * dx + dz * dz).toInt()
-                if (dist > 0) ProgressionEventBus.publish(ProgressionEvent.DistanceWalked(p, dist))
-            }
-        }
+        activityWatchdog.startGameplayLoops(semanticRecorder::recordPosition)
     }
 
     private fun handleTimerExpired() {
@@ -1342,8 +1296,7 @@ abstract class GameMode : ServerMode {
             logger.info { "Skipping rating changes for hosted game (host=${Orbit.hostOwner})" }
         }
 
-        positionRecordTask?.cancel()
-        positionRecordTask = null
+        activityWatchdog.cleanupPositionRecording()
         val semanticData = semanticRecorder.stop()
 
         if (replayRecorder.isRecording && ReplayStorage.isInitialized()) {

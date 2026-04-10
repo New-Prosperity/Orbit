@@ -211,7 +211,16 @@ class VoteCategoryBuilder @PublishedApi internal constructor(private val id: Str
     fun name(key: String) { nameKey = key }
     fun icon(key: String) { material = key }
     fun default(index: Int) { defaultIndex = index }
-    fun option(nameKey: String, material: String, value: Int) { options += VoteOptionDef(nameKey, material, value) }
+
+    fun option(
+        nameKey: String,
+        material: String,
+        value: Int,
+        mapIcon: String? = null,
+        descriptionKey: String? = null,
+    ) {
+        options += VoteOptionDef(nameKey, material, value, mapIcon = mapIcon, descriptionKey = descriptionKey)
+    }
 
     @PublishedApi internal fun build() = VoteCategoryDef(
         id = id,

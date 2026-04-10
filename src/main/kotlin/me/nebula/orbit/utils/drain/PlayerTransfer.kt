@@ -4,10 +4,7 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.TransferPlayerMessage
 import me.nebula.gravity.server.ServerData
-import me.nebula.orbit.cosmetic.CompanionManager
-import me.nebula.orbit.cosmetic.CosmeticMountManager
-import me.nebula.orbit.cosmetic.GadgetManager
-import me.nebula.orbit.cosmetic.PetManager
+import me.nebula.orbit.Orbit
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import java.util.UUID
@@ -50,11 +47,7 @@ object PlayerTransfer {
     }
 
     private fun despawnCosmetics(player: Player) {
-        val uuid = player.uuid
-        runCatching { PetManager.despawn(uuid) }
-        runCatching { CompanionManager.despawn(uuid) }
-        runCatching { CosmeticMountManager.despawn(uuid) }
-        runCatching { GadgetManager.unequip(player) }
+        runCatching { Orbit.cosmetics.despawnAll(player) }
     }
 
     private fun publishTransfer(uuid: UUID, serverName: String): Boolean =

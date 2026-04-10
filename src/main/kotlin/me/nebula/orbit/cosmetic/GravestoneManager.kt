@@ -20,7 +20,7 @@ data class ActiveGravestone(
     val instance: Instance,
 )
 
-object GravestoneManager {
+class GravestoneManager {
 
     private val logger = logger("GravestoneManager")
     private val gravestones = ConcurrentHashMap<UUID, ActiveGravestone>()

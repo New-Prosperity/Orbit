@@ -21,7 +21,7 @@ data class ActiveCompanion(
     val level: Int,
 )
 
-object CompanionManager {
+class CompanionManager {
 
     private val logger = logger("CompanionManager")
     private val companions = ConcurrentHashMap<UUID, ActiveCompanion>()

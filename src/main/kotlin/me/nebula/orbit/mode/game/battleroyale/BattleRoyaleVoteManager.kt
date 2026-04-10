@@ -20,7 +20,7 @@ object BattleRoyaleVoteManager {
                         nameKey = it.nameKey,
                         material = it.material,
                         value = it.value,
-                        previewModelId = it.previewModelId,
+                        mapIcon = it.mapIcon,
                         descriptionKey = it.descriptionKey,
                     )
                 },

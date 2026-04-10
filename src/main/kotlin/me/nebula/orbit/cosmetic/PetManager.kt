@@ -27,7 +27,7 @@ data class ActivePet(
     val level: Int,
 )
 
-object PetManager {
+class PetManager {
 
     private val logger = logger("PetManager")
     private val pets = ConcurrentHashMap<UUID, ActivePet>()

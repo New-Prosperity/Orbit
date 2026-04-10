@@ -38,14 +38,12 @@ data class ActiveMount(
     val speed: Double,
 )
 
-object CosmeticMountManager {
+class CosmeticMountManager {
 
     private val logger = logger("CosmeticMountManager")
     private val mounts = ConcurrentHashMap<UUID, ActiveMount>()
     private var task: Task? = null
     private var eventNode: EventNode<*>? = null
-
-    const val MOUNT_SLOT = 8
 
     fun install() {
         MountManager.install()
@@ -201,5 +199,9 @@ object CosmeticMountManager {
                 model.stopAnimation(walkAnim)
             }
         }
+    }
+
+    companion object {
+        const val MOUNT_SLOT = 8
     }
 }

@@ -69,14 +69,9 @@ import me.nebula.orbit.commands.cleanupReplayViewer
 import me.nebula.orbit.commands.replayCommand
 import me.nebula.orbit.commands.settingsCommand
 import me.nebula.orbit.commands.vanishCommand
-import me.nebula.orbit.cosmetic.AuraManager
-import me.nebula.orbit.cosmetic.CompanionManager
+import me.nebula.orbit.cosmetic.CosmeticContext
 import me.nebula.orbit.cosmetic.CosmeticListener
-import me.nebula.orbit.cosmetic.CosmeticMountManager
 import me.nebula.orbit.cosmetic.CosmeticRegistry
-import me.nebula.orbit.cosmetic.GadgetManager
-import me.nebula.orbit.cosmetic.GravestoneManager
-import me.nebula.orbit.cosmetic.PetManager
 import me.nebula.orbit.cosmetic.cosmeticsCommand
 import me.nebula.orbit.mutator.MutatorRegistry
 import me.nebula.orbit.guild.guildCommand
@@ -177,6 +172,8 @@ object Orbit {
     lateinit var mode: ServerMode
         private set
     internal val isModeInitialized: Boolean get() = ::mode.isInitialized
+    lateinit var cosmetics: CosmeticContext
+        internal set
     var provisionUuid: String? = null
         private set
     var gameMode: String? = null

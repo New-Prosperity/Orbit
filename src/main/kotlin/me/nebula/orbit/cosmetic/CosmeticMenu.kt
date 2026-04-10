@@ -137,11 +137,12 @@ object CosmeticMenu {
         if (definition.maxLevel > 1) definition.price * (currentLevel + 1) else definition.price
 
     fun despawnCategory(uuid: UUID, category: CosmeticCategory, player: Player) {
+        val ctx = CosmeticListener.context
         when (category) {
-            CosmeticCategory.PET -> PetManager.despawn(uuid)
-            CosmeticCategory.COMPANION -> CompanionManager.despawn(uuid)
-            CosmeticCategory.MOUNT -> CosmeticMountManager.despawn(uuid)
-            CosmeticCategory.GADGET -> GadgetManager.unequip(player)
+            CosmeticCategory.PET -> ctx.pets.despawn(uuid)
+            CosmeticCategory.COMPANION -> ctx.companions.despawn(uuid)
+            CosmeticCategory.MOUNT -> ctx.mounts.despawn(uuid)
+            CosmeticCategory.GADGET -> ctx.gadgets.unequip(player)
             else -> {}
         }
     }

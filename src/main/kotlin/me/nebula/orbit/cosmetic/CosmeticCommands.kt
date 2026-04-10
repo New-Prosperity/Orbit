@@ -106,11 +106,12 @@ fun previewCommand(): Command = command("preview") {
 }
 
 private fun spawnPreview(player: Player, category: CosmeticCategory, cosmeticId: String) {
+    val ctx = CosmeticListener.context
     when (category) {
-        CosmeticCategory.PET -> PetManager.spawn(player, cosmeticId, 1)
-        CosmeticCategory.COMPANION -> CompanionManager.spawn(player, cosmeticId, 1)
-        CosmeticCategory.MOUNT -> CosmeticMountManager.spawn(player, cosmeticId, 1)
-        CosmeticCategory.GADGET -> GadgetManager.equip(player, cosmeticId, 1)
+        CosmeticCategory.PET -> ctx.pets.spawn(player, cosmeticId, 1)
+        CosmeticCategory.COMPANION -> ctx.companions.spawn(player, cosmeticId, 1)
+        CosmeticCategory.MOUNT -> ctx.mounts.spawn(player, cosmeticId, 1)
+        CosmeticCategory.GADGET -> ctx.gadgets.equip(player, cosmeticId, 1)
         CosmeticCategory.AURA -> {}
         CosmeticCategory.ARMOR_SKIN -> CosmeticApplier.applyArmorSkin(player, cosmeticId, 1)
         CosmeticCategory.SPAWN_EFFECT -> {
@@ -133,7 +134,7 @@ private fun spawnPreview(player: Player, category: CosmeticCategory, cosmeticId:
         CosmeticCategory.PROJECTILE_TRAIL -> {}
         CosmeticCategory.GRAVESTONE -> {
             val instance = player.instance ?: return
-            GravestoneManager.spawn(instance, player.position, cosmeticId, 1, playerUuid = player.uuid)
+            ctx.gravestones.spawn(instance, player.position, cosmeticId, 1, playerUuid = player.uuid)
         }
         CosmeticCategory.ELIMINATION_MESSAGE -> {}
         CosmeticCategory.JOIN_QUIT_MESSAGE -> {}
@@ -142,11 +143,12 @@ private fun spawnPreview(player: Player, category: CosmeticCategory, cosmeticId:
 
 fun endPreview(player: Player) {
     val state = activePreviews.remove(player.uuid) ?: return
+    val ctx = CosmeticListener.context
     when (state.category) {
-        CosmeticCategory.PET -> PetManager.despawn(player.uuid)
-        CosmeticCategory.COMPANION -> CompanionManager.despawn(player.uuid)
-        CosmeticCategory.MOUNT -> CosmeticMountManager.despawn(player.uuid)
-        CosmeticCategory.GADGET -> GadgetManager.unequip(player)
+        CosmeticCategory.PET -> ctx.pets.despawn(player.uuid)
+        CosmeticCategory.COMPANION -> ctx.companions.despawn(player.uuid)
+        CosmeticCategory.MOUNT -> ctx.mounts.despawn(player.uuid)
+        CosmeticCategory.GADGET -> ctx.gadgets.unequip(player)
         CosmeticCategory.ARMOR_SKIN -> {
             if (state.previousEquippedId != null) {
                 val data = CosmeticStore.load(player.uuid)
@@ -164,22 +166,22 @@ fun endPreview(player: Player) {
             CosmeticCategory.PET -> {
                 val data = CosmeticStore.load(player.uuid)
                 val level = data?.owned?.get(state.previousEquippedId) ?: 1
-                PetManager.spawn(player, state.previousEquippedId, level)
+                ctx.pets.spawn(player, state.previousEquippedId, level)
             }
             CosmeticCategory.COMPANION -> {
                 val data = CosmeticStore.load(player.uuid)
                 val level = data?.owned?.get(state.previousEquippedId) ?: 1
-                CompanionManager.spawn(player, state.previousEquippedId, level)
+                ctx.companions.spawn(player, state.previousEquippedId, level)
             }
             CosmeticCategory.MOUNT -> {
                 val data = CosmeticStore.load(player.uuid)
                 val level = data?.owned?.get(state.previousEquippedId) ?: 1
-                CosmeticMountManager.spawn(player, state.previousEquippedId, level)
+                ctx.mounts.spawn(player, state.previousEquippedId, level)
             }
             CosmeticCategory.GADGET -> {
                 val data = CosmeticStore.load(player.uuid)
                 val level = data?.owned?.get(state.previousEquippedId) ?: 1
-                GadgetManager.equip(player, state.previousEquippedId, level)
+                ctx.gadgets.equip(player, state.previousEquippedId, level)
             }
             else -> {}
         }

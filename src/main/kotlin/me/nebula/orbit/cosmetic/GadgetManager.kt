@@ -19,13 +19,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 private val GADGET_TAG = Tag.String("cosmetic:gadget")
 
-object GadgetManager {
+class GadgetManager {
 
     private val cooldowns = ConcurrentHashMap<String, Cooldown<Unit>>()
     private val activeGadgets = ConcurrentHashMap<UUID, String>()
     private var eventNode: EventNode<*>? = null
-
-    const val GADGET_SLOT = 4
 
     fun install() {
         val node = EventNode.all("gadget-manager")
@@ -113,5 +111,9 @@ object GadgetManager {
     private fun resolveParticle(name: String?): Particle? {
         if (name == null) return null
         return runCatching { Particle.fromKey("minecraft:${name.lowercase()}") }.getOrNull()
+    }
+
+    companion object {
+        const val GADGET_SLOT = 4
     }
 }

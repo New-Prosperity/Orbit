@@ -23,11 +23,13 @@ private val SHOOTER_TAG = Tag.Integer("mechanic:projectile:shooter")
 object CosmeticListener {
 
     @Volatile var activeConfig = CosmeticConfig()
+    lateinit var context: CosmeticContext
 
     private var eventNode: EventNode<*>? = null
     private var projectileTrailTask: Task? = null
 
     fun install(handler: GlobalEventHandler) {
+        val ctx = context
         val node = EventNode.all("cosmetic-listeners")
 
         node.addListener(PlayerMoveEvent::class.java) { event ->
@@ -50,10 +52,7 @@ object CosmeticListener {
             val player = event.player
 
             if (!event.isFirstSpawn) {
-                PetManager.despawn(player.uuid)
-                CompanionManager.despawn(player.uuid)
-                CosmeticMountManager.despawn(player.uuid)
-                GadgetManager.unequip(player)
+                ctx.despawnAll(player)
             }
 
             val data = loadEquipped(player) ?: return@addListener
@@ -74,43 +73,40 @@ object CosmeticListener {
             val companionId = data.equipped[CosmeticCategory.COMPANION.name]
             if (companionId != null && isAllowed(CosmeticCategory.COMPANION, companionId)) {
                 val level = data.owned[companionId] ?: 1
-                CompanionManager.spawn(player, companionId, level)
+                ctx.companions.spawn(player, companionId, level)
             }
 
             val petId = data.equipped[CosmeticCategory.PET.name]
             if (petId != null && isAllowed(CosmeticCategory.PET, petId)) {
                 val level = data.owned[petId] ?: 1
-                PetManager.spawn(player, petId, level)
+                ctx.pets.spawn(player, petId, level)
             }
 
             val gadgetId = data.equipped[CosmeticCategory.GADGET.name]
             if (gadgetId != null && isAllowed(CosmeticCategory.GADGET, gadgetId)) {
                 val level = data.owned[gadgetId] ?: 1
-                GadgetManager.equip(player, gadgetId, level)
+                ctx.gadgets.equip(player, gadgetId, level)
             }
 
             val mountId = data.equipped[CosmeticCategory.MOUNT.name]
             if (mountId != null && isAllowed(CosmeticCategory.MOUNT, mountId)) {
                 val level = data.owned[mountId] ?: 1
-                CosmeticMountManager.spawn(player, mountId, level)
+                ctx.mounts.spawn(player, mountId, level)
             }
         }
 
         node.addListener(PlayerDisconnectEvent::class.java) { event ->
             CosmeticDataCache.invalidate(event.player.uuid)
-            CompanionManager.despawn(event.player.uuid)
-            PetManager.despawn(event.player.uuid)
-            GadgetManager.unequip(event.player)
-            CosmeticMountManager.despawn(event.player.uuid)
+            ctx.despawnAll(event.player)
         }
 
         node.addListener(PlayerUseItemEvent::class.java) { event ->
             val slot = event.player.heldSlot.toInt()
-            if (slot == GadgetManager.GADGET_SLOT && GadgetManager.isActive(event.player.uuid)) {
-                GadgetManager.onUse(event.player)
+            if (slot == GadgetManager.GADGET_SLOT && ctx.gadgets.isActive(event.player.uuid)) {
+                ctx.gadgets.onUse(event.player)
             }
-            if (slot == CosmeticMountManager.MOUNT_SLOT && CosmeticMountManager.isActive(event.player.uuid)) {
-                CosmeticMountManager.toggleMount(event.player)
+            if (slot == CosmeticMountManager.MOUNT_SLOT && ctx.mounts.isActive(event.player.uuid)) {
+                ctx.mounts.toggleMount(event.player)
             }
         }
 
@@ -151,12 +147,10 @@ object CosmeticListener {
         if (gravestoneId != null && isAllowed(CosmeticCategory.GRAVESTONE, gravestoneId)) {
             val instance = player.instance ?: return
             val level = data.owned[gravestoneId] ?: 1
-            GravestoneManager.spawn(instance, deathPosition, gravestoneId, level, playerUuid = player.uuid)
+            context.gravestones.spawn(instance, deathPosition, gravestoneId, level, playerUuid = player.uuid)
         }
 
-        PetManager.despawn(player.uuid)
-        CompanionManager.despawn(player.uuid)
-        CosmeticMountManager.despawn(player.uuid)
+        context.despawnAll(player.uuid)
     }
 
     fun onGameWon(winner: Player) {

@@ -1,13 +1,8 @@
 package me.nebula.orbit
 
 import me.nebula.ether.utils.module.Module
-import me.nebula.orbit.cosmetic.AuraManager
-import me.nebula.orbit.cosmetic.CompanionManager
+import me.nebula.orbit.cosmetic.CosmeticContext
 import me.nebula.orbit.cosmetic.CosmeticListener
-import me.nebula.orbit.cosmetic.CosmeticMountManager
-import me.nebula.orbit.cosmetic.GadgetManager
-import me.nebula.orbit.cosmetic.GravestoneManager
-import me.nebula.orbit.cosmetic.PetManager
 import me.nebula.orbit.cosmetic.installCosmeticInteraction
 import me.nebula.orbit.marketplace.MarketplaceExpiry
 import me.nebula.orbit.nick.NickManager
@@ -62,24 +57,17 @@ object CosmeticSystemModule : Module("cosmetic-system") {
         check(Orbit.isModeInitialized) { "cosmetic-system requires Orbit.mode to be initialized" }
         val handler = MinecraftServer.getGlobalEventHandler()
         CosmeticListener.activeConfig = Orbit.mode.cosmeticConfig
+        val context = CosmeticContext(CosmeticListener)
+        Orbit.cosmetics = context
+        CosmeticListener.context = context
         CosmeticListener.install(handler)
         installCosmeticInteraction(handler)
-        AuraManager.install()
-        CompanionManager.install()
-        PetManager.install()
-        GadgetManager.install()
-        GravestoneManager.install()
-        CosmeticMountManager.install()
+        context.install()
     }
 
     override fun onDisable() {
         CosmeticListener.uninstall()
-        AuraManager.uninstall()
-        CompanionManager.uninstall()
-        PetManager.uninstall()
-        GadgetManager.uninstall()
-        GravestoneManager.uninstall()
-        CosmeticMountManager.uninstall()
+        Orbit.cosmetics.uninstall()
     }
 }
 
