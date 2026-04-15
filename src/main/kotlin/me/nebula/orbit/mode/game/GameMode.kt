@@ -14,6 +14,7 @@ import me.nebula.orbit.audit.OrbitAudit
 import me.nebula.orbit.utils.botai.BotLobbyFiller
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mutator.MutatorEngine
+import me.nebula.orbit.rules.RuleUiWatcher
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.PlaceholderResolver
 import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
@@ -165,6 +166,7 @@ abstract class GameMode : ServerMode {
     }
 
     private val ratingManager = RatingManager(this)
+    private val ruleUiWatcher = RuleUiWatcher(this)
 
     private fun applyRatingChanges() = ratingManager.applyRatingChanges()
 
@@ -425,6 +427,7 @@ abstract class GameMode : ServerMode {
         spectatorToolkit?.uninstall()
         comboCounter?.uninstall()
         comboCounter = null
+        ruleUiWatcher.uninstall()
         reconnectionManager.cleanup()
         for (uuid in tracker.disconnected) ReconnectionStore.delete(uuid)
         respawnManager.cleanup()
@@ -626,6 +629,7 @@ abstract class GameMode : ServerMode {
         ceremony = null
         comboCounter?.uninstall()
         comboCounter = null
+        ruleUiWatcher.uninstall()
         lobbyInstance.players.forEach { it.removeTag(spectatorTargetTag) }
         _gameInstance?.players?.forEach { it.removeTag(spectatorTargetTag) }
         activityWatchdog.cleanupGameplayLoops()
@@ -730,6 +734,7 @@ abstract class GameMode : ServerMode {
     private fun transferAlivePlayersToGameInstance(alivePlayers: List<Player>) = gameInitializer.transferAlivePlayersToGameInstance(alivePlayers)
 
     private fun installGameSubsystems() {
+        ruleUiWatcher.install()
         comboCounter = buildComboCounter()
         comboCounter?.install()
 
