@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.achievement
 
-import me.nebula.gravity.achievement.AchievementData
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.gravity.achievement.AchievementStore
 import me.nebula.gravity.achievement.ClaimMilestoneProcessor
 import me.nebula.gravity.achievement.IncrementAchievementProcessor
@@ -24,7 +25,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
-data class AchievementCategory(val id: String, val displayKey: String)
+data class AchievementCategory(val id: String, val displayKey: TranslationKey)
 
 object AchievementCategories {
 
@@ -38,7 +39,7 @@ object AchievementCategories {
     val MASTERY = register("mastery", "orbit.achievement.category.mastery")
 
     fun register(id: String, displayKey: String): AchievementCategory {
-        val category = AchievementCategory(id, displayKey)
+        val category = AchievementCategory(id, displayKey.asTranslationKey())
         registry[id] = category
         return category
     }
@@ -50,19 +51,19 @@ object AchievementCategories {
     fun unregister(id: String) = registry.remove(id)
 }
 
-enum class AchievementRarity(val colorTag: String, val labelKey: String) {
-    COMMON("<gray>", "orbit.achievement.rarity.common"),
-    UNCOMMON("<green>", "orbit.achievement.rarity.uncommon"),
-    RARE("<blue>", "orbit.achievement.rarity.rare"),
-    EPIC("<dark_purple>", "orbit.achievement.rarity.epic"),
-    LEGENDARY("<gold>", "orbit.achievement.rarity.legendary"),
+enum class AchievementRarity(val colorTag: String, val labelKey: TranslationKey) {
+    COMMON("<gray>", "orbit.achievement.rarity.common".asTranslationKey()),
+    UNCOMMON("<green>", "orbit.achievement.rarity.uncommon".asTranslationKey()),
+    RARE("<blue>", "orbit.achievement.rarity.rare".asTranslationKey()),
+    EPIC("<dark_purple>", "orbit.achievement.rarity.epic".asTranslationKey()),
+    LEGENDARY("<gold>", "orbit.achievement.rarity.legendary".asTranslationKey()),
 }
 
 data class AchievementReward(val type: String, val amount: Int, val value: String = "")
 
 data class AchievementMilestone(
     val threshold: Int,
-    val nameKey: String,
+    val nameKey: TranslationKey,
     val rewards: List<AchievementReward>,
 )
 
@@ -251,7 +252,7 @@ object AchievementRegistry {
                     }
                 }
                 val locale = Orbit.localeOf(player.uuid)
-                val milestoneName = Orbit.translations.get(milestone.nameKey, locale) ?: milestone.nameKey
+                val milestoneName = Orbit.translations.get(milestone.nameKey.value, locale) ?: milestone.nameKey.value
                 player.sendMessage(player.translate(
                     "orbit.achievement.milestone_reached",
                     "name" to milestoneName,
@@ -317,17 +318,17 @@ object AchievementRegistry {
     }
 
     val MILESTONES = listOf(
-        AchievementMilestone(50, "orbit.achievement.milestone.novice", listOf(AchievementReward("coins", 100))),
-        AchievementMilestone(150, "orbit.achievement.milestone.explorer", listOf(AchievementReward("coins", 250))),
-        AchievementMilestone(300, "orbit.achievement.milestone.achiever", listOf(
+        AchievementMilestone(50, "orbit.achievement.milestone.novice".asTranslationKey(), listOf(AchievementReward("coins", 100))),
+        AchievementMilestone(150, "orbit.achievement.milestone.explorer".asTranslationKey(), listOf(AchievementReward("coins", 250))),
+        AchievementMilestone(300, "orbit.achievement.milestone.achiever".asTranslationKey(), listOf(
             AchievementReward("coins", 500),
             AchievementReward("cosmetic", 0, "title_achiever"),
         )),
-        AchievementMilestone(500, "orbit.achievement.milestone.master", listOf(
+        AchievementMilestone(500, "orbit.achievement.milestone.master".asTranslationKey(), listOf(
             AchievementReward("coins", 1000),
             AchievementReward("cosmetic", 0, "aura_achievement"),
         )),
-        AchievementMilestone(750, "orbit.achievement.milestone.grandmaster", listOf(
+        AchievementMilestone(750, "orbit.achievement.milestone.grandmaster".asTranslationKey(), listOf(
             AchievementReward("coins", 2000),
             AchievementReward("cosmetic", 0, "mount_achievement"),
         )),

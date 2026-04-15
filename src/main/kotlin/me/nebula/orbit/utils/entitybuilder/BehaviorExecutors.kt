@@ -8,14 +8,9 @@ import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.LivingEntity
 import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.entity.damage.Damage
-import net.minestom.server.instance.block.Block
-import net.minestom.server.particle.Particle
-import net.minestom.server.sound.SoundEvent
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.math.sqrt
 import kotlin.random.Random
 
 class IdleExecutor(

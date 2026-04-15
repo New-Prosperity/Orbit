@@ -2,7 +2,6 @@ package me.nebula.orbit.utils.vanilla.modules
 
 import me.nebula.orbit.utils.vanilla.ModuleConfig
 import me.nebula.orbit.utils.vanilla.VanillaModule
-import net.minestom.server.collision.Aerodynamics
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.GameMode
 import net.minestom.server.event.Event

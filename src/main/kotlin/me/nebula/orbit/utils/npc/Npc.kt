@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.npc
 
+import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.modelengine.model.ModeledEntityBuilder
@@ -312,7 +313,7 @@ class NpcBuilder @PublishedApi internal constructor(private val nameRaw: String)
     @PublishedApi internal val entityMetadata: MutableMap<Int, Metadata.Entry<*>> = mutableMapOf()
     @PublishedApi internal var modelBlock: (ModeledEntityBuilder.() -> Unit)? = null
     @PublishedApi internal var speechConfig: SpeechBubbleConfig? = null
-    @PublishedApi internal var translatedNameKey: String? = null
+    @PublishedApi internal var translatedNameKey: TranslationKey? = null
     @PublishedApi internal var autoShowRange: Double = 0.0
     @PublishedApi internal var invulnerable: Boolean = true
 

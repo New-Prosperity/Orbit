@@ -1,5 +1,7 @@
 package me.nebula.orbit.mode.game.battleroyale
 
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.HotbarItemConfig
 import me.nebula.orbit.mode.config.LobbyConfig
@@ -26,7 +28,7 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
     @PublishedApi internal var preloadRadius = 8
     @PublishedApi internal var spawn = SpawnConfig(0.5, 65.0, 0.5, 0f, 0f)
     @PublishedApi internal var scoreboard = ScoreboardConfig("orbit.game.br.scoreboard.title", 2, emptyList())
-    @PublishedApi internal var tabList = TabListConfig(3, "orbit.game.br.tablist.header", "orbit.game.br.tablist.footer")
+    @PublishedApi internal var tabList = TabListConfig(3, "orbit.game.br.tablist.header".asTranslationKey(), "orbit.game.br.tablist.footer".asTranslationKey())
     @PublishedApi internal var lobby = LobbyConfig("ADVENTURE", protectBlocks = true, disableDamage = true, disableHunger = true, lockInventory = false, voidTeleportY = -64.0)
     @PublishedApi internal var hotbar = listOf<HotbarItemConfig>()
     @PublishedApi internal var timing = TimingConfig(countdownSeconds = 15, endingDurationSeconds = 10, minPlayers = 2, maxPlayers = 16)
@@ -74,7 +76,7 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
     }
 
     fun tabList(refresh: Int, header: String, footer: String) {
-        tabList = TabListConfig(refresh, header, footer)
+        tabList = TabListConfig(refresh, header.asTranslationKey(), footer.asTranslationKey())
     }
 
     fun lobby(block: LobbyConfig) { lobby = block }
@@ -135,8 +137,8 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
 @SeasonDslMarker
 class KitDefBuilder @PublishedApi internal constructor(private val id: String) {
 
-    @PublishedApi internal var nameKey = ""
-    @PublishedApi internal var descriptionKey = ""
+    @PublishedApi internal var nameKey = TranslationKey("")
+    @PublishedApi internal var descriptionKey = TranslationKey("")
     @PublishedApi internal var material = "minecraft:barrier"
     @PublishedApi internal var locked = true
     @PublishedApi internal var maxLevel = 3
@@ -144,8 +146,8 @@ class KitDefBuilder @PublishedApi internal constructor(private val id: String) {
     @PublishedApi internal val tiers = mutableMapOf<Int, KitTierConfig>()
 
     fun name(baseKey: String) {
-        nameKey = "$baseKey.name"
-        descriptionKey = "$baseKey.desc"
+        nameKey = "$baseKey.name".asTranslationKey()
+        descriptionKey = "$baseKey.desc".asTranslationKey()
     }
 
     fun icon(key: String) { material = key }
@@ -203,12 +205,12 @@ class EquipmentBuilder @PublishedApi internal constructor() {
 @SeasonDslMarker
 class VoteCategoryBuilder @PublishedApi internal constructor(private val id: String) {
 
-    @PublishedApi internal var nameKey = ""
+    @PublishedApi internal var nameKey = TranslationKey("")
     @PublishedApi internal var material = "minecraft:paper"
     @PublishedApi internal var defaultIndex = 1
     @PublishedApi internal val options = mutableListOf<VoteOptionDef>()
 
-    fun name(key: String) { nameKey = key }
+    fun name(key: String) { nameKey = key.asTranslationKey() }
     fun icon(key: String) { material = key }
     fun default(index: Int) { defaultIndex = index }
 
@@ -219,7 +221,7 @@ class VoteCategoryBuilder @PublishedApi internal constructor(private val id: Str
         mapIcon: String? = null,
         descriptionKey: String? = null,
     ) {
-        options += VoteOptionDef(nameKey, material, value, mapIcon = mapIcon, descriptionKey = descriptionKey)
+        options += VoteOptionDef(nameKey.asTranslationKey(), material, value, mapIcon = mapIcon, descriptionKey = descriptionKey?.asTranslationKey())
     }
 
     @PublishedApi internal fun build() = VoteCategoryDef(

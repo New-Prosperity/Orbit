@@ -1,7 +1,6 @@
 package me.nebula.orbit.utils.modelengine.blueprint
 
 import me.nebula.orbit.utils.modelengine.math.Quat
-import me.nebula.orbit.utils.modelengine.math.QUAT_IDENTITY
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.item.ItemStack
 

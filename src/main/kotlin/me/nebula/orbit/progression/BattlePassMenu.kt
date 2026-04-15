@@ -4,8 +4,6 @@ import me.nebula.gravity.battlepass.BattlePassData
 import me.nebula.gravity.battlepass.BattlePassDefinitions
 import me.nebula.gravity.battlepass.BattlePassProgress
 import me.nebula.gravity.battlepass.BattlePassStore
-import me.nebula.gravity.battlepass.SeasonSummary
-import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.gui.confirmGui
 import me.nebula.orbit.utils.gui.gui
@@ -211,7 +209,7 @@ object BattlePassMenu {
                 for ((_, summary) in history) {
                     if (slotIndex > 16) break
                     val def = BattlePassDefinitions[summary.passId]
-                    val nameKey = def?.nameKey ?: summary.passId
+                    val nameKey = def?.nameKey?.value ?: summary.passId
                     val maxTier = def?.maxTier ?: 50
                     val status = if (summary.completedAt > 0) {
                         player.translateRaw("orbit.battlepass.history_completed")

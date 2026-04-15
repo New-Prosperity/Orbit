@@ -1,7 +1,6 @@
 package me.nebula.orbit.utils.structureblock
 
 import net.minestom.server.coordinate.Point
-import net.minestom.server.coordinate.Vec
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.block.Block
 import java.util.concurrent.ConcurrentHashMap

@@ -1,6 +1,5 @@
 package me.nebula.orbit.utils.gamechat
 
-import me.nebula.orbit.rank
 import me.nebula.orbit.rankColor
 import me.nebula.orbit.rankPrefix
 import me.nebula.orbit.mode.game.PlayerTracker

@@ -3,7 +3,6 @@ package me.nebula.orbit.utils.animation
 import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.coordinate.Point
 import net.minestom.server.coordinate.Pos
-import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.batch.AbsoluteBlockBatch

@@ -4,8 +4,6 @@ import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
 import net.minestom.server.event.player.PlayerMoveEvent
-import net.minestom.server.timer.Task
-import net.minestom.server.timer.TaskSchedule
 
 data class VoidTeleportConfig(
     val threshold: Double = -64.0,

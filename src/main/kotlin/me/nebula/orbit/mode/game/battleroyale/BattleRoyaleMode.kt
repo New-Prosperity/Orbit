@@ -19,6 +19,13 @@ import me.nebula.gravity.party.PartyLookupStore
 import me.nebula.orbit.mode.game.GameMode
 import me.nebula.orbit.mode.game.GamePhase
 import me.nebula.orbit.mode.game.GameSettings
+import me.nebula.orbit.mode.game.battleroyale.script.BorderController
+import me.nebula.orbit.mode.game.battleroyale.script.DeathmatchController
+import me.nebula.orbit.mode.game.battleroyale.script.buildBorderSteps
+import me.nebula.orbit.mode.game.battleroyale.spawn.SpawnModeRegistry
+import me.nebula.orbit.rules.Rules
+import me.nebula.orbit.variant.GameComponent
+import me.nebula.orbit.variant.GameVariantPool
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.chestloot.ChestLootManager
@@ -63,10 +70,9 @@ import net.minestom.server.tag.Tag
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
 import net.minestom.server.timer.Task
 
-class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
+class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderController, DeathmatchController {
 
     private val logger = logger("BattleRoyaleMode")
     private val season = SeasonConfig.current
@@ -106,7 +112,6 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     private val killPipeline = BattleRoyaleKillPipeline(this, brDeathRecapTracker, lastAttackerTag, lastAttackerTimeTag)
     private var worldBorder: ManagedWorldBorder? = null
     private var borderDamageTask: Task? = null
-    private val borderPhasesTasks = CopyOnWriteArrayList<Task>()
     private var currentBorderDamage = season.borderDamagePerSecond
     @Volatile private var deathmatchActive = false
     @Volatile private var spawnBlocking = false
@@ -171,32 +176,51 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
         }
 
         val mapRadius = generatedMap?.mapRadius ?: (season.border.initialDiameter / 2).toInt()
-        val result = SpawnModeExecutor.execute(
-            config = season.spawnMode,
-            players = players,
-            instance = gameInstance,
-            center = spawnPoint,
-            mapRadius = mapRadius,
-            onPlayerReady = { player, pos ->
-                player.teleport(pos)
-                player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
-                applyVotedHealth(player)
-                BattleRoyaleKitManager.resolveKit(player).apply(player)
-            },
-            onBusComplete = { spawnBlocking = false },
-        )
+        val spawnComponent = activeVariant?.find<GameComponent.Spawn>()
+        val spawnConfig = season.spawnMode
+        val result = if (spawnComponent != null) {
+            val provider = SpawnModeRegistry.resolve(spawnComponent.spawnModeId)
+                ?: error("Unknown spawn mode id: ${spawnComponent.spawnModeId}")
+            provider.execute(
+                config = spawnConfig,
+                players = players,
+                instance = gameInstance,
+                center = spawnPoint,
+                mapRadius = mapRadius,
+                onPlayerReady = { player, pos ->
+                    player.teleport(pos)
+                    player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
+                    applyVotedHealth(player)
+                    BattleRoyaleKitManager.resolveKit(player).apply(player)
+                },
+                onComplete = { spawnBlocking = false },
+            )
+        } else {
+            SpawnModeExecutor.execute(
+                config = spawnConfig,
+                players = players,
+                instance = gameInstance,
+                center = spawnPoint,
+                mapRadius = mapRadius,
+                onPlayerReady = { player, pos ->
+                    player.teleport(pos)
+                    player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
+                    applyVotedHealth(player)
+                    BattleRoyaleKitManager.resolveKit(player).apply(player)
+                },
+                onBusComplete = { spawnBlocking = false },
+            )
+        }
 
         spawnModeResult = result
         spawnBlocking = result.pvpBlocked
     }
 
+    override fun variantPool(): GameVariantPool = BattleRoyaleVariants.POOL
+
     override fun onPlayingStart() {
         brDeathRecapTracker.gameStartTime = System.currentTimeMillis()
-        if (season.borderPhases.isNotEmpty()) {
-            scheduleBorderPhases(borderSpeedMultiplier())
-        } else {
-            scheduleLegacyBorder()
-        }
+        variantController.runAuxiliarySteps(buildBorderSteps(season, borderSpeedMultiplier()))
 
         borderDamageTask = repeat(20) {
             if (phase != GamePhase.PLAYING) return@repeat
@@ -248,12 +272,14 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
         }
 
         if (season.deathmatch.enabled && !deathmatchActive && tracker.aliveCount <= season.deathmatch.triggerAtPlayers) {
-            triggerDeathmatch()
+            startDeathmatch()
         }
     }
 
     override fun onPlayerDamaged(victim: Player, attacker: Player?, amount: Float, event: EntityDamageEvent): Boolean {
+        if (!rules[Rules.DAMAGE_ENABLED]) return false
         if (spawnBlocking && attacker != null) return false
+        if (attacker != null && !rules[Rules.PVP_ENABLED]) return false
 
         if (attacker != null && attacker.uuid != victim.uuid) {
             victim.setTag(lastAttackerTag, attacker.uuid)
@@ -289,8 +315,6 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
     internal fun goldenHeadEnabled(): Boolean = season.goldenHead.enabled
 
     override fun onGameReset() {
-        borderPhasesTasks.forEach { it.cancel() }
-        borderPhasesTasks.clear()
         borderDamageTask?.cancel()
         borderDamageTask = null
         worldBorder?.setDiameter(season.border.initialDiameter)
@@ -507,44 +531,16 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
         return if (System.currentTimeMillis() - attackTime < 10_000L) attackerUuid else null
     }
 
-    private fun scheduleLegacyBorder() {
-        if (season.border.shrinkStartSeconds > 0) {
-            val task = delay(season.border.shrinkStartSeconds * 20) {
-                broadcastAll { p ->
-                    p.sendMessage(p.translate("orbit.game.br.border_shrinking"))
-                }
-                worldBorder?.shrinkTo(season.border.finalDiameter, season.border.shrinkDurationSeconds.toDouble())
-            }
-            borderPhasesTasks.add(task)
-        } else {
-            worldBorder?.shrinkTo(season.border.finalDiameter, season.border.shrinkDurationSeconds.toDouble())
-        }
+    override fun shrinkBorderTo(diameter: Double, durationSeconds: Double) {
+        if (!rules[Rules.ZONE_SHRINKING]) return
+        worldBorder?.shrinkTo(diameter, durationSeconds)
     }
 
-    private fun scheduleBorderPhases(speedMultiplier: Double = 1.0) {
-        for (phase in season.borderPhases) {
-            val startDelay = (phase.startAfterSeconds * speedMultiplier).toInt()
-            val shrinkDuration = (phase.shrinkDurationSeconds * speedMultiplier).toInt()
-            val task = scheduleGameEvent("border_phase_${phase.startAfterSeconds}", startDelay * 20) {
-                currentBorderDamage = phase.damagePerSecond
-                broadcastAll { p ->
-                    p.sendMessage(p.translate("orbit.game.br.border_shrinking"))
-                }
-                worldBorder?.shrinkTo(phase.targetDiameter, shrinkDuration.toDouble())
-            }
-            borderPhasesTasks.add(task)
-        }
+    override fun setBorderDamage(damagePerSecond: Double) {
+        currentBorderDamage = damagePerSecond.toFloat()
     }
 
-    private fun scheduleDeathmatchCheck() {
-        scheduleGameEvent("deathmatch_check", season.deathmatch.checkDelaySeconds * 20) {
-            if (!deathmatchActive && tracker.aliveCount <= season.deathmatch.triggerAtPlayers) {
-                triggerDeathmatch()
-            }
-        }
-    }
-
-    private fun triggerDeathmatch() {
+    override fun startDeathmatch() {
         if (deathmatchActive) return
         deathmatchActive = true
 
@@ -560,6 +556,14 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode() {
         }
 
         worldBorder?.shrinkTo(season.deathmatch.borderDiameter, season.deathmatch.borderShrinkSeconds.toDouble())
+    }
+
+    private fun scheduleDeathmatchCheck() {
+        scheduleGameEvent("deathmatch_check", season.deathmatch.checkDelaySeconds * 20) {
+            if (!deathmatchActive && tracker.aliveCount <= season.deathmatch.triggerAtPlayers) {
+                startDeathmatch()
+            }
+        }
     }
 
     private fun applyVotedHealth(player: Player) {

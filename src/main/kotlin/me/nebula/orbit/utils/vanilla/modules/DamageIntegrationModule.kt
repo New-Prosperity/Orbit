@@ -6,7 +6,6 @@ import me.nebula.orbit.utils.damage.DamageTracker
 import me.nebula.orbit.utils.vanilla.ConfigParam
 import me.nebula.orbit.utils.vanilla.ModuleConfig
 import me.nebula.orbit.utils.vanilla.VanillaModule
-import net.minestom.server.entity.LivingEntity
 import net.minestom.server.entity.Player
 import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode

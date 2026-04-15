@@ -1,5 +1,6 @@
 package me.nebula.orbit.mode.game
 
+import me.nebula.orbit.cosmetic.CosmeticListener
 import me.nebula.orbit.displayUsername
 import me.nebula.orbit.progression.ProgressionEvent
 import me.nebula.orbit.progression.ProgressionEventBus
@@ -77,6 +78,9 @@ class EliminationHandler(private val gameMode: GameMode) {
         val distance = if (killer != null) killer.position.distance(player.position) else null
         gameMode.killFeedInternal?.reportKill(KillEvent(killer = killer, victim = player, weaponKey = weaponKey, distance = distance))
         gameMode.deathRecapTracker?.sendRecap(player)
+        if (killer != null && killer.uuid != player.uuid) {
+            CosmeticListener.onPlayerEliminated(killer, player.position, weaponKey)
+        }
 
         gameMode.onPlayerDeath(player, killer)
 

@@ -149,9 +149,9 @@ private fun CommandExecutionContext.handleInvite(args: Array<String>) {
     if (target == null) { reply("orbit.guild.invite.player_offline"); return }
 
     if (GuildLookupStore.exists(targetId)) { reply("orbit.guild.invite.already_in_guild", "player" to targetName); return }
-    if (GuildInviteStore.exists(targetId)) { reply("orbit.guild.invite.already_invited", "player" to targetName); return }
 
-    GuildInviteStore.save(targetId, GuildInvite(guildId, player.username, System.currentTimeMillis()))
+    val existing = GuildInviteStore.saveIfAbsent(targetId, GuildInvite(guildId, player.username, System.currentTimeMillis()))
+    if (existing != null) { reply("orbit.guild.invite.already_invited", "player" to targetName); return }
 
     AuditStore.log(
         actorId = player.uuid, actorName = player.username,

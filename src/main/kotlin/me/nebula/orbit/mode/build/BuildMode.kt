@@ -1,7 +1,6 @@
 package me.nebula.orbit.mode.build
 
 import me.nebula.ether.utils.logging.logger
-import me.nebula.orbit.Orbit
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.config.CosmeticConfig
@@ -50,7 +49,7 @@ class BuildMode(private val worldPathOverride: String? = null) : ServerMode {
             if (MapLoader.isNebulaFile(path)) {
                 return NebulaWorldLoader.load("build", path)
             }
-            val resolved = runCatching { MapLoader.resolve(override) }.getOrNull()
+            val resolved = runCatching { MapLoader.resolve(override) }.getOrNull() // noqa: runCatching{}.getOrNull() as null check
             if (resolved != null) {
                 return AnvilWorldLoader.load("build", resolved)
             }

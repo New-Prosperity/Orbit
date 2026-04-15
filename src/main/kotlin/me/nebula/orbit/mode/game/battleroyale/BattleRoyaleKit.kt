@@ -46,7 +46,7 @@ object BattleRoyaleKitManager {
         val xp = data.kitXp[def.id] ?: 0L
         val maxLevel = def.maxLevel
         val xpNeeded = if (level in 1 until maxLevel && def.xpPerLevel.size >= level) def.xpPerLevel[level - 1] else 0L
-        val material = runCatching { ItemResolver.resolveMaterial(def.material) }.getOrNull() ?: Material.BARRIER
+        val material = ItemResolver.resolveMaterialOrNull(def.material) ?: Material.BARRIER
 
         return itemStack(if (isUnlocked) material else Material.GRAY_DYE) {
             name(player.translateRaw(def.nameKey))

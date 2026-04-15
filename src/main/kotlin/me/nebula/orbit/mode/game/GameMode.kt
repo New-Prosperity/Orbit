@@ -146,6 +146,24 @@ abstract class GameMode : ServerMode {
 
     protected open fun persistGameStats(result: MatchResult) {}
 
+    val rules: me.nebula.orbit.rules.GameRules = me.nebula.orbit.rules.GameRules()
+    val events: me.nebula.orbit.event.GameEventBus = me.nebula.orbit.event.GameEventBus()
+    internal val variantController: me.nebula.orbit.variant.GameVariantController = me.nebula.orbit.variant.GameVariantController(this)
+    val activeVariant: me.nebula.orbit.variant.GameVariant? get() = variantController.active
+
+    open fun variantPool(): me.nebula.orbit.variant.GameVariantPool? = null
+
+    private fun applyMutatorsForGame() {
+        val variant = variantController.active
+        val filter = variant?.find<me.nebula.orbit.variant.GameComponent.MutatorFilter>()
+        val forced = filter?.forced ?: emptyList()
+        val excluded = filter?.excluded ?: emptyList()
+        val mutators = MutatorEngine.resolveForGame(forced, excluded)
+        if (mutators.isEmpty()) return
+        MutatorEngine.apply(activeInstance, mutators)
+        MutatorEngine.applyRuleOverrides(rules, mutators)
+    }
+
     private val ratingManager = RatingManager(this)
 
     private fun applyRatingChanges() = ratingManager.applyRatingChanges()
@@ -346,6 +364,13 @@ abstract class GameMode : ServerMode {
             onEnter(GamePhase.STARTING) { enterStarting() }
             onEnter(GamePhase.PLAYING) { enterPlaying() }
             onEnter(GamePhase.ENDING) { enterEnding() }
+        }.also { sm ->
+            sm.onTransition { from, to -> events.publish(me.nebula.orbit.event.GameEvent.PhaseChanged(from, to)) }
+            rules.onAnyChange { id, old, new ->
+                val key = me.nebula.orbit.rules.RuleRegistry.resolve(id) ?: return@onAnyChange
+                @Suppress("UNCHECKED_CAST")
+                events.publish(me.nebula.orbit.event.GameEvent.RuleChanged(key as me.nebula.orbit.rules.RuleKey<Any>, old, new))
+            }
         }
     }
 
@@ -573,6 +598,8 @@ abstract class GameMode : ServerMode {
     }
 
     private fun resetSubsystemsForNewRound() {
+        variantController.dispose()
+        rules.reset()
         startingCountdown?.stop()
         startingCountdown = null
         gameEventInstaller.cleanupFreezeNode()
@@ -675,6 +702,8 @@ abstract class GameMode : ServerMode {
         val alivePlayers = collectAlivePlayers()
         transferAlivePlayersToGameInstance(alivePlayers)
         alivePlayers.forEach { tracker.markActivity(it.uuid) }
+        variantPool()?.selectRandom()?.let { variantController.install(it) }
+        applyMutatorsForGame()
         onGameSetup(alivePlayers)
         for (player in alivePlayers) {
             runCatching { AchievementRegistry.progress(player, "games_played", 1) } // noqa: dangling runCatching
@@ -773,16 +802,14 @@ abstract class GameMode : ServerMode {
 
         persistGameStats(result)
         if (Orbit.hostOwner == null) {
-            runCatching { applyRatingChanges() }
-                .onFailure { logger.warn { "Failed to apply rating changes: ${it.message}" } }
+            runCatching { applyRatingChanges() }.onFailure { logger.warn { "Failed to apply rating changes: ${it.message}" } }
         } else {
             logger.info { "Skipping rating changes for hosted game (host=${Orbit.hostOwner})" }
         }
 
         replayFlusher.flush()
 
-        runCatching { rewardDistributor?.distribute(result, tracker.all, partyBonuses) }
-            .onFailure { logger.error(it) { "Reward distribution failed" } }
+        runCatching { rewardDistributor?.distribute(result, tracker.all, partyBonuses) }.onFailure { logger.error(it) { "Reward distribution failed" } }
 
         for (uuid in tracker.all) {
             val bonus = partyBonuses[uuid] ?: continue
@@ -840,8 +867,8 @@ abstract class GameMode : ServerMode {
     private fun buildLiveTabList(): LiveTabList = liveTabList {
         val cfg = settings.tabList
         refreshEvery(cfg.refreshSeconds.seconds)
-        header { player -> resolver.resolveTranslated(cfg.header, player) }
-        footer { player -> resolver.resolveTranslated(cfg.footer, player) }
+        header { player -> resolver.resolveTranslated(cfg.header.value, player) }
+        footer { player -> resolver.resolveTranslated(cfg.footer.value, player) }
     }
 
     protected fun autoBalanceTeams(teamNames: List<String>) {

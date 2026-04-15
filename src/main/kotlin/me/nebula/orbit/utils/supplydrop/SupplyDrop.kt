@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.supplydrop
 
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.orbit.utils.chat.mm
 import me.nebula.orbit.utils.loot.LootTable
 import me.nebula.orbit.utils.scheduler.delay
@@ -32,7 +34,7 @@ data class SupplyDrop(
     val landingParticle: Particle = Particle.EXPLOSION,
     val landingSound: SoundEvent = SoundEvent.ENTITY_GENERIC_EXPLODE,
     val announceRadius: Double = 100.0,
-    val announceKey: String = "orbit.supplydrop.incoming",
+    val announceKey: TranslationKey = "orbit.supplydrop.incoming".asTranslationKey(),
     val chestDurationTicks: Int = 600,
     val onLand: ((Pos) -> Unit)? = null,
 ) {
@@ -71,7 +73,7 @@ class ActiveSupplyDrop(
     }
 
     private fun announce() {
-        val message = mm("<gold><bold>${config.announceKey}")
+        val message = mm("<gold><bold>${config.announceKey.value}")
         val radiusSq = config.announceRadius * config.announceRadius
         instance.players
             .filter { it.position.distanceSquared(config.origin) <= radiusSq }
@@ -166,7 +168,7 @@ class SupplyDropBuilder @PublishedApi internal constructor() {
     @PublishedApi internal var landingParticle: Particle = Particle.EXPLOSION
     @PublishedApi internal var landingSound: SoundEvent = SoundEvent.ENTITY_GENERIC_EXPLODE
     @PublishedApi internal var announceRadius: Double = 100.0
-    @PublishedApi internal var announceKey: String = "orbit.supplydrop.incoming"
+    @PublishedApi internal var announceKey: TranslationKey = "orbit.supplydrop.incoming".asTranslationKey()
     @PublishedApi internal var chestDurationTicks: Int = 600
     @PublishedApi internal var onLandHandler: ((Pos) -> Unit)? = null
 
@@ -178,7 +180,7 @@ class SupplyDropBuilder @PublishedApi internal constructor() {
     fun landingParticle(particle: Particle) { landingParticle = particle }
     fun landingSound(sound: SoundEvent) { landingSound = sound }
     fun announceRadius(radius: Double) { announceRadius = radius }
-    fun announceKey(key: String) { announceKey = key }
+    fun announceKey(key: String) { announceKey = key.asTranslationKey() }
     fun chestDuration(ticks: Int) { chestDurationTicks = ticks }
     fun onLand(handler: (Pos) -> Unit) { onLandHandler = handler }
 

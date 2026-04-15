@@ -20,5 +20,7 @@ sealed class BlockHitbox(val name: String) {
 
         fun fromString(value: String): BlockHitbox =
             byName[value.lowercase()] ?: error("Unknown hitbox type: $value")
+
+        fun fromStringOrNull(value: String): BlockHitbox? = byName[value.lowercase()]
     }
 }

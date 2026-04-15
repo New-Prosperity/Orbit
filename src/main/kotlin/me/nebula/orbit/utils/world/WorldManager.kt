@@ -3,7 +3,6 @@ package me.nebula.orbit.utils.world
 import me.nebula.orbit.translation.translateDefault
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
-import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.instance.InstanceManager

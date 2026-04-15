@@ -20,7 +20,7 @@ class ReplayFlusher(private val gameMode: GameMode) {
         val replayRecorder = gameMode.replayRecorderInternal
 
         if (replayRecorder.isRecording && ReplayStorage.isInitialized()) {
-            val replayName = "${Orbit.serverName}-${System.currentTimeMillis()}"
+            val replayName = "${Orbit.serverName}-${gameMode.gameStartTime}"
             val gm = Orbit.gameMode ?: "unknown"
             val map = Orbit.mapName ?: ""
             PendingReplayFlushes.mark(replayName, replayName)

@@ -13,6 +13,7 @@ fun orbitCommand(): Command = command("orbit") {
     installTestSubcommands()
     installStatusSubcommands()
     installAdminSubcommands()
+    installVariantSubcommands()
 
     onPlayerExecute {
         replyMM("<gold><bold>Orbit</bold></gold> <dark_gray>- Admin command")
@@ -20,6 +21,7 @@ fun orbitCommand(): Command = command("orbit") {
         replyMM("<white> /orbit mode <dark_gray>- Game mode info")
         replyMM("<white> /orbit test <dark_gray>- Gametest runner")
         replyMM("<white> /orbit fill <dark_gray>- Lobby filler management")
+        replyMM("<white> /orbit variant <dark_gray>- Inspect / force game variant")
         replyMM("<white> /orbit reload <dark_gray>- Reload configuration")
     }
 }

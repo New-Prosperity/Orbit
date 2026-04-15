@@ -3,9 +3,10 @@ package me.nebula.orbit.mode.game.battleroyale
 import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.entitymount.EntityMountManager
-import me.nebula.orbit.utils.scheduler.delay
+import me.nebula.orbit.utils.particle.spawnParticle
 import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
+import net.minestom.server.ServerFlag
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
@@ -17,6 +18,7 @@ import net.minestom.server.event.player.PlayerPacketEvent
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.block.Block
 import net.minestom.server.network.packet.client.play.ClientInputPacket
+import net.minestom.server.particle.Particle
 import net.minestom.server.potion.Potion
 import net.minestom.server.potion.PotionEffect
 import net.minestom.server.timer.Task
@@ -48,6 +50,8 @@ data class SpawnModeConfig(
     val maxSpawnAttempts: Int = 200,
     val fallbackSurfaceY: Int = 64,
     val spawnProtectionTicks: Int = 0,
+    val busEjectArmTicks: Int = 60,
+    val busRoutePreviewSteps: Int = 32,
 )
 
 data class SpawnModeResult(
@@ -189,6 +193,9 @@ object SpawnModeExecutor {
         val dirZ = dz / totalDist * config.busSpeed
         val busYaw = Math.toDegrees(-atan2(dx, dz)).toFloat()
         var traveled = 0.0
+        var tickCount = 0
+
+        drawRoutePreview(instance, startX, startZ, endX, endZ, config)
 
         val node = EventNode.all("br-bus-dismount")
         node.addListener(PlayerPacketEvent::class.java) { event ->
@@ -197,11 +204,16 @@ object SpawnModeExecutor {
             val player = event.player
             if (player.uuid in ejected) return@addListener
             if (!EntityMountManager.isMounted(player)) return@addListener
+            if (tickCount < config.busEjectArmTicks) {
+                player.sendActionBar(miniMessage.deserialize("<red>Eject is not yet armed"))
+                return@addListener
+            }
             ejectFromBus(player, config, ejected)
         }
         MinecraftServer.getGlobalEventHandler().addChild(node)
 
         val busTask = repeat(1) {
+            tickCount++
             traveled += config.busSpeed
             if (traveled >= totalDist) {
                 for (player in players) {
@@ -228,11 +240,18 @@ object SpawnModeExecutor {
                 busYaw,
                 0f,
             )
-            bus.teleport(newPos)
+            bus.refreshPosition(newPos)
+            bus.velocity = Vec(dirX * ServerFlag.SERVER_TICKS_PER_SECOND, 0.0, dirZ * ServerFlag.SERVER_TICKS_PER_SECOND)
 
             for (player in players) {
                 if (player.uuid !in ejected) {
-                    player.sendActionBar(miniMessage.deserialize("<yellow><bold>SHIFT</bold> <gray>to jump | <white>$progress%"))
+                    val hint = if (tickCount < config.busEjectArmTicks) {
+                        val secondsLeft = ((config.busEjectArmTicks - tickCount) / 20) + 1
+                        "<gray>Eject arms in <white>${secondsLeft}s <dark_gray>| <white>$progress%"
+                    } else {
+                        "<yellow><bold>SHIFT</bold> <gray>to jump <dark_gray>| <white>$progress%"
+                    }
+                    player.sendActionBar(miniMessage.deserialize(hint))
                 }
             }
         }
@@ -244,6 +263,26 @@ object SpawnModeExecutor {
             dismountNode = node,
             ejectedPlayers = ejected,
         )
+    }
+
+    private fun drawRoutePreview(
+        instance: Instance,
+        startX: Double,
+        startZ: Double,
+        endX: Double,
+        endZ: Double,
+        config: SpawnModeConfig,
+    ) {
+        val steps = config.busRoutePreviewSteps.coerceAtLeast(2)
+        val dx = (endX - startX) / (steps - 1)
+        val dz = (endZ - startZ) / (steps - 1)
+        for (player in instance.players) {
+            for (i in 0 until steps) {
+                val x = startX + dx * i
+                val z = startZ + dz * i
+                player.spawnParticle(Particle.END_ROD, Pos(x, config.busHeight, z), count = 1, spread = 0f, speed = 0f)
+            }
+        }
     }
 
     private fun ejectFromBus(player: Player, config: SpawnModeConfig, ejected: MutableSet<UUID>) {

@@ -3,7 +3,6 @@ package me.nebula.orbit.commands
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.commandbuilder.command
-import me.nebula.orbit.utils.replay.HighlightType
 import me.nebula.orbit.utils.replay.ReplayStorage
 import me.nebula.orbit.utils.replay.ReplayViewer
 import net.kyori.adventure.text.event.ClickEvent

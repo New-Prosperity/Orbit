@@ -1,7 +1,6 @@
 package me.nebula.orbit.utils.worldedit
 
 import net.minestom.server.instance.Section
-import net.minestom.server.instance.block.Block
 import java.util.concurrent.atomic.AtomicInteger
 
 fun interface SectionFilter {

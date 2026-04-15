@@ -3,7 +3,6 @@ package me.nebula.orbit.utils.gui
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.sound.playSound
-import net.kyori.adventure.text.Component
 import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player

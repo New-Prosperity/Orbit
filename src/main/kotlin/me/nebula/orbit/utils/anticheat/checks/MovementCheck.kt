@@ -86,12 +86,16 @@ object MovementCheck : AntiCheatCheck {
             val newAirTicks = if (player.isOnGround) 0 else state.airTicks + 1
             val newGroundY = if (player.isOnGround) newPos.y() else state.lastGroundY
 
-            if (dy > FLY_Y_THRESHOLD && !player.isOnGround && newAirTicks > 3
+            val lagMultiplier = (1.0 + player.latency.toDouble() / AntiCheat.lagCompensationMs).coerceAtMost(3.0)
+            val speedThreshold = SPEED_THRESHOLD * lagMultiplier
+            val flyThreshold = FLY_Y_THRESHOLD * lagMultiplier
+
+            if (dy > flyThreshold && !player.isOnGround && newAirTicks > 3
                 && PropertyStore[NetworkProperties.AC_CHECK_FLY_ENABLED]) {
                 AntiCheat.flag(uuid, "fly", WEIGHT, AntiCheat.movementFlagThreshold, AntiCheat.movementKickThreshold)
             }
 
-            if (horizontalDist > SPEED_THRESHOLD
+            if (horizontalDist > speedThreshold
                 && PropertyStore[NetworkProperties.AC_CHECK_SPEED_ENABLED]) {
                 AntiCheat.flag(uuid, "speed", WEIGHT, AntiCheat.movementFlagThreshold, AntiCheat.movementKickThreshold)
             }

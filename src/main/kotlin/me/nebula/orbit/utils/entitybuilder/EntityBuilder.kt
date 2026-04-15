@@ -9,8 +9,6 @@ import net.minestom.server.entity.EquipmentSlot
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.entity.damage.Damage
-import net.minestom.server.entity.damage.DamageType
-import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.instance.Instance
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material

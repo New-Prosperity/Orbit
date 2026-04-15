@@ -2,25 +2,18 @@ package me.nebula.orbit.utils.worldedit
 
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.commandbuilder.command
-import me.nebula.orbit.utils.schematic.MirrorAxis
-import me.nebula.orbit.utils.schematic.Rotation
-import me.nebula.orbit.utils.schematic.SchematicIO
 import net.minestom.server.command.CommandManager
 import net.minestom.server.coordinate.Pos
-import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.GameMode
-import net.minestom.server.entity.Player
 import net.minestom.server.entity.PlayerHand
 import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerBlockBreakEvent
 import net.minestom.server.event.player.PlayerBlockInteractEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
-import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.instance.block.Block
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
-import java.nio.file.Path
 
 private const val WAND_TAG = "nebula:wand"
 

@@ -3,6 +3,7 @@ package me.nebula.orbit.nick
 import com.google.gson.JsonParser
 import com.hazelcast.query.Predicates
 import me.nebula.ether.utils.http.httpClient
+import me.nebula.ether.utils.logging.logger
 import me.nebula.gravity.nick.NickData
 import me.nebula.gravity.nick.NickPoolManager
 import me.nebula.gravity.nick.NickPoolStore
@@ -137,6 +138,8 @@ private fun forceNickCommand(): Command = command("forcenick") {
     }
 }
 
+private val logger = logger("NickCommand")
+
 private val mojangApi = httpClient {
     baseUrl("https://api.mojang.com")
     connectTimeout(10.seconds)
@@ -164,6 +167,11 @@ private fun fetchMojangSkin(username: String): Pair<String, String> {
     return texturesProperty.get("value").asString to texturesProperty.get("signature").asString
 }
 
+private fun fetchMojangSkinOrNull(username: String): Pair<String, String>? =
+    runCatching { fetchMojangSkin(username) }.onFailure {
+        logger.warn(it) { "Failed to fetch Mojang skin for $username" }
+    }.getOrNull()
+
 private fun nickPoolCommand(): Command = command("nickpool") {
     permission("nebula.nick.admin")
 
@@ -173,7 +181,7 @@ private fun nickPoolCommand(): Command = command("nickpool") {
         onPlayerExecute {
             val username = requireArg("username") ?: return@onPlayerExecute
 
-            val (skinTextures, skinSignature) = runCatching { fetchMojangSkin(username) }.getOrNull() ?: run {
+            val (skinTextures, skinSignature) = fetchMojangSkinOrNull(username) ?: run {
                 reply("orbit.nick.fetch_failed")
                 return@onPlayerExecute
             }

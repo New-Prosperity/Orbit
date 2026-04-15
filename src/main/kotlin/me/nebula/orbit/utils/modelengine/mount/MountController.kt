@@ -12,4 +12,5 @@ data class MountInput(
     val sideways: Float = 0f,
     val jump: Boolean = false,
     val sneak: Boolean = false,
+    val sprint: Boolean = false,
 )

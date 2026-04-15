@@ -1,5 +1,7 @@
 package me.nebula.orbit.mode.game.battleroyale
 
+import me.nebula.ether.utils.translation.TranslationKey
+
 data class BorderConfig(
     val initialDiameter: Double,
     val finalDiameter: Double,
@@ -49,8 +51,8 @@ data class DeathmatchConfig(
 
 data class KitDefinitionConfig(
     val id: String,
-    val nameKey: String,
-    val descriptionKey: String,
+    val nameKey: TranslationKey,
+    val descriptionKey: TranslationKey,
     val material: String,
     val locked: Boolean = false,
     val maxLevel: Int = 3,

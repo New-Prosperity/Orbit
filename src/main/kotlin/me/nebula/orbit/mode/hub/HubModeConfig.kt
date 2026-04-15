@@ -1,5 +1,6 @@
 package me.nebula.orbit.mode.hub
 
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.gravity.cosmetic.CosmeticCategory
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.HotbarItemConfig
@@ -54,8 +55,8 @@ object HubDefinitions {
         ),
         tabList = TabListConfig(
             refreshSeconds = 5,
-            header = "orbit.hub.tablist.header",
-            footer = "orbit.hub.tablist.footer",
+            header = "orbit.hub.tablist.header".asTranslationKey(),
+            footer = "orbit.hub.tablist.footer".asTranslationKey(),
         ),
         lobby = LobbyConfig(
             gameMode = "ADVENTURE",

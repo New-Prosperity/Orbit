@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.mapvote
 
+import me.nebula.ether.utils.translation.TranslationKey
 import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -10,23 +11,23 @@ class MapVoteManagerTest {
     private fun categories() = listOf(
         VoteCategory(
             id = "duration",
-            nameKey = "vote.duration",
+            nameKey = TranslationKey("vote.duration"),
             material = "minecraft:clock",
             defaultIndex = 1,
             options = listOf(
-                VoteOption(nameKey = "vote.short", material = "minecraft:clock", value = 600),
-                VoteOption(nameKey = "vote.normal", material = "minecraft:clock", value = 900),
-                VoteOption(nameKey = "vote.long", material = "minecraft:clock", value = 1200),
+                VoteOption(nameKey = TranslationKey("vote.short"), material = "minecraft:clock", value = 600),
+                VoteOption(nameKey = TranslationKey("vote.normal"), material = "minecraft:clock", value = 900),
+                VoteOption(nameKey = TranslationKey("vote.long"), material = "minecraft:clock", value = 1200),
             ),
         ),
         VoteCategory(
             id = "health",
-            nameKey = "vote.health",
+            nameKey = TranslationKey("vote.health"),
             material = "minecraft:apple",
             defaultIndex = 0,
             options = listOf(
-                VoteOption(nameKey = "vote.normal_hp", material = "minecraft:apple", value = 20),
-                VoteOption(nameKey = "vote.enhanced_hp", material = "minecraft:apple", value = 30),
+                VoteOption(nameKey = TranslationKey("vote.normal_hp"), material = "minecraft:apple", value = 20),
+                VoteOption(nameKey = TranslationKey("vote.enhanced_hp"), material = "minecraft:apple", value = 30),
             ),
         ),
     )

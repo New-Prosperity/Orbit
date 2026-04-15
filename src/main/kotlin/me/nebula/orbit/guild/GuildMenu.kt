@@ -3,7 +3,6 @@ package me.nebula.orbit.guild
 import me.nebula.gravity.guild.GuildData
 import me.nebula.gravity.guild.GuildLevelFormula
 import me.nebula.gravity.guild.GuildRole
-import me.nebula.gravity.guild.GuildSettings
 import me.nebula.gravity.guild.GuildStore
 import me.nebula.gravity.guild.SetGuildSettingsProcessor
 import me.nebula.gravity.player.PlayerStore

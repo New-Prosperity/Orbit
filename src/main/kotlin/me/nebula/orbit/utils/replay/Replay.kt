@@ -7,11 +7,9 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
-import com.google.gson.reflect.TypeToken
 import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.storage.StorageScope
 import me.nebula.orbit.utils.scheduler.repeat
-import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
 import net.kyori.adventure.nbt.TagStringIO

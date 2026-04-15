@@ -2,6 +2,8 @@ package me.nebula.orbit.mutator
 
 import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.Orbit
+import me.nebula.orbit.rules.GameRules
+import me.nebula.orbit.rules.RuleRegistry
 import me.nebula.orbit.utils.vanilla.ModuleConfig
 import me.nebula.orbit.utils.vanilla.VanillaModules
 import net.minestom.server.instance.Instance
@@ -12,14 +14,17 @@ object MutatorEngine {
     private val logger = logger("MutatorEngine")
     private val activeByInstance = ConcurrentHashMap<Long, List<Mutator>>()
 
-    fun resolveForGame(): List<Mutator> {
-        val mutatorIds = Orbit.activeMutatorIds
-        val explicit = MutatorRegistry.resolve(mutatorIds)
+    fun resolveForGame(
+        forcedIds: List<String> = emptyList(),
+        excludedIds: List<String> = emptyList(),
+    ): List<Mutator> {
+        val explicitIds = (Orbit.activeMutatorIds + forcedIds).distinct()
+        val explicit = MutatorRegistry.resolve(explicitIds).filter { it.id !in excludedIds }
 
         val randomCount = Orbit.randomMutatorCount
         val random = if (randomCount > 0) {
-            val explicitIds = explicit.map { it.id }.toSet()
-            MutatorRegistry.selectRandom(randomCount).filter { it.id !in explicitIds }
+            val usedIds = explicit.map { it.id }.toSet() + excludedIds
+            MutatorRegistry.selectRandom(randomCount).filter { it.id !in usedIds }
         } else emptyList()
 
         val combined = explicit + random
@@ -27,6 +32,24 @@ object MutatorEngine {
             logger.info { "Resolved mutators: ${combined.map { it.id }}" }
         }
         return combined
+    }
+
+    fun applyRuleOverrides(rules: GameRules, mutators: List<Mutator>) {
+        if (mutators.isEmpty()) return
+        for (mutator in mutators) {
+            val ruleValues = mutator.overrides["__rules__"] ?: continue
+            for ((id, value) in ruleValues) {
+                val key = RuleRegistry.resolve(id) ?: run {
+                    logger.warn { "Mutator '${mutator.id}' targets unknown rule '$id'" }
+                    continue
+                }
+                if (!key.default::class.java.isInstance(value)) {
+                    logger.warn { "Mutator '${mutator.id}' has wrong type for rule '$id': ${value::class.simpleName} vs ${key.default::class.simpleName}" }
+                    continue
+                }
+                rules.setById(id, value)
+            }
+        }
     }
 
     fun apply(instance: Instance, mutators: List<Mutator>) {
@@ -41,7 +64,7 @@ object MutatorEngine {
         for (mutator in mutators) {
             allDisables += mutator.disables
             for ((moduleId, params) in mutator.overrides) {
-                if (moduleId == "__gamemode__") continue
+                if (moduleId == "__gamemode__" || moduleId == "__rules__") continue
                 mergedOverrides.getOrPut(moduleId) { mutableMapOf() }.putAll(params)
             }
         }

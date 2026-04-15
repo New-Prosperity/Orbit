@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.rewards
 
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.gravity.economy.AddBalanceProcessor
 import me.nebula.gravity.economy.EconomyStore
 import me.nebula.orbit.progression.PartyBonusCalculator
@@ -7,7 +9,6 @@ import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.utils.stattracker.StatTracker
 import net.minestom.server.MinecraftServer
-import net.minestom.server.entity.Player
 import java.util.UUID
 
 data class RewardEntry(
@@ -30,7 +31,7 @@ class RewardDistributor @PublishedApi internal constructor(
     private val rules: List<RewardRule>,
     private val participationRewards: List<RewardEntry>,
     private val perKillRewards: List<RewardEntry>,
-    private val announcementKey: String?,
+    private val announcementKey: TranslationKey?,
 ) {
 
     fun distribute(
@@ -98,7 +99,7 @@ class RewardDistributorBuilder @PublishedApi internal constructor() {
     @PublishedApi internal val rules = mutableListOf<RewardRule>()
     @PublishedApi internal val participationRewards = mutableListOf<RewardEntry>()
     @PublishedApi internal val perKillRewards = mutableListOf<RewardEntry>()
-    @PublishedApi internal var announcementKey: String? = null
+    @PublishedApi internal var announcementKey: TranslationKey? = null
 
     fun participation(currency: String, amount: Double, reason: String = "participation") {
         participationRewards.add(RewardEntry(currency, amount, reason))
@@ -127,7 +128,7 @@ class RewardDistributorBuilder @PublishedApi internal constructor() {
         }
     }
 
-    fun announcement(translationKey: String) { announcementKey = translationKey }
+    fun announcement(translationKey: String) { announcementKey = translationKey.asTranslationKey() }
 
     @PublishedApi internal fun build(): RewardDistributor =
         RewardDistributor(rules.toList(), participationRewards.toList(), perKillRewards.toList(), announcementKey)

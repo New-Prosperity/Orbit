@@ -24,6 +24,8 @@ object CompassTracker {
     private val targets = ConcurrentHashMap<UUID, CompassTarget>()
     private var tickTask: Task? = null
     private var eventNode: EventNode<*>? = null
+    private var tickCounter = 0L
+    private var updateInterval = 10L
 
     fun track(player: Player, target: Player) {
         targets[player.uuid] = CompassTarget.PlayerTarget(target.uuid)
@@ -43,13 +45,14 @@ object CompassTracker {
 
     fun start(updateIntervalTicks: Int = 10) {
         stop()
+        updateInterval = updateIntervalTicks.toLong().coerceAtLeast(1L)
         val node = EventNode.all("compass-tracker")
         node.addListener(PlayerDisconnectEvent::class.java) { event ->
             targets.remove(event.player.uuid)
         }
         MinecraftServer.getGlobalEventHandler().addChild(node)
         eventNode = node
-        tickTask = repeat(updateIntervalTicks) { tick() }
+        tickTask = repeat(1) { tick() }
     }
 
     fun stop() {
@@ -65,10 +68,12 @@ object CompassTracker {
     }
 
     private fun tick() {
+        tickCounter++
         val onlinePlayers = MinecraftServer.getConnectionManager().onlinePlayers
         val playerMap = onlinePlayers.associateBy { it.uuid }
 
         targets.forEach { (trackerUuid, target) ->
+            if ((tickCounter + trackerUuid.hashCode()) % updateInterval != 0L) return@forEach
             val tracker = playerMap[trackerUuid] ?: return@forEach
 
             val hasCompass = (0 until tracker.inventory.size).any {

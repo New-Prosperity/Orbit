@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.mapvote
 
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.gui.gui
@@ -13,22 +15,22 @@ import java.util.concurrent.atomic.AtomicReference
 
 data class VoteCategory(
     val id: String,
-    val nameKey: String,
+    val nameKey: TranslationKey,
     val material: String,
     val defaultIndex: Int = 0,
     val options: List<VoteOption>,
 )
 
 data class VoteOption(
-    val nameKey: String,
+    val nameKey: TranslationKey,
     val material: String,
     val value: Int = 0,
     val mapIcon: String? = null,
-    val descriptionKey: String? = null,
+    val descriptionKey: TranslationKey? = null,
 )
 
 class MapVoteManager(
-    private val titleKey: String = "orbit.vote.title",
+    private val titleKey: TranslationKey = "orbit.vote.title".asTranslationKey(),
     private val recentHistorySize: Int = 3,
     private val recentPenalty: Double = 0.4,
     private val categoriesProvider: () -> List<VoteCategory>,
@@ -93,7 +95,7 @@ class MapVoteManager(
             val startSlot = 9 + (9 - totalWidth) / 2
             categories.forEachIndexed { i, cat ->
                 val slotIndex = startSlot + i * 2
-                val material = runCatching { ItemResolver.resolveMaterial(cat.material) }.getOrNull() ?: Material.PAPER
+                val material = ItemResolver.resolveMaterialOrNull(cat.material) ?: Material.PAPER
                 slot(slotIndex, itemStack(material) {
                     name(player.translateRaw(cat.nameKey))
                     val current = getVote(player.uuid, cat.id)
@@ -122,7 +124,7 @@ class MapVoteManager(
                 val slotIndex = startSlot + i * 2
                 val currentVote = getVote(player.uuid, cat.id)
                 val isSelected = currentVote == i
-                val material = runCatching { ItemResolver.resolveMaterial(option.material) }.getOrNull() ?: Material.PAPER
+                val material = ItemResolver.resolveMaterialOrNull(option.material) ?: Material.PAPER
                 slot(slotIndex, itemStack(material) {
                     name(player.translateRaw(option.nameKey))
                     option.mapIcon?.let { itemModel("sprites/$it") }

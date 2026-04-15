@@ -29,8 +29,7 @@ object PendingReplayFlushes {
     }
 
     fun complete(replayName: String) {
-        runCatching { pending.remove(replayName) }
-            .onFailure { log.warn(it) { "Failed to clear pending replay flush: $replayName" } }
+        runCatching { pending.remove(replayName) }.onFailure { log.warn(it) { "Failed to clear pending replay flush: $replayName" } }
     }
 
     fun sweepStale() {

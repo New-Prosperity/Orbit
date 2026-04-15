@@ -70,6 +70,7 @@ object MountManager {
                     sideways = sideways,
                     jump = packet.jump(),
                     sneak = packet.shift(),
+                    sprint = packet.sprint(),
                 )
                 if (session.input.sneak) {
                     return@addListener

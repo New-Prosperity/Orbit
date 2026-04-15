@@ -37,7 +37,7 @@ Generated index of `me.nebula.orbit.utils.<feature>/` packages. Each entry links
 - **deathrecap** — Damage tracking and death recap utility. Records all damage dealt and generates a summary on elimination.
 - **drain** — Phase-aware graceful drain for game and hub servers, driven by `ServerData.drain`. Cosmetic-aware transfer to fallback hub.
 - **entityai** — DSL for configuring Minestom entity AI with presets and custom goal/target selectors.
-- **entitybuilder** — Priority-based behavior AI with type-safe memory, spatial sensors, and ModelEngine integration.
+- **entitybuilder** — Priority-based behavior AI with type-safe memory, spatial sensors, and ModelEngine integration. The 22 `BehaviorExecutor` implementations live in `BehaviorExecutors.kt` (renamed from `Executors.kt` to avoid collision with `java.util.concurrent.Executors`).
 - **entityformation** — Entity formation system for arranging entities in geometric patterns with optional animation.
 - **entityglow** — Per-player and global entity glowing via `EntityMetaDataPacket`.
 - **entitymount** — Entity mounting/riding system with stacking, speed multipliers, player extensions.
@@ -78,7 +78,7 @@ Generated index of `me.nebula.orbit.utils.<feature>/` packages. Each entry links
 - **protection** — Unified zone-based protection system. Region, chunk, and radius zones with per-flag control, whitelists, priority.
 - **queue** — Two queue types: `GameQueue` (min/max players, countdown, auto-start) and `SimpleQueue` (lightweight FIFO).
 - **raytrace** — Step-based ray tracing for blocks and entities, plus bounding-box accurate `raycast`.
-- **region** — Sealed region types (cuboid, sphere, cylinder) with global `RegionManager` registry and `RegionTracker` for enter/exit events.
+- **region** — Sealed region types (cuboid, sphere, cylinder) with global `RegionManager` registry and `RegionTracker` for enter/exit events. All region subtypes expose `boundingCenter`/`boundingRadius` so spatial queries can use `entityTracker.nearbyEntities(...)` instead of iterating `instance.entities`.
 - **replay** — Game recording, playback, highlight detection, commands. Two recording modes (semantic frames, raw packet capture). MinIO storage via `.nebr` binary format.
 - **respawn** — Per-player and global respawn point management with instance resolution.
 - **rewards** — DSL-configured post-game reward system. Distributes currency based on participation, kills, configurable conditions.

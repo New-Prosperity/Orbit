@@ -1,5 +1,6 @@
 package me.nebula.orbit.mode.game.battleroyale
 
+import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.HotbarItemConfig
 import me.nebula.orbit.mode.config.LobbyConfig
@@ -22,7 +23,7 @@ data class Season(
     val preloadRadius: Int = 8,
     val spawn: SpawnConfig = SpawnConfig(0.5, 65.0, 0.5, 0f, 0f),
     val scoreboard: ScoreboardConfig = ScoreboardConfig("orbit.game.br.scoreboard.title", 2, emptyList()),
-    val tabList: TabListConfig = TabListConfig(3, "orbit.game.br.tablist.header", "orbit.game.br.tablist.footer"),
+    val tabList: TabListConfig = TabListConfig(3, TranslationKey("orbit.game.br.tablist.header"), TranslationKey("orbit.game.br.tablist.footer")),
     val lobby: LobbyConfig = LobbyConfig("ADVENTURE", protectBlocks = true, disableDamage = true, disableHunger = true, lockInventory = false, voidTeleportY = -64.0),
     val hotbar: List<HotbarItemConfig> = emptyList(),
     val timing: TimingConfig = TimingConfig(countdownSeconds = 15, endingDurationSeconds = 10, minPlayers = 2, maxPlayers = 16),
@@ -39,18 +40,18 @@ data class Season(
 
 data class VoteCategoryDef(
     val id: String,
-    val nameKey: String,
+    val nameKey: TranslationKey,
     val material: String,
     val defaultIndex: Int = 1,
     val options: List<VoteOptionDef>,
 )
 
 data class VoteOptionDef(
-    val nameKey: String,
+    val nameKey: TranslationKey,
     val material: String,
     val value: Int,
     val mapIcon: String? = null,
-    val descriptionKey: String? = null,
+    val descriptionKey: TranslationKey? = null,
 )
 
 object SeasonConfig {

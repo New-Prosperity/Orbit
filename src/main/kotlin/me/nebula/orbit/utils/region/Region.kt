@@ -5,13 +5,17 @@ import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
+import net.minestom.server.instance.EntityTracker
 import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.sqrt
 
 sealed interface Region {
     val name: String
+    val boundingCenter: Pos
+    val boundingRadius: Double
     fun contains(point: Point): Boolean
     fun contains(x: Double, y: Double, z: Double): Boolean
 }
@@ -28,6 +32,9 @@ data class CuboidRegion(
     val center: Pos get() = Pos((min.x() + max.x()) / 2, (min.y() + max.y()) / 2, (min.z() + max.z()) / 2)
     val volume: Double get() = sizeX * sizeY * sizeZ
 
+    override val boundingCenter: Pos get() = center
+    override val boundingRadius: Double get() = sqrt(sizeX * sizeX + sizeY * sizeY + sizeZ * sizeZ) / 2.0
+
     override fun contains(point: Point): Boolean =
         contains(point.x(), point.y(), point.z())
 
@@ -43,6 +50,9 @@ data class SphereRegion(
 
     val radiusSquared: Double = radius * radius
     val volume: Double get() = (4.0 / 3.0) * Math.PI * radius * radius * radius
+
+    override val boundingCenter: Pos get() = center
+    override val boundingRadius: Double get() = radius
 
     override fun contains(point: Point): Boolean =
         contains(point.x(), point.y(), point.z())
@@ -63,6 +73,9 @@ data class CylinderRegion(
 ) : Region {
 
     val radiusSquared: Double = radius * radius
+
+    override val boundingCenter: Pos get() = Pos(center.x(), center.y() + height / 2, center.z())
+    override val boundingRadius: Double get() = sqrt(radius * radius + (height / 2) * (height / 2))
 
     override fun contains(point: Point): Boolean =
         contains(point.x(), point.y(), point.z())
@@ -100,8 +113,15 @@ object RegionManager {
     fun playersInRegion(region: Region, instance: Instance): List<Player> =
         instance.players.filter { region.contains(it.position) }
 
-    fun entitiesInRegion(region: Region, instance: Instance): List<Entity> =
-        instance.entities.filter { region.contains(it.position) }
+    fun entitiesInRegion(region: Region, instance: Instance): List<Entity> {
+        val result = mutableListOf<Entity>()
+        instance.entityTracker.nearbyEntities(
+            region.boundingCenter, region.boundingRadius, EntityTracker.Target.ENTITIES,
+        ) { entity ->
+            if (region.contains(entity.position)) result += entity
+        }
+        return result
+    }
 }
 
 fun cuboidRegion(name: String, min: Pos, max: Pos): CuboidRegion {

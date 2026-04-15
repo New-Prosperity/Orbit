@@ -1,5 +1,6 @@
 package me.nebula.orbit.mode.game.battleroyale
 
+import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.orbit.utils.cooldown.CooldownIndicator
 import me.nebula.orbit.utils.cooldown.SkillCooldown
 import me.nebula.orbit.utils.cooldown.skillCooldown
@@ -25,7 +26,7 @@ interface LegendaryAbility {
 
 data class LegendaryDefinition(
     val id: String,
-    val nameKey: String,
+    val nameKey: TranslationKey,
     val baseMaterial: Material,
     val ability: LegendaryAbility,
     val cooldown: Duration,
@@ -55,7 +56,7 @@ object LegendaryRegistry {
 
     fun createStack(definition: LegendaryDefinition, nameResolver: (String) -> String): ItemStack =
         itemStack(definition.baseMaterial) {
-            name(nameResolver(definition.nameKey))
+            name(nameResolver(definition.nameKey.value))
             glowing()
         }.withTag(legendaryTag, definition.id)
 

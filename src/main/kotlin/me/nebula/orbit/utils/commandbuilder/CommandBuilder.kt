@@ -1,7 +1,8 @@
 package me.nebula.orbit.utils.commandbuilder
 
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.gravity.rank.RankManager
-import me.nebula.orbit.Orbit
 import me.nebula.orbit.localeCode
 import me.nebula.orbit.translation.translate
 import net.kyori.adventure.text.Component
@@ -24,9 +25,11 @@ data class CommandExecutionContext(
     val locale: String,
 ) {
     fun arg(name: String): String = args.get(ArgumentType.String(name))
-    fun argOrNull(name: String): String? = runCatching { args.get(ArgumentType.String(name)) }.getOrNull()
+    fun argOrNull(name: String): String? =
+        if (args.has(name)) args.get(ArgumentType.String(name)) else null
     fun intArg(name: String): Int = args.get(ArgumentType.Integer(name))
-    fun intArgOrNull(name: String): Int? = runCatching { args.get(ArgumentType.Integer(name)) }.getOrNull()
+    fun intArgOrNull(name: String): Int? =
+        if (args.has(name)) args.get(ArgumentType.Integer(name)) else null
     fun doubleArg(name: String): Double = args.get(ArgumentType.Double(name))
     fun floatArg(name: String): Float = args.get(ArgumentType.Float(name))
     fun boolArg(name: String): Boolean = args.get(ArgumentType.Boolean(name))
@@ -78,13 +81,13 @@ class CommandBuilderDsl @PublishedApi internal constructor(
     @PublishedApi internal var playerExecuteHandler: ((CommandExecutionContext) -> Unit)? = null
     @PublishedApi internal var tabCompleteHandler: ((Player, String) -> List<String>)? = null
     @PublishedApi internal var cooldownMs: Long = 0
-    @PublishedApi internal var usageKey: String? = null
+    @PublishedApi internal var usageKey: TranslationKey? = null
 
     fun aliases(vararg names: String) { aliases += names }
     fun permission(perm: String) { permission = perm }
     fun playerOnly() { playerOnly = true }
     fun cooldown(ms: Long) { cooldownMs = ms }
-    fun usage(translationKey: String) { usageKey = translationKey }
+    fun usage(translationKey: String) { usageKey = translationKey.asTranslationKey() }
 
     fun <T> argument(arg: Argument<T>) { arguments += arg }
     fun stringArgument(name: String) { arguments += ArgumentType.String(name) }

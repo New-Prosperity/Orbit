@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.leaderboard
 
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.gravity.ranking.Periodicity
 import me.nebula.gravity.ranking.RankedPlayer
 import me.nebula.gravity.ranking.RankingStore
@@ -15,7 +17,7 @@ import java.util.UUID
 
 data class LeaderboardColumn(
     val statKey: String,
-    val displayKey: String,
+    val displayKey: TranslationKey,
     val material: Material = Material.DIAMOND,
 )
 
@@ -23,7 +25,7 @@ class LeaderboardDisplay @PublishedApi internal constructor(
     private val columns: List<LeaderboardColumn>,
     private val defaultPeriodicity: Periodicity,
     private val entriesPerPage: Int,
-    private val guiTitleKey: String,
+    private val guiTitleKey: TranslationKey,
 ) {
 
     fun query(statKey: String, periodicity: Periodicity = defaultPeriodicity): List<RankedPlayer> =
@@ -128,10 +130,10 @@ class LeaderboardDisplayBuilder @PublishedApi internal constructor() {
     @PublishedApi internal val columns = mutableListOf<LeaderboardColumn>()
     @PublishedApi internal var defaultPeriodicity: Periodicity = Periodicity.ALL_TIME
     @PublishedApi internal var entriesPerPage: Int = 28
-    @PublishedApi internal var guiTitleKey: String = "orbit.leaderboard.title"
+    @PublishedApi internal var guiTitleKey: TranslationKey = "orbit.leaderboard.title".asTranslationKey()
 
     fun column(statKey: String, displayKey: String, material: Material = Material.DIAMOND) {
-        columns += LeaderboardColumn(statKey, displayKey, material)
+        columns += LeaderboardColumn(statKey, displayKey.asTranslationKey(), material)
     }
 
     fun defaultPeriod(periodicity: Periodicity) {
@@ -143,7 +145,7 @@ class LeaderboardDisplayBuilder @PublishedApi internal constructor() {
     }
 
     fun guiTitle(key: String) {
-        guiTitleKey = key
+        guiTitleKey = key.asTranslationKey()
     }
 
     @PublishedApi internal fun build(): LeaderboardDisplay = LeaderboardDisplay(

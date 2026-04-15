@@ -122,13 +122,21 @@ object CosmeticListener {
         CosmeticDataCache.clear()
     }
 
-    fun onPlayerEliminated(killer: Player, victimPosition: Pos) {
+    fun onPlayerEliminated(killer: Player, victimPosition: Pos, weaponMaterial: String? = null) {
         val data = CosmeticDataCache.get(killer.uuid) ?: return
         val killEffectId = data.equipped[CosmeticCategory.KILL_EFFECT.name] ?: return
         if (!isAllowed(CosmeticCategory.KILL_EFFECT, killEffectId)) return
         val instance = killer.instance ?: return
         val level = data.owned[killEffectId] ?: 1
-        CosmeticApplier.playKillEffect(instance, victimPosition, killEffectId, level, ownerUuid = killer.uuid)
+        CosmeticApplier.playKillEffect(
+            instance = instance,
+            position = victimPosition,
+            cosmeticId = killEffectId,
+            level = level,
+            ownerUuid = killer.uuid,
+            killer = killer,
+            weaponMaterial = weaponMaterial,
+        )
     }
 
     fun onPlayerDeath(player: Player, deathPosition: Pos) {

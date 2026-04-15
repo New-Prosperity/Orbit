@@ -1,12 +1,15 @@
 package me.nebula.orbit.utils.statue
 
+import me.nebula.ether.utils.parse.enumValueOfOrNull
 import me.nebula.gravity.cosmetic.CosmeticCategory
 import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.gravity.leveling.LevelStore
 import me.nebula.gravity.player.PlayerStore
 import me.nebula.gravity.rank.RankManager
 import me.nebula.gravity.rating.EloCalculator
+import me.nebula.gravity.rating.PLACEMENT_MATCHES_REQUIRED
 import me.nebula.gravity.rating.RatingStore
+import me.nebula.gravity.rating.isPlaced
 import me.nebula.gravity.stats.StatsStore
 import me.nebula.orbit.cosmetic.CosmeticRegistry
 import me.nebula.orbit.translation.translateRaw
@@ -83,7 +86,7 @@ object StatueProfileMenu {
                 val cosmeticSlots = listOf(19, 20, 21, 22, 23, 24, 25)
                 val equippedCategories = cosmeticData?.equipped?.entries?.toList() ?: emptyList()
                 equippedCategories.take(cosmeticSlots.size).forEachIndexed { index, (categoryName, cosmeticId) ->
-                    val category = runCatching { CosmeticCategory.valueOf(categoryName) }.getOrNull() ?: return@forEachIndexed
+                    val category = enumValueOfOrNull<CosmeticCategory>(categoryName) ?: return@forEachIndexed
                     val definition = CosmeticRegistry[cosmeticId] ?: return@forEachIndexed
                     val level = cosmeticData?.owned?.get(cosmeticId) ?: 1
                     val material = categoryMaterials[category] ?: Material.BARRIER
@@ -105,11 +108,17 @@ object StatueProfileMenu {
                 val ratingSlots = listOf(37, 38, 39, 40, 41, 42, 43)
                 ratingEntries.take(ratingSlots.size).forEachIndexed { index, (gameMode, rating) ->
                     val tier = EloCalculator.tierOf(rating.rating)
+                    val provisional = !rating.isPlaced()
                     slot(ratingSlots[index], itemStack(Material.IRON_SWORD) {
+                        val suffix = if (provisional) "<gray>*" else ""
                         name("${tier.color}<bold>${viewer.translateRaw("orbit.statue.rating_gamemode", "gamemode" to gameMode)}")
-                        lore("${tier.color}${tier.displayName} <gray>(${rating.rating})")
-                        lore("<gray>${viewer.translateRaw("orbit.statue.peak_rating", "rating" to rating.peakRating.toString())}")
-                        lore("<gray>${viewer.translateRaw("orbit.statue.games_played", "games" to rating.gamesPlayed.toString())}")
+                        lore("${tier.color}${tier.displayName}$suffix <gray>(${rating.rating})")
+                        if (provisional) {
+                            lore("<yellow>${viewer.translateRaw("orbit.statue.placement_progress", "games" to rating.gamesPlayed.toString(), "required" to PLACEMENT_MATCHES_REQUIRED.toString())}")
+                        } else {
+                            lore("<gray>${viewer.translateRaw("orbit.statue.peak_rating", "rating" to rating.peakRating.toString())}")
+                            lore("<gray>${viewer.translateRaw("orbit.statue.games_played", "games" to rating.gamesPlayed.toString())}")
+                        }
                         clean()
                     })
                 }

@@ -51,7 +51,5 @@ object PlayerTransfer {
     }
 
     private fun publishTransfer(uuid: UUID, serverName: String): Boolean =
-        runCatching { NetworkMessenger.publish(TransferPlayerMessage(uuid, serverName)) }
-            .onFailure { logger.warn(it) { "Failed to publish transfer for $uuid" } }
-            .isSuccess
+        runCatching { NetworkMessenger.publish(TransferPlayerMessage(uuid, serverName)) }.onFailure { logger.warn(it) { "Failed to publish transfer for $uuid" } }.isSuccess
 }

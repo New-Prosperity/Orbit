@@ -1,16 +1,13 @@
 package me.nebula.orbit.utils.npcdialog
 
 import me.nebula.orbit.translation.translateDefault
-import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.chat.mm
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
 import net.minestom.server.MinecraftServer
-import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.LivingEntity
 import net.minestom.server.entity.Player
-import net.minestom.server.event.player.PlayerChatEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap

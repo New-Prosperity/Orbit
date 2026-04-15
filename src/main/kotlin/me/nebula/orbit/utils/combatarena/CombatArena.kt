@@ -11,7 +11,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
 enum class CombatArenaState { WAITING, ACTIVE, ENDED }
 

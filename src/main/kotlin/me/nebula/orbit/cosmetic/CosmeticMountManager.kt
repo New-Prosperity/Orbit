@@ -36,6 +36,7 @@ data class ActiveMount(
     val cosmeticId: String,
     val level: Int,
     val speed: Double,
+    val sprintMultiplier: Double,
 )
 
 class CosmeticMountManager {
@@ -86,6 +87,7 @@ class CosmeticMountManager {
         }
         val scale = resolved["scale"]?.toFloatOrNull() ?: 1.0f
         val speed = resolved["speed"]?.toDoubleOrNull() ?: 0.2
+        val sprintMultiplier = resolved["sprintMultiplier"]?.toDoubleOrNull() ?: 1.5
         val seatBone = resolved["seatBone"] ?: "seat"
         val instance = player.instance ?: return
 
@@ -119,7 +121,7 @@ class CosmeticMountManager {
             }.withTag(MOUNT_TAG, cosmeticId)
             player.inventory.setItemStack(MOUNT_SLOT, item)
 
-            mounts[player.uuid] = ActiveMount(creature, modeled, mountBehavior, cosmeticId, level, speed)
+            mounts[player.uuid] = ActiveMount(creature, modeled, mountBehavior, cosmeticId, level, speed, sprintMultiplier)
         }
     }
 
@@ -144,7 +146,12 @@ class CosmeticMountManager {
             mount.entity.teleport(player.position.add(2.0, 0.0, 0.0))
         }
 
-        MountManager.mount(player, mount.modeled, mount.mountBehavior, WalkingController(speed = mount.speed))
+        MountManager.mount(
+            player,
+            mount.modeled,
+            mount.mountBehavior,
+            WalkingController(speed = mount.speed, sprintMultiplier = mount.sprintMultiplier),
+        )
     }
 
     fun isActive(playerId: UUID): Boolean = mounts.containsKey(playerId)

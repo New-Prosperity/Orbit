@@ -1,6 +1,8 @@
 package me.nebula.orbit.utils.autorestart
 
 import me.nebula.ether.utils.duration.DurationFormatter
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.scheduler.delay
 import net.minestom.server.MinecraftServer
@@ -12,14 +14,14 @@ class AutoRestartConfig @PublishedApi internal constructor() {
 
     @PublishedApi internal var delay: Duration = Duration.ofHours(6)
     @PublishedApi internal val warningIntervals = mutableListOf<Duration>()
-    @PublishedApi internal var warningKey: String = "orbit.autorestart.warning"
-    @PublishedApi internal var kickKey: String = "orbit.autorestart.kick"
+    @PublishedApi internal var warningKey: TranslationKey = "orbit.autorestart.warning".asTranslationKey()
+    @PublishedApi internal var kickKey: TranslationKey = "orbit.autorestart.kick".asTranslationKey()
     @PublishedApi internal var restartAction: () -> Unit = { MinecraftServer.stopCleanly() }
 
     fun after(duration: Duration) { delay = duration }
     fun warnings(vararg intervals: Duration) { warningIntervals.addAll(intervals) }
-    fun warningKey(key: String) { warningKey = key }
-    fun kickKey(key: String) { kickKey = key }
+    fun warningKey(key: String) { warningKey = key.asTranslationKey() }
+    fun kickKey(key: String) { kickKey = key.asTranslationKey() }
     fun onRestart(action: () -> Unit) { restartAction = action }
 }
 

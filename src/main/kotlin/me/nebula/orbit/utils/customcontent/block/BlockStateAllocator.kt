@@ -27,7 +27,7 @@ object BlockStateAllocator {
                 val id = parts[0].trim()
                 val valueParts = parts[1].trim().split(":", limit = 2)
                 if (valueParts.size != 2) return@forEach
-                val hitbox = runCatching { BlockHitbox.fromString(valueParts[0]) }.getOrNull() ?: return@forEach
+                val hitbox = BlockHitbox.fromStringOrNull(valueParts[0]) ?: return@forEach
                 val poolIndex = valueParts[1].toIntOrNull() ?: return@forEach
                 val pool = pools[hitbox] ?: return@forEach
                 if (poolIndex >= pool.size) return@forEach

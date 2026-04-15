@@ -10,7 +10,6 @@ import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerBlockBreakEvent
 import net.minestom.server.event.player.PlayerBlockInteractEvent
 import net.minestom.server.event.player.PlayerBlockPlaceEvent
-import java.util.UUID
 
 object InteractReachCheck : AntiCheatCheck {
 

@@ -10,7 +10,6 @@ import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.commandbuilder.resolvePlayer
 import me.nebula.orbit.utils.commandbuilder.suggestPlayers
 import me.nebula.orbit.utils.scheduler.delay
-import net.minestom.server.MinecraftServer
 import net.minestom.server.command.builder.Command
 import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode

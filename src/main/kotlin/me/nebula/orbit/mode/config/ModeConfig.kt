@@ -1,5 +1,6 @@
 package me.nebula.orbit.mode.config
 
+import me.nebula.ether.utils.translation.TranslationKey
 import net.minestom.server.coordinate.Pos
 
 data class SpawnConfig(
@@ -20,8 +21,8 @@ data class ScoreboardConfig(
 
 data class TabListConfig(
     val refreshSeconds: Int,
-    val header: String,
-    val footer: String,
+    val header: TranslationKey,
+    val footer: TranslationKey,
 )
 
 data class LobbyConfig(

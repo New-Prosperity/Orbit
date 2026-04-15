@@ -1,7 +1,6 @@
 package me.nebula.orbit.utils.teambalance
 
 import net.minestom.server.entity.Player
-import kotlin.math.abs
 
 object TeamBalance {
 

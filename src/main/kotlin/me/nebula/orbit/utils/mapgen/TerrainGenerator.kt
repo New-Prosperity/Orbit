@@ -8,7 +8,6 @@ import net.minestom.server.world.biome.Biome
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.floor
-import kotlin.math.sin
 
 data class TerrainConfig(
     val seed: Long = 0L,

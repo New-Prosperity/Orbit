@@ -14,10 +14,12 @@ import me.nebula.orbit.Orbit
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.anticheat.checks.CombatCheck
 import me.nebula.orbit.utils.anticheat.checks.GroundSpoofCheck
+import me.nebula.orbit.utils.anticheat.checks.HeadshotCheck
 import me.nebula.orbit.utils.anticheat.checks.InteractReachCheck
 import me.nebula.orbit.utils.anticheat.checks.KillAuraCheck
+import me.nebula.orbit.utils.anticheat.checks.KillDistanceCheck
+import me.nebula.orbit.utils.anticheat.checks.ClickPatternCheck
 import me.nebula.orbit.utils.anticheat.checks.MovementCheck
-import me.nebula.orbit.utils.chat.mm
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
@@ -36,6 +38,8 @@ object AntiCheat {
     val movementKickThreshold: Int get() = PropertyStore[NetworkProperties.AC_MOVEMENT_KICK_THRESHOLD]
     val combatFlagThreshold: Int get() = PropertyStore[NetworkProperties.AC_COMBAT_FLAG_THRESHOLD]
     val combatKickThreshold: Int get() = PropertyStore[NetworkProperties.AC_COMBAT_KICK_THRESHOLD]
+    val lagCompensationMs: Int get() = PropertyStore[NetworkProperties.AC_LAG_COMPENSATION_MS]
+    val repeatOffenderMultiplier: Double get() = PropertyStore[NetworkProperties.AC_REPEAT_OFFENDER_MULTIPLIER]
 
     const val BYPASS_PERMISSION = "orbit.anticheat.bypass"
     private const val STAFF_ALERT_PERMISSION = "staff.inspect"
@@ -46,7 +50,9 @@ object AntiCheat {
     fun flag(uuid: UUID, type: String, weight: Int, flagThreshold: Int, kickThreshold: Int) {
         if (hasCachedPerm(uuid, BYPASS_PERMISSION)) return
         val tracker = tracker(uuid)
-        tracker.addViolation(type, weight)
+        val priorFlags = FlaggedPlayerStore.load(uuid)?.totalFlags ?: 0
+        val amplifiedWeight = if (priorFlags > 0) (weight * repeatOffenderMultiplier).toInt().coerceAtLeast(weight) else weight
+        tracker.addViolation(type, amplifiedWeight)
         val total = tracker.totalViolations()
         logger.debug { "Flag: $uuid | $type (weight=$weight, total=$total)" }
 
@@ -103,6 +109,9 @@ object AntiCheat {
             AntiCheatRegistry.register(GroundSpoofCheck)
             AntiCheatRegistry.register(InteractReachCheck)
             AntiCheatRegistry.register(KillAuraCheck)
+            AntiCheatRegistry.register(HeadshotCheck)
+            AntiCheatRegistry.register(KillDistanceCheck)
+            AntiCheatRegistry.register(ClickPatternCheck)
         }
 
         val node = EventNode.all("anticheat")

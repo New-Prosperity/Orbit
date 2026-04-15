@@ -8,9 +8,10 @@ import net.minestom.server.timer.Task
 class AuraManager(private val listener: CosmeticListener) {
 
     private var task: Task? = null
+    private var tickCounter = 0L
 
     fun install() {
-        task = repeat(5) { tick() }
+        task = repeat(1) { tick() }
     }
 
     fun uninstall() {
@@ -19,7 +20,9 @@ class AuraManager(private val listener: CosmeticListener) {
     }
 
     private fun tick() {
+        tickCounter++
         for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
+            if ((tickCounter + player.uuid.hashCode()) % AURA_INTERVAL_TICKS != 0L) continue
             val instance = player.instance ?: continue
             val data = CosmeticDataCache.get(player.uuid) ?: continue
             val auraId = data.equipped[CosmeticCategory.AURA.name] ?: continue
@@ -27,5 +30,9 @@ class AuraManager(private val listener: CosmeticListener) {
             val level = data.owned[auraId] ?: 1
             CosmeticApplier.spawnAuraParticles(instance, player.position, auraId, level, ownerUuid = player.uuid)
         }
+    }
+
+    private companion object {
+        const val AURA_INTERVAL_TICKS = 5L
     }
 }

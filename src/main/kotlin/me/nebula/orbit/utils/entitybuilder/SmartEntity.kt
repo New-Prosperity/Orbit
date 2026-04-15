@@ -3,7 +3,6 @@ package me.nebula.orbit.utils.entitybuilder
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.model.ActiveModel
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
-import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.EntityCreature
@@ -11,7 +10,6 @@ import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.entity.damage.Damage
-import net.minestom.server.entity.damage.DamageType
 import net.minestom.server.item.ItemStack
 import net.kyori.adventure.sound.Sound
 import net.minestom.server.sound.SoundEvent

@@ -2,7 +2,6 @@ package me.nebula.orbit.utils.nebulaworld
 
 import com.github.luben.zstd.Zstd
 import net.kyori.adventure.nbt.BinaryTagIO
-import net.kyori.adventure.nbt.CompoundBinaryTag
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.file.Path

@@ -3,6 +3,8 @@ package me.nebula.orbit.utils.statue
 import com.google.gson.reflect.TypeToken
 import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.logging.logger
+import me.nebula.ether.utils.parse.toUUIDOrNull
+import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.gravity.cosmetic.CosmeticCategory
 import me.nebula.gravity.cosmetic.CosmeticPlayerData
 import me.nebula.gravity.cosmetic.CosmeticStore
@@ -14,6 +16,7 @@ import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.ranking.rankingKey
 import me.nebula.gravity.rating.EloCalculator
 import me.nebula.gravity.rating.RatingStore
+import me.nebula.gravity.rating.isPlaced
 import me.nebula.gravity.sanction.SanctionStore
 import me.nebula.gravity.sanction.isBanned
 import me.nebula.orbit.Orbit
@@ -33,7 +36,6 @@ import me.nebula.orbit.utils.modelengine.model.standAloneModel
 import me.nebula.orbit.utils.modelengine.modeledEntity
 import me.nebula.orbit.utils.npc.Npc
 import me.nebula.orbit.utils.npc.npc
-import me.nebula.orbit.utils.particle.spawnParticleCircle
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.sound.playSound
@@ -63,7 +65,8 @@ data class StatueConfig(
     val rotationSpeed: Float = 0f,
     val showCosmetics: Boolean = true,
     val showHologram: Boolean = true,
-    val label: String? = null,
+    val labelKey: TranslationKey? = null,
+    val tier: Int? = null,
     val leaderboardSource: String = "rating:battleroyale",
     val leaderboardPeriod: String = "ALL_TIME",
     val autoManaged: Boolean = false,
@@ -100,7 +103,8 @@ data class SavedStatueConfig(
     val rotationSpeed: Float,
     val showCosmetics: Boolean,
     val showHologram: Boolean,
-    val label: String?,
+    val labelKey: String? = null,
+    val tier: Int? = null,
     val leaderboardSource: String,
     val leaderboardPeriod: String,
     val autoManaged: Boolean,
@@ -169,8 +173,9 @@ object StatueManager {
             config.instance.hologram(hologramPos) {
                 lineSpacing = 0.28
 
-                if (config.label != null) {
-                    line("<yellow><bold>${config.label}")
+                if (config.labelKey != null) {
+                    val labelText = Orbit.translations.require(config.labelKey.value, Orbit.translations.defaultLocale)
+                    line("${tierColor(config.tier)}<bold>$labelText")
                 }
 
                 line("<$rankColor><bold>$playerName")
@@ -182,7 +187,8 @@ object StatueManager {
                 val bestRating = ratingData?.ratings?.values?.maxByOrNull { it.rating }
                 if (bestRating != null) {
                     val tier = EloCalculator.tierOf(bestRating.rating)
-                    line("${tier.color}${tier.displayName} <gray>(${bestRating.rating})")
+                    val suffix = if (!bestRating.isPlaced()) "<gray>*" else ""
+                    line("${tier.color}${tier.displayName}$suffix <gray>(${bestRating.rating})")
                 }
             }
         } else null
@@ -421,7 +427,8 @@ object StatueManager {
                 rotationSpeed = 1f,
                 showCosmetics = true,
                 showHologram = true,
-                label = "#${podium.rank} Player",
+                labelKey = tierLabelKey(podium.rank),
+                tier = podium.rank,
                 leaderboardSource = currentLeaderboardSource,
                 leaderboardPeriod = currentLeaderboardPeriod,
                 autoManaged = true,
@@ -445,8 +452,9 @@ object StatueManager {
         val newHologram = config.instance.hologram(hologramPos) {
             lineSpacing = 0.28
 
-            if (config.label != null) {
-                line("<yellow><bold>${config.label}")
+            if (config.labelKey != null) {
+                val labelText = Orbit.translations.require(config.labelKey.value, Orbit.translations.defaultLocale)
+                line("${tierColor(config.tier)}<bold>$labelText")
             }
 
             val rankColor = rankData?.color ?: "white"
@@ -460,7 +468,8 @@ object StatueManager {
             val bestRating = ratingData?.ratings?.values?.maxByOrNull { it.rating }
             if (bestRating != null) {
                 val tier = EloCalculator.tierOf(bestRating.rating)
-                line("${tier.color}${tier.displayName} <gray>(${bestRating.rating})")
+                val suffix = if (!bestRating.isPlaced()) "<gray>*" else ""
+                line("${tier.color}${tier.displayName}$suffix <gray>(${bestRating.rating})")
             }
         }
 
@@ -565,24 +574,6 @@ object StatueManager {
                 }
             }
 
-            if (tickCounter % 10 == 0L) {
-                val label = config.label ?: ""
-                val particle = when {
-                    "#1" in label -> Particle.FLAME
-                    "#2" in label -> Particle.END_ROD
-                    "#3" in label -> Particle.COMPOSTER
-                    else -> null
-                }
-                if (particle != null) {
-                    config.instance.spawnParticleCircle(
-                        particle,
-                        config.position,
-                        radius = 1.5,
-                        points = 10,
-                        count = 1,
-                    )
-                }
-            }
         }
     }
 
@@ -596,7 +587,7 @@ object StatueManager {
         val allRatings = RatingStore.entries()
         return allRatings
             .flatMap { (uuid, data) ->
-                data.ratings.values.map { uuid to it.rating }
+                data.ratings.values.filter { it.isPlaced() }.map { uuid to it.rating }
             }
             .sortedByDescending { it.second }
             .distinctBy { it.first }
@@ -627,7 +618,8 @@ object StatueManager {
                         rotationSpeed = statue.config.rotationSpeed,
                         showCosmetics = statue.config.showCosmetics,
                         showHologram = statue.config.showHologram,
-                        label = statue.config.label,
+                        labelKey = statue.config.labelKey?.value,
+                        tier = statue.config.tier,
                         leaderboardSource = statue.config.leaderboardSource,
                         leaderboardPeriod = statue.config.leaderboardPeriod,
                         autoManaged = false,
@@ -648,7 +640,7 @@ object StatueManager {
             val saved: List<SavedStatueConfig> = GsonProvider.default.fromJson(json, type)
             var loadedCount = 0
             for (cfg in saved) {
-                val uuid = runCatching { UUID.fromString(cfg.playerUuid) }.getOrNull() ?: continue
+                val uuid = cfg.playerUuid.toUUIDOrNull() ?: continue
                 val pos = Pos(cfg.x, cfg.y, cfg.z, cfg.yaw, cfg.pitch)
                 val instance = Orbit.mode.defaultInstance
                 spawn(cfg.id, StatueConfig(
@@ -658,7 +650,8 @@ object StatueManager {
                     rotationSpeed = cfg.rotationSpeed,
                     showCosmetics = cfg.showCosmetics,
                     showHologram = cfg.showHologram,
-                    label = cfg.label,
+                    labelKey = cfg.labelKey?.let { TranslationKey(it) },
+                    tier = cfg.tier,
                     leaderboardSource = cfg.leaderboardSource,
                     leaderboardPeriod = cfg.leaderboardPeriod,
                     autoManaged = false,
@@ -678,6 +671,20 @@ private data class ModelStatueResult(
     val skinNpc: Npc,
     val modelOwner: StandaloneModelOwner,
 )
+
+private fun tierColor(tier: Int?): String = when (tier) {
+    1 -> "<gold>"
+    2 -> "<gray>"
+    3 -> "<#cd7f32>"
+    else -> "<yellow>"
+}
+
+private fun tierLabelKey(rank: Int): TranslationKey = when (rank) {
+    1 -> TranslationKey("orbit.statue.tier.first")
+    2 -> TranslationKey("orbit.statue.tier.second")
+    3 -> TranslationKey("orbit.statue.tier.third")
+    else -> TranslationKey("orbit.statue.tier.other")
+}
 
 internal data class TopPlayerEntry(
     val uuid: UUID,

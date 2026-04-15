@@ -8,7 +8,6 @@ import me.nebula.orbit.utils.modelengine.math.quatNormalize
 import me.nebula.orbit.utils.modelengine.math.quatSlerp
 import me.nebula.orbit.utils.modelengine.math.quatToEuler
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
-import net.minestom.server.coordinate.Vec
 import kotlin.math.acos
 import kotlin.math.asin
 import kotlin.math.atan2

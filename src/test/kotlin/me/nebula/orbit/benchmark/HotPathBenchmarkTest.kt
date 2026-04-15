@@ -1,5 +1,6 @@
 package me.nebula.orbit.benchmark
 
+import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.orbit.utils.mapvote.MapVoteManager
 import me.nebula.orbit.utils.mapvote.VoteCategory
 import me.nebula.orbit.utils.mapvote.VoteOption
@@ -28,10 +29,10 @@ class HotPathBenchmarkTest {
         val categories = listOf(
             VoteCategory(
                 id = "test",
-                nameKey = "test",
+                nameKey = TranslationKey("test"),
                 material = "PAPER",
                 defaultIndex = 0,
-                options = (0..4).map { VoteOption("opt-$it", "PAPER", it) },
+                options = (0..4).map { VoteOption(TranslationKey("opt-$it"), "PAPER", it) },
             )
         )
         val manager = MapVoteManager(categoriesProvider = { categories })
@@ -49,7 +50,7 @@ class HotPathBenchmarkTest {
     @Test
     fun `MapVoteManager recordSelection is allocation-light`() {
         val categories = listOf(
-            VoteCategory("test", "test", "PAPER", 0, listOf(VoteOption("a", "PAPER", 0))),
+            VoteCategory("test", TranslationKey("test"), "PAPER", 0, listOf(VoteOption(TranslationKey("a"), "PAPER", 0))),
         )
         val manager = MapVoteManager(categoriesProvider = { categories })
 

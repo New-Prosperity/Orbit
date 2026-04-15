@@ -5,7 +5,6 @@ import me.nebula.orbit.utils.commandbuilder.command
 import net.kyori.adventure.text.Component
 import net.minestom.server.command.builder.Command
 import net.minestom.server.coordinate.Pos
-import net.minestom.server.coordinate.Vec
 
 fun cinematicTestCommand(): Command = command("cinematic") {
 

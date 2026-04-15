@@ -23,7 +23,6 @@ import net.minestom.server.item.Material
 import net.minestom.server.tag.Tag
 import java.time.Duration
 import kotlin.math.cos
-import kotlin.math.min
 import kotlin.math.sin
 
 private val BOW_CHARGE_TAG = Tag.Long("vanilla:bow_charge")

@@ -6,12 +6,10 @@ import me.nebula.orbit.utils.botai.BotMovement
 import me.nebula.orbit.utils.botai.BotPersonalities
 import me.nebula.orbit.utils.botai.ExploreGoal
 import me.nebula.orbit.utils.botai.SurviveGoal
-import me.nebula.orbit.utils.itembuilder.itemStack
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
-import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.EquipmentSlot
 import net.minestom.server.entity.GameMode
 import net.minestom.server.entity.Player

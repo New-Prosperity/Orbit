@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.ceremony
 
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.utils.podium.PodiumDisplay
@@ -7,8 +9,6 @@ import me.nebula.orbit.utils.podium.podium
 import me.nebula.orbit.utils.stattracker.StatTracker
 import net.kyori.adventure.sound.Sound
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextDecoration
 import net.kyori.adventure.title.Title
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
@@ -22,7 +22,6 @@ import net.minestom.server.instance.Instance
 import net.minestom.server.sound.SoundEvent
 import net.minestom.server.timer.Task
 import java.time.Duration
-import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
 class Ceremony @PublishedApi internal constructor(
@@ -35,11 +34,11 @@ class Ceremony @PublishedApi internal constructor(
     private val personalStatsKeys: List<String>,
     private val personalStatsDelay: Int,
     private val spectateWinner: Boolean,
-    private val winnerTitleKey: String?,
-    private val loserTitleKey: String?,
-    private val drawTitleKey: String?,
-    private val winnerSubtitleKey: String?,
-    private val loserSubtitleKey: String?,
+    private val winnerTitleKey: TranslationKey?,
+    private val loserTitleKey: TranslationKey?,
+    private val drawTitleKey: TranslationKey?,
+    private val winnerSubtitleKey: TranslationKey?,
+    private val loserSubtitleKey: TranslationKey?,
     private val winnerSoundEvent: SoundEvent,
     private val loserSoundEvent: SoundEvent,
 ) {
@@ -234,11 +233,11 @@ class CeremonyBuilder @PublishedApi internal constructor(
     @PublishedApi internal val personalStatsKeys = mutableListOf<String>()
     @PublishedApi internal var personalStatsDelay: Int = 40
     @PublishedApi internal var spectateWinner: Boolean = true
-    @PublishedApi internal var winnerTitleKey: String? = "orbit.ceremony.title.winner"
-    @PublishedApi internal var loserTitleKey: String? = "orbit.ceremony.title.loser"
-    @PublishedApi internal var drawTitleKey: String? = "orbit.ceremony.title.draw"
-    @PublishedApi internal var winnerSubtitleKey: String? = "orbit.ceremony.subtitle.winner"
-    @PublishedApi internal var loserSubtitleKey: String? = "orbit.ceremony.subtitle.loser"
+    @PublishedApi internal var winnerTitleKey: TranslationKey? = "orbit.ceremony.title.winner".asTranslationKey()
+    @PublishedApi internal var loserTitleKey: TranslationKey? = "orbit.ceremony.title.loser".asTranslationKey()
+    @PublishedApi internal var drawTitleKey: TranslationKey? = "orbit.ceremony.title.draw".asTranslationKey()
+    @PublishedApi internal var winnerSubtitleKey: TranslationKey? = "orbit.ceremony.subtitle.winner".asTranslationKey()
+    @PublishedApi internal var loserSubtitleKey: TranslationKey? = "orbit.ceremony.subtitle.loser".asTranslationKey()
     @PublishedApi internal var winnerSoundEvent: SoundEvent = SoundEvent.UI_TOAST_CHALLENGE_COMPLETE
     @PublishedApi internal var loserSoundEvent: SoundEvent = SoundEvent.ENTITY_EXPERIENCE_ORB_PICKUP
 
@@ -274,17 +273,17 @@ class CeremonyBuilder @PublishedApi internal constructor(
     }
 
     fun winnerTitle(titleKey: String, subtitleKey: String? = null) {
-        winnerTitleKey = titleKey
-        winnerSubtitleKey = subtitleKey
+        winnerTitleKey = titleKey.asTranslationKey()
+        winnerSubtitleKey = subtitleKey?.asTranslationKey()
     }
 
     fun loserTitle(titleKey: String, subtitleKey: String? = null) {
-        loserTitleKey = titleKey
-        loserSubtitleKey = subtitleKey
+        loserTitleKey = titleKey.asTranslationKey()
+        loserSubtitleKey = subtitleKey?.asTranslationKey()
     }
 
     fun drawTitle(titleKey: String) {
-        drawTitleKey = titleKey
+        drawTitleKey = titleKey.asTranslationKey()
     }
 
     fun winnerSound(event: SoundEvent) { winnerSoundEvent = event }

@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.deathmessage
 
+import me.nebula.ether.utils.parse.toUUIDOrNull
 import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
@@ -10,7 +11,6 @@ import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.event.player.PlayerDeathEvent
 import net.minestom.server.item.ItemStack
 import net.minestom.server.tag.Tag
-import java.util.UUID
 
 private val LAST_DAMAGE_TYPE_TAG = Tag.String("util:death_msg:last_damage_type")
 private val LAST_ATTACKER_UUID_TAG = Tag.String("util:death_msg:last_attacker_uuid")
@@ -50,7 +50,7 @@ class DeathMessageHandler(private val config: DeathMessageConfig) {
             val cause = resolveCause(player)
             val template = config.messages[cause] ?: config.messages[DeathCause.GENERIC] ?: return@addListener
 
-            val killerUuid = player.getTag(LAST_ATTACKER_UUID_TAG)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            val killerUuid = player.getTag(LAST_ATTACKER_UUID_TAG)?.toUUIDOrNull()
             val killer = killerUuid?.let { uuid ->
                 MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid)
             }

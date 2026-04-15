@@ -2,7 +2,6 @@ package me.nebula.orbit.utils.mapgen
 
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.instance.block.Block
-import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt

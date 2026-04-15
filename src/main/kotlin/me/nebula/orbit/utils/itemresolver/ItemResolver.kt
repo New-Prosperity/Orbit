@@ -20,6 +20,11 @@ object ItemResolver {
         return Material.fromKey(key) ?: error("Unknown item key: $key")
     }
 
+    fun resolveMaterialOrNull(key: String): Material? {
+        CustomItemRegistry[key]?.let { return it.baseMaterial }
+        return Material.fromKey(key)
+    }
+
     fun isCustom(stack: ItemStack): Boolean = stack.getTag(ITEM_ID_TAG) != null
 
     fun customId(stack: ItemStack): String? = stack.getTag(ITEM_ID_TAG)

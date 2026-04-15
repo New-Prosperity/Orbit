@@ -2,8 +2,6 @@ package me.nebula.orbit.utils.vanilla.modules
 
 import me.nebula.orbit.utils.vanilla.ModuleConfig
 import me.nebula.orbit.utils.vanilla.VanillaModule
-import me.nebula.orbit.utils.vanilla.VanillaModules
-import net.minestom.server.entity.Player
 import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.entity.damage.DamageType
 import net.minestom.server.event.Event
@@ -11,8 +9,6 @@ import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerTickEvent
 import net.minestom.server.instance.Instance
 import net.minestom.server.potion.PotionEffect
-import net.minestom.server.timer.Task
-import java.time.Duration
 
 object PotionEffectsModule : VanillaModule {
 

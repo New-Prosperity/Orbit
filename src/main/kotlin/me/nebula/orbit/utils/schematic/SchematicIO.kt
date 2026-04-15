@@ -2,7 +2,6 @@ package me.nebula.orbit.utils.schematic
 
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.instance.Instance
-import java.nio.file.Files
 import java.nio.file.Path
 
 enum class SchematicFormat {

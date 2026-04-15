@@ -2,7 +2,6 @@ package me.nebula.orbit.utils.modelengine.interaction
 
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.behavior.SubHitboxBehavior
-import me.nebula.orbit.utils.modelengine.bone.ModelBone
 import me.nebula.orbit.utils.modelengine.model.ModeledEntity
 import me.nebula.orbit.utils.raytrace.lookDirection
 import net.minestom.server.coordinate.Vec

@@ -3,7 +3,6 @@ package me.nebula.orbit.progression.achievement
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.achievement.AchievementCategories
 import me.nebula.orbit.utils.achievement.AchievementCategory
-import me.nebula.orbit.utils.achievement.AchievementRarity
 import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.orbit.utils.achievement.progressBar
 import me.nebula.orbit.utils.gui.gui

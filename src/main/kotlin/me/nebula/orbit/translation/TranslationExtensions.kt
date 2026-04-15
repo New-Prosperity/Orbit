@@ -1,5 +1,6 @@
 package me.nebula.orbit.translation
 
+import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.localeCode
 import me.nebula.orbit.utils.chat.miniMessage
@@ -45,3 +46,15 @@ fun PlaceholderResolver.resolveTranslated(key: String, player: Player): String {
     val template = Orbit.translations.get(key, locale) ?: key
     return resolve(template, player)
 }
+
+fun Player.translate(key: TranslationKey, vararg args: Pair<String, String>): Component =
+    translate(key.value, *args)
+
+fun Player.translateRaw(key: TranslationKey, vararg args: Pair<String, String>): String =
+    translateRaw(key.value, *args)
+
+fun translateDefault(key: TranslationKey, vararg args: Pair<String, String>): Component =
+    translateDefault(key.value, *args)
+
+fun translateFor(uuid: UUID, key: TranslationKey, vararg args: Pair<String, String>): Component =
+    translateFor(uuid, key.value, *args)

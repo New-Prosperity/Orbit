@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.statue
 
 import com.hazelcast.query.Predicates
+import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.gravity.player.PlayerData
 import me.nebula.gravity.player.PlayerStore
 import me.nebula.orbit.Orbit
@@ -16,12 +17,14 @@ fun statueCommand(): Command = command("statue") {
         permission("orbit.statue")
         wordArgument("id")
         wordArgument("player")
-        stringArgument("label")
+        stringArgument("labelKey")
+        intArgument("tier")
 
         onPlayerExecute {
             val id = arg("id")
             val playerName = arg("player")
-            val label = argOrNull("label")
+            val labelKey = argOrNull("labelKey")
+            val tier = intArgOrNull("tier")
 
             val targetUuid = resolvePlayerUuid(playerName)
             if (targetUuid == null) {
@@ -37,7 +40,8 @@ fun statueCommand(): Command = command("statue") {
                 rotationSpeed = 0f,
                 showCosmetics = true,
                 showHologram = true,
-                label = label,
+                labelKey = labelKey?.let { TranslationKey(it) },
+                tier = tier,
             ))
 
             if (result != null) {

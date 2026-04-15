@@ -1,5 +1,6 @@
 package me.nebula.orbit.mode.game.battleroyale
 
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.orbit.utils.mapvote.MapVoteManager
 import me.nebula.orbit.utils.mapvote.VoteCategory
 import me.nebula.orbit.utils.mapvote.VoteOption
@@ -8,7 +9,7 @@ import java.util.UUID
 
 object BattleRoyaleVoteManager {
 
-    private val delegate = MapVoteManager(titleKey = "orbit.game.br.vote.title") {
+    private val delegate = MapVoteManager(titleKey = "orbit.game.br.vote.title".asTranslationKey()) {
         SeasonConfig.current.voteCategories.map { def ->
             VoteCategory(
                 id = def.id,

@@ -4,10 +4,8 @@ import me.nebula.orbit.Orbit
 import me.nebula.orbit.localeCode
 import me.nebula.orbit.translation.translateDefault
 import net.kyori.adventure.text.Component
-import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
-import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.Metadata

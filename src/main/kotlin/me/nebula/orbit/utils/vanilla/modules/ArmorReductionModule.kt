@@ -10,7 +10,6 @@ import net.minestom.server.event.EventNode
 import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.instance.Instance
 import kotlin.math.max
-import kotlin.math.min
 
 object ArmorReductionModule : VanillaModule {
 

@@ -236,9 +236,7 @@ object SkillCooldown {
         val entry = cooldowns.remove(key) ?: return
         entry.displayTask?.cancel()
         entry.bossBar?.let { bar ->
-            MinecraftServer.getConnectionManager().onlinePlayers
-                .firstOrNull { it.uuid == player.uuid }
-                ?.hideBossBar(bar)
+            MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(player.uuid)?.hideBossBar(bar)
         }
     }
 

@@ -11,7 +11,6 @@ import me.nebula.gravity.messaging.QueueProvisioningMessage
 import me.nebula.gravity.messaging.QueueRemovedMessage
 import me.nebula.gravity.property.NetworkProperties
 import me.nebula.gravity.property.PropertyStore
-import me.nebula.gravity.rank.RankManager
 import me.nebula.orbit.rankName
 import me.nebula.orbit.rankColor
 import me.nebula.orbit.rankPrefix
@@ -54,9 +53,7 @@ import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
-import me.nebula.gravity.cache.PlayerCache
 import me.nebula.gravity.leveling.LevelFormula
-import me.nebula.orbit.cached
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.counter.AnimatedCounterManager
 import me.nebula.orbit.utils.counter.Easing
@@ -173,8 +170,8 @@ class HubMode : ServerMode {
 
         tabList = liveTabList {
             refreshEvery(config.tabList.refreshSeconds.seconds)
-            header { player -> resolver.resolveTranslated(config.tabList.header, player) }
-            footer { player -> resolver.resolveTranslated(config.tabList.footer, player) }
+            header { player -> resolver.resolveTranslated(config.tabList.header.value, player) }
+            footer { player -> resolver.resolveTranslated(config.tabList.footer.value, player) }
         }
 
         setupHubTabEntries(handler)

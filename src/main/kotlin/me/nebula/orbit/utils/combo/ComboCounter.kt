@@ -2,7 +2,6 @@ package me.nebula.orbit.utils.combo
 
 import me.nebula.orbit.translation.translateDefault
 import me.nebula.orbit.utils.actionbar.ActionBarManager
-import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.vanish.VanishManager
 import net.kyori.adventure.bossbar.BossBar

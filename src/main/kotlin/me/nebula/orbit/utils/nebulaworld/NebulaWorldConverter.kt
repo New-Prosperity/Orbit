@@ -6,8 +6,6 @@ import net.minestom.server.instance.Chunk
 import net.minestom.server.instance.Section
 import net.minestom.server.instance.anvil.AnvilLoader
 import net.minestom.server.instance.block.Block
-import net.minestom.server.registry.RegistryKey
-import net.minestom.server.world.biome.Biome
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture

@@ -2,9 +2,7 @@ package me.nebula.orbit.utils.instancepool
 
 import me.nebula.orbit.translation.translateDefault
 import net.minestom.server.MinecraftServer
-import net.minestom.server.instance.Instance
 import net.minestom.server.instance.InstanceContainer
-import net.minestom.server.instance.LightingChunk
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 

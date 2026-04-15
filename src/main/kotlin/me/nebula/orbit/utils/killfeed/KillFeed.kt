@@ -1,7 +1,10 @@
 package me.nebula.orbit.utils.killfeed
 
+import me.nebula.ether.utils.translation.TranslationKey
+import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.orbit.mode.game.PlayerTracker
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.vanish.VanishManager
 import net.kyori.adventure.key.Key
 import net.kyori.adventure.sound.Sound
@@ -18,25 +21,52 @@ data class KillEvent(
     val distance: Double? = null,
 )
 
+enum class KillType { MELEE, RANGED, ENVIRONMENTAL, OTHER }
+
 object WeaponIcons {
-    private val icons = mapOf(
-        "wooden_sword" to "\u2694",
-        "stone_sword" to "\u2694",
-        "iron_sword" to "\u2694",
-        "diamond_sword" to "\u2694",
-        "netherite_sword" to "\u2694",
-        "bow" to "\uD83C\uDFF9",
-        "crossbow" to "\uD83C\uDFF9",
-        "trident" to "\uD83D\uDD31",
-    )
 
     private const val DEFAULT_ICON = "\u2620"
 
+    private val exactIcons = mapOf(
+        "fall" to "\u21A7",
+        "void" to "\u25CB",
+        "explosion" to "\u273A",
+        "fire" to "\u2668",
+        "drown" to "\u2248",
+        "magic" to "\u2726",
+    )
+
+    private val keywordIcons = listOf(
+        "sword" to "\u2694",
+        "axe" to "\u26CF",
+        "trident" to "\uD83D\uDD31",
+        "crossbow" to "\uD83C\uDFF9",
+        "bow" to "\uD83C\uDFF9",
+        "mace" to "\u2692",
+    )
+
     fun resolve(weaponKey: String?): String {
         if (weaponKey == null) return DEFAULT_ICON
-        return icons[weaponKey] ?: DEFAULT_ICON
+        val key = weaponKey.lowercase()
+        exactIcons[key]?.let { return it }
+        for ((keyword, icon) in keywordIcons) {
+            if (keyword in key) return icon
+        }
+        return DEFAULT_ICON
+    }
+
+    fun classify(weaponKey: String?, killer: Player?): KillType {
+        if (killer == null) return KillType.ENVIRONMENTAL
+        if (weaponKey == null) return KillType.OTHER
+        val key = weaponKey.lowercase()
+        if (exactIcons.containsKey(key)) return KillType.ENVIRONMENTAL
+        if ("bow" in key || "crossbow" in key || "trident" in key) return KillType.RANGED
+        if ("sword" in key || "axe" in key || "mace" in key) return KillType.MELEE
+        return KillType.OTHER
     }
 }
+
+private const val LONG_RANGE_THRESHOLD_BLOCKS = 30.0
 
 fun interface KillFeedRenderer {
     fun render(event: KillEvent, viewer: Player): net.kyori.adventure.text.Component
@@ -53,7 +83,7 @@ class KillFeed @PublishedApi internal constructor(
     private val multiKillWindowMillis: Long,
     private val multiKillMessages: Map<Int, String>,
     private val streakMessages: Map<Int, String>,
-    private val firstBloodKey: String?,
+    private val firstBloodKey: TranslationKey?,
     private val broadcastProvider: () -> Collection<Player>,
 ) {
 
@@ -136,17 +166,29 @@ class KillFeedBuilder @PublishedApi internal constructor() {
     @PublishedApi internal var renderer: KillFeedRenderer = KillFeedRenderer { event, viewer ->
         val killerName = event.killer?.username ?: "?"
         val icon = WeaponIcons.resolve(event.weaponKey)
-        viewer.translate("orbit.killfeed.default",
+        val type = WeaponIcons.classify(event.weaponKey, event.killer)
+        val distanceSuffix = event.distance
+            ?.takeIf { it >= LONG_RANGE_THRESHOLD_BLOCKS }
+            ?.let { viewer.translateRaw("orbit.killfeed.distance_suffix", "distance" to it.toInt().toString()) }
+            ?: ""
+        val key = when (type) {
+            KillType.MELEE -> "orbit.killfeed.melee"
+            KillType.RANGED -> "orbit.killfeed.ranged"
+            KillType.ENVIRONMENTAL -> "orbit.killfeed.environmental"
+            KillType.OTHER -> "orbit.killfeed.default"
+        }
+        viewer.translate(key,
             "killer" to killerName,
             "victim" to event.victim.username,
             "weapon" to icon,
+            "distance" to distanceSuffix,
         )
     }
     @PublishedApi internal val effects = mutableListOf<KillFeedEffect>()
     @PublishedApi internal var multiKillWindowMillis: Long = 5000L
     @PublishedApi internal val multiKillMessages = mutableMapOf<Int, String>()
     @PublishedApi internal val streakMessages = mutableMapOf<Int, String>()
-    @PublishedApi internal var firstBloodKey: String? = null
+    @PublishedApi internal var firstBloodKey: TranslationKey? = null
     @PublishedApi internal var broadcastProvider: () -> Collection<Player> = {
         MinecraftServer.getConnectionManager().onlinePlayers
     }
@@ -157,7 +199,7 @@ class KillFeedBuilder @PublishedApi internal constructor() {
     fun multiKillWindow(millis: Long) { multiKillWindowMillis = millis }
     fun multiKill(count: Int, translationKey: String) { multiKillMessages[count] = translationKey }
     fun streak(count: Int, translationKey: String) { streakMessages[count] = translationKey }
-    fun firstBlood(translationKey: String) { firstBloodKey = translationKey }
+    fun firstBlood(translationKey: String) { firstBloodKey = translationKey.asTranslationKey() }
     fun broadcastTo(provider: () -> Collection<Player>) { broadcastProvider = provider }
 
     @PublishedApi internal fun build(): KillFeed {

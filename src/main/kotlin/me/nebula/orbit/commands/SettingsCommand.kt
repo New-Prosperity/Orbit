@@ -7,7 +7,6 @@ import me.nebula.gravity.player.PreferenceStore
 import me.nebula.gravity.player.SetPreferenceProcessor
 import me.nebula.gravity.player.TogglePreferenceProcessor
 import me.nebula.gravity.rank.RankManager
-import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.gui.gui

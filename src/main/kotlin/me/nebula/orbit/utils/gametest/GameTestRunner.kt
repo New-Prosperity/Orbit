@@ -287,7 +287,7 @@ object GameTestRunner {
 
     private fun formatFailureContext(context: GameTestContext): List<String> {
         val lines = mutableListOf<String>()
-        val snap = runCatching { context.snapshot() }.getOrNull() ?: return lines
+        val snap = runCatching { context.snapshot() }.getOrNull() ?: return lines // noqa: runCatching{}.getOrNull() as null check
 
         lines.add("Phase: ${snap.phase ?: "N/A"}")
 

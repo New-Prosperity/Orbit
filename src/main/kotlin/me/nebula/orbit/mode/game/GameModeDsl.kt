@@ -8,7 +8,6 @@ import me.nebula.orbit.utils.hotbar.Hotbar
 import me.nebula.orbit.utils.killfeed.KillFeed
 import me.nebula.orbit.utils.kit.Kit
 import me.nebula.orbit.utils.matchresult.MatchResult
-import me.nebula.orbit.utils.matchresult.matchResult
 import me.nebula.orbit.utils.rewards.RewardDistributor
 import me.nebula.orbit.utils.spectatortoolkit.SpectatorToolkit
 import net.minestom.server.coordinate.Pos

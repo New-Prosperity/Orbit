@@ -3,6 +3,7 @@ package me.nebula.orbit.cosmetic
 import me.nebula.gravity.cosmetic.CosmeticCategory
 import me.nebula.gravity.cosmetic.CosmeticDefinition
 import me.nebula.gravity.cosmetic.CosmeticPlayerData
+import me.nebula.gravity.cosmetic.CosmeticRarity
 import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.gravity.cosmetic.EquipCosmeticProcessor
 import me.nebula.gravity.cosmetic.UnlockCosmeticProcessor
@@ -156,8 +157,10 @@ object CosmeticMenu {
         level: Int,
     ) = itemStack(material) {
         val rarityName = player.translateRaw("orbit.cosmetic.rarity.${definition.rarity.name.lowercase()}")
-        name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
-        lore("${definition.rarity.colorTag}$rarityName")
+        val rarityColor = definition.rarity.colorTag
+        val isLegendary = definition.rarity == CosmeticRarity.LEGENDARY
+        name("$rarityColor${player.translateRaw(definition.nameKey)}")
+        lore("$rarityColor<bold>$rarityName</bold>")
         lore(player.translateRaw(definition.descriptionKey))
         if (definition.maxLevel > 1) {
             lore("")
@@ -173,6 +176,7 @@ object CosmeticMenu {
             owned -> {
                 lore("<green>${player.translateRaw("orbit.cosmetic.status.owned")}")
                 lore("<yellow>${player.translateRaw("orbit.cosmetic.action.equip")}")
+                if (isLegendary) glowing()
             }
             else -> {
                 if (definition.price > 0) {
@@ -182,6 +186,7 @@ object CosmeticMenu {
                 } else {
                     lore("<red>${player.translateRaw("orbit.cosmetic.status.locked")}")
                 }
+                if (isLegendary) glowing()
             }
         }
         clean()

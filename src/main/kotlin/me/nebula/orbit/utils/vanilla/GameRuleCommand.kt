@@ -5,7 +5,6 @@ import me.nebula.orbit.utils.commandbuilder.command
 import net.minestom.server.command.CommandManager
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.command.builder.suggestion.SuggestionEntry
-import net.minestom.server.entity.Player
 
 private fun moduleArg(name: String = "module") = ArgumentType.Word(name).apply {
     setSuggestionCallback { _, _, suggestion ->
