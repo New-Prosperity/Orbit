@@ -203,6 +203,9 @@ object PackMerger {
         val json = JsonObject().apply {
             add("textures", JsonObject().apply {
                 model.textures.forEachIndexed { i, path -> addProperty(i.toString(), path) }
+                if (!has("particle") && model.textures.isNotEmpty()) {
+                    addProperty("particle", model.textures.first())
+                }
             })
             add("display", buildDisplayJson(model.display))
             add("elements", com.google.gson.JsonArray().apply {
