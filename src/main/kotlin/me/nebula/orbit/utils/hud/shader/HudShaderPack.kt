@@ -53,8 +53,8 @@ void main() {
         int blueVal = int(Color.b * 255.0 + 0.5);
         int redVal = int(Color.r * 255.0 + 0.5);
         int greenVal = int(Color.g * 255.0 + 0.5);
-        bool isGrayscale = abs(redVal - greenVal) <= 2 && abs(redVal - blueVal) <= 2;
-        if (blueVal >= 128 && !isGrayscale) {
+        bool isStandardColor = (redVal % 85 <= 1 || redVal % 85 >= 84) && (greenVal % 85 <= 1 || greenVal % 85 >= 84);
+        if (blueVal >= 128 && !isStandardColor) {
             hudFlag = 1;
             int encoded = blueVal - 128;
             int tierIndex = encoded >> 4;
