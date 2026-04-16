@@ -8,6 +8,7 @@ import me.nebula.orbit.utils.customcontent.block.BlockHitbox
 import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
+import me.nebula.orbit.utils.customcontent.pack.PackUploader
 import net.minestom.server.command.builder.Command
 import java.io.ByteArrayInputStream
 import java.util.zip.ZipInputStream
@@ -155,6 +156,29 @@ fun customContentCommand(resources: ResourceManager): Command = command("cc") {
                 ))
             } catch (e: Exception) {
                 player.sendMessage(player.translate("orbit.command.cc.pack.failed", "error" to (e.message ?: "")))
+            }
+        }
+    }
+
+    subCommand("upload") {
+        onPlayerExecute {
+            if (!PackUploader.isConfigured) {
+                player.sendMessage(player.translate("orbit.command.cc.upload.not_configured"))
+                return@onPlayerExecute
+            }
+            player.sendMessage(player.translate("orbit.command.cc.upload.starting"))
+            Thread.startVirtualThread {
+                try {
+                    val result = PackUploader.upload()
+                    player.sendMessage(player.translate("orbit.command.cc.upload.success",
+                        "size" to result.sizeKb.toString(),
+                        "sha" to result.sha1.take(8),
+                        "url" to result.url,
+                        "cache" to if (result.cachePurged) "purged" else "skipped",
+                    ))
+                } catch (e: Exception) {
+                    player.sendMessage(player.translate("orbit.command.cc.upload.failed", "error" to (e.message ?: "")))
+                }
             }
         }
     }
