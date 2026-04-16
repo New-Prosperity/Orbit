@@ -72,14 +72,6 @@ void main() {
             else cornerOffset = vec2(CELL_WIDTH, 0.0);
 
             pos = vec3(targetX + cornerOffset.x, baseY + cornerOffset.y, pos.z);
-        } else if (blueVal >= 32 && blueVal <= 64) {
-            int redVal = int(Color.r * 255.0 + 0.5);
-            int greenVal = int(Color.g * 255.0 + 0.5);
-            bool grayscale = abs(redVal - blueVal) <= 2 && abs(greenVal - blueVal) <= 2;
-            if (!grayscale) {
-                hudFlag = 2;
-                pos.xy = vec2(-10000.0);
-            }
         }
     }
 
