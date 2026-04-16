@@ -228,15 +228,12 @@ object HudFontProvider {
     private fun generateFontJson(ascent: Int): ByteArray {
         val json = JsonObject().apply {
             add("providers", JsonArray().apply {
-                add(buildSpaceProvider())
-
                 for ((tierIndex, tierHeight) in HEIGHT_TIERS.withIndex()) {
                     val tierSprites = HudSpriteRegistry.spritesForTier(tierIndex)
                     if (tierSprites.isEmpty()) continue
 
                     val rows = HudSpriteRegistry.tierRowCount(tierIndex)
                     val allColumns = tierSprites.flatMap { it.columns }
-                    val clampedAscent = ascent.coerceIn(-256, tierHeight)
 
                     val charRows = (0 until rows).map { row ->
                         buildString {
@@ -251,7 +248,7 @@ object HudFontProvider {
                         addProperty("type", "bitmap")
                         addProperty("file", "nebula:hud/tier_$tierIndex.png")
                         addProperty("height", tierHeight)
-                        addProperty("ascent", clampedAscent)
+                        addProperty("ascent", ascent)
                         add("chars", JsonArray().apply {
                             charRows.forEach { add(it) }
                         })
@@ -260,17 +257,5 @@ object HudFontProvider {
             })
         }
         return gson.toJson(json).toByteArray(Charsets.UTF_8)
-    }
-
-    private fun buildSpaceProvider(): JsonObject = JsonObject().apply {
-        addProperty("type", "space")
-        add("advances", JsonObject().apply {
-            for (i in POSITIVE_CHARS.indices) {
-                addProperty(POSITIVE_CHARS[i].toString(), POSITIVE_SHIFTS[i])
-            }
-            for (i in NEGATIVE_CHARS.indices) {
-                addProperty(NEGATIVE_CHARS[i].toString(), NEGATIVE_SHIFTS[i])
-            }
-        })
     }
 }
