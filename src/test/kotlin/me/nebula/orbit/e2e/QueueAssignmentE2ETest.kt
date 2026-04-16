@@ -10,11 +10,11 @@ import me.nebula.gravity.queue.QueueStore
 import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankStore
 import me.nebula.gravity.rating.RatingStore
+import me.nebula.gravity.server.LiveServer
+import me.nebula.gravity.server.LiveServerRegistry
 import me.nebula.gravity.server.ProtonClient
-import me.nebula.gravity.server.ProvisionStatus
 import me.nebula.gravity.server.ProvisionStore
-import me.nebula.gravity.server.ServerData
-import me.nebula.gravity.server.ServerStore
+import me.nebula.gravity.server.ServerType
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions
@@ -39,7 +39,6 @@ class QueueAssignmentE2ETest {
         )
         NebulaTestFixture.boot()
         NebulaTestFixture.registerStore(PoolConfigStore)
-        NebulaTestFixture.registerStore(ServerStore)
         NebulaTestFixture.registerStore(ProvisionStore)
         NebulaTestFixture.registerStore(QueueStore)
         NebulaTestFixture.registerStore(QueueAssignmentStore)
@@ -54,9 +53,9 @@ class QueueAssignmentE2ETest {
     fun reset() {
         QueueStore.clearForTest()
         QueueAssignmentStore.clearForTest()
-        ServerStore.clearForTest()
         PoolConfigStore.clearForTest()
         ProvisionStore.clearForTest()
+        LiveServerRegistry.all().forEach { LiveServerRegistry.deregister(it.name) }
     }
 
     @AfterAll
@@ -77,25 +76,18 @@ class QueueAssignmentE2ETest {
 
     private fun seedServer(
         gameMode: String = "br",
-        provisionUuid: String = "srv-${UUID.randomUUID()}",
+        name: String = "br-1",
         maxPlayers: Int = 16,
-    ): ServerData {
-        val server = ServerData(
-            provisionUuid = provisionUuid,
-            serverId = 1,
-            serverIdentifier = "id-$provisionUuid",
-            serverUuid = UUID.randomUUID().toString(),
-            name = "br-1",
-            templateId = 100,
-            nodeId = 1,
-            address = "127.0.0.1:25565",
+    ): LiveServer {
+        val server = LiveServer(
+            name = name,
+            address = "127.0.0.1",
             port = 25565,
-            status = ProvisionStatus.ACTIVE,
-            expiresAt = null,
+            serverType = ServerType.GAME,
             gameMode = gameMode,
             maxPlayers = maxPlayers,
         )
-        ServerStore.save(provisionUuid, server)
+        LiveServerRegistry.register(server)
         return server
     }
 
@@ -112,7 +104,7 @@ class QueueAssignmentE2ETest {
         assertEquals(1, assignments.size, "expected exactly one assignment")
         val assignment = assignments.single()
         assertEquals("br", assignment.gameMode)
-        assertEquals(server.provisionUuid, assignment.serverProvisionUuid)
+        assertEquals(server.name, assignment.serverProvisionUuid)
         assertEquals(player, assignment.partyLeader)
         assertEquals(listOf(player), assignment.members)
     }

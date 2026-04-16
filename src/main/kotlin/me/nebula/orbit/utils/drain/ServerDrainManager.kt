@@ -4,7 +4,7 @@ import me.nebula.ether.utils.duration.DurationFormatter
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.scheduling.ScheduledTask
 import me.nebula.ether.utils.scheduling.TaskScheduler
-import me.nebula.gravity.server.ServerStore
+import me.nebula.gravity.server.LiveServerRegistry
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.game.GameMode
 import me.nebula.orbit.mode.game.GamePhase
@@ -63,10 +63,9 @@ object ServerDrainManager {
 
     private fun tick() {
         try {
-            val pUuid = Orbit.provisionUuid
-            if (pUuid == null) return
-            val data = ServerStore.load(pUuid) ?: return
-            if (data.drain) onDrainActive() else onDrainCleared()
+            val name = Orbit.serverName
+            val live = LiveServerRegistry.get(name) ?: return
+            if (live.drain) onDrainActive() else onDrainCleared()
         } catch (e: Throwable) {
             logger.warn(e) { "Drain tick failed: ${e.message}" }
         }

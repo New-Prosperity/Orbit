@@ -38,7 +38,6 @@ import me.nebula.orbit.subscriber.installNetworkSubscribers
 import me.nebula.gravity.server.LiveServer
 import me.nebula.gravity.server.LiveServerRegistry
 import me.nebula.gravity.server.ServerType
-import me.nebula.gravity.server.ServerStore
 import me.nebula.gravity.mission.ActiveMission
 import me.nebula.gravity.mission.MissionData
 import me.nebula.gravity.mission.MissionStore
@@ -294,7 +293,6 @@ object Orbit {
                         +StatsStore
                         +RankingReportStore
                         +PlayerStatSummaryStore
-                        +ServerStore
                         +ProvisionStore
                         +ReconnectionStore
                         +CosmeticStore
