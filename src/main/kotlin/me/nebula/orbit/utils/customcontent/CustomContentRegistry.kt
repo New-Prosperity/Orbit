@@ -182,8 +182,13 @@ object CustomContentRegistry {
         val allRaw = (ModelEngine.rawResults() + generated)
             .distinctBy { it.blueprint.name }
 
-        val armorEntries = emptyMap<String, ByteArray>()
-        logger.info { "Armor shader pack disabled for 26.1 diagnostics" }
+        val armorEntries = if (!CustomArmorRegistry.isEmpty()) {
+            val armors = CustomArmorRegistry.all().toList()
+            logger.info { "Generating armor shader pack for ${armors.size} armors" }
+            ArmorShaderPack.generate(armors)
+        } else {
+            emptyMap()
+        }
 
         val hudShaderEntries = HudShaderPack.generate()
         logger.info { "Generated HUD shader pack: ${hudShaderEntries.size} entries" }
@@ -191,8 +196,8 @@ object CustomContentRegistry {
         val hudFontEntries = HudFontProvider.generate()
         logger.info { "Generated HUD font provider: ${hudFontEntries.size} entries" }
 
-        val effectsEntries = emptyMap<String, ByteArray>()
-        logger.info { "Effects shader pack disabled for 26.1 diagnostics" }
+        val effectsEntries = EffectsShaderPack.generate()
+        logger.info { "Generated effects shader pack: ${effectsEntries.size} entries" }
 
         val tooltipEntries = TooltipStylePack.generate()
         logger.info { "Generated tooltip style pack: ${tooltipEntries.size} entries" }

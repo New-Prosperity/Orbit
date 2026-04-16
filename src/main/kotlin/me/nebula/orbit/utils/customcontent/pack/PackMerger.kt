@@ -114,6 +114,24 @@ object PackMerger {
         if (modelTextures.isNotEmpty()) {
             val atlasJson = JsonObject().apply {
                 add("sources", JsonArray().apply {
+                    add(JsonObject().apply {
+                        addProperty("type", "minecraft:directory")
+                        addProperty("source", "block")
+                        addProperty("prefix", "block/")
+                    })
+                    add(JsonObject().apply {
+                        addProperty("type", "minecraft:directory")
+                        addProperty("source", "entity/conduit")
+                        addProperty("prefix", "entity/conduit/")
+                    })
+                    add(JsonObject().apply {
+                        addProperty("type", "minecraft:single")
+                        addProperty("resource", "minecraft:entity/bell/bell_body")
+                    })
+                    add(JsonObject().apply {
+                        addProperty("type", "minecraft:single")
+                        addProperty("resource", "minecraft:entity/enchantment/enchanting_table_book")
+                    })
                     for (tex in modelTextures) {
                         add(JsonObject().apply {
                             addProperty("type", "minecraft:single")
