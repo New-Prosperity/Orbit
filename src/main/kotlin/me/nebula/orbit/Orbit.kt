@@ -35,7 +35,6 @@ import me.nebula.gravity.host.HostTicketStore
 import me.nebula.gravity.map.GameMapStore
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.orbit.subscriber.installNetworkSubscribers
-import me.nebula.gravity.messaging.ServerDeregistrationMessage
 import me.nebula.gravity.server.LiveServer
 import me.nebula.gravity.server.LiveServerRegistry
 import me.nebula.gravity.server.ServerType
@@ -57,10 +56,7 @@ import me.nebula.gravity.ranking.RankingReportStore
 import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.reconnection.ReconnectionStore
 import me.nebula.gravity.sanction.SanctionStore
-import me.nebula.gravity.server.ConnectPlayerProcessor
-import me.nebula.gravity.server.DisconnectPlayerProcessor
 import me.nebula.gravity.server.ProvisionStore
-import me.nebula.gravity.server.SyncConnectedPlayersProcessor
 import me.nebula.gravity.session.SessionStore
 import me.nebula.gravity.stats.StatsStore
 import me.nebula.orbit.commands.installBasicCommands
@@ -226,12 +222,6 @@ object Orbit {
 
     fun cacheLocale(player: Player, locale: String) {
         player.setTag(LOCALE_TAG, locale)
-    }
-
-    fun syncConnectedPlayers() {
-        val pUuid = provisionUuid ?: return
-        val playerIds = MinecraftServer.getConnectionManager().onlinePlayers.mapTo(mutableSetOf()) { it.uuid }
-        ServerStore.executeOnKey(pUuid, SyncConnectedPlayersProcessor(playerIds))
     }
 
     fun deserialize(key: String, locale: String, vararg resolvers: TagResolver): Component =
@@ -621,10 +611,6 @@ object Orbit {
                 }
             }
 
-            val pUuid = provisionUuid
-            if (pUuid != null) {
-                ServerStore.executeOnKey(pUuid, ConnectPlayerProcessor(player.uuid))
-            }
         }
 
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
@@ -632,10 +618,6 @@ object Orbit {
             AchievementRegistry.unloadPlayer(event.player.uuid)
             PlayerCache.evict(event.player.uuid)
             cleanupReplayViewer(event.player.uuid)
-            val pUuid = provisionUuid
-            if (pUuid != null) {
-                ServerStore.executeOnKey(pUuid, DisconnectPlayerProcessor(event.player.uuid))
-            }
         }
 
         globalTasks += repeat(Duration.ofSeconds(5)) { OnlinePlayerCache.refresh() }
@@ -662,11 +644,6 @@ object Orbit {
         }
 
         installNetworkSubscribers(gameMode)
-
-        val pUuid = provisionUuid
-        if (pUuid != null) {
-            globalTasks += repeat(Duration.ofSeconds(5)) { syncConnectedPlayers() }
-        }
 
         Runtime.getRuntime().addShutdownHook(Thread {
             if (!shuttingDown.compareAndSet(false, true)) return@Thread
