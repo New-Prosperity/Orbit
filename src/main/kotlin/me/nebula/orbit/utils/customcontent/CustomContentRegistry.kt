@@ -182,13 +182,8 @@ object CustomContentRegistry {
         val allRaw = (ModelEngine.rawResults() + generated)
             .distinctBy { it.blueprint.name }
 
-        val armorEntries = if (!CustomArmorRegistry.isEmpty()) {
-            val armors = CustomArmorRegistry.all().toList()
-            logger.info { "Generating armor shader pack for ${armors.size} armors" }
-            ArmorShaderPack.generate(armors)
-        } else {
-            emptyMap()
-        }
+        val armorEntries = emptyMap<String, ByteArray>()
+        logger.info { "Armor shader pack disabled for 26.1 diagnostics" }
 
         val hudShaderEntries = HudShaderPack.generate()
         logger.info { "Generated HUD shader pack: ${hudShaderEntries.size} entries" }
