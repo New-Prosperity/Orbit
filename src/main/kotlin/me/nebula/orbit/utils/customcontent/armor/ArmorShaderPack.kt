@@ -42,7 +42,20 @@ object ArmorShaderPack {
     fun generate(armors: List<RegisteredArmor>): Map<String, ByteArray> {
         val entries = LinkedHashMap<String, ByteArray>()
 
-        logger.info { "CEM armor shaders disabled for 26.1 compatibility — skipping shader files" }
+        for ((packPath, resourcePath) in STATIC_FILES) {
+            val bytes = readResource("$SHADER_RESOURCE_BASE/$resourcePath")
+            if (bytes != null) {
+                entries[packPath] = bytes
+            } else {
+                logger.warn { "Missing static shader resource: $resourcePath" }
+            }
+        }
+
+        val armorGlsl = ArmorGlslGenerator.generateArmorGlsl(armors)
+        entries["assets/minecraft/shaders/include/mods/armor/armor.glsl"] = armorGlsl.toByteArray(Charsets.UTF_8)
+
+        val armorcordsGlsl = ArmorGlslGenerator.generateArmorcordsGlsl(armors)
+        entries["assets/minecraft/shaders/include/armorcords.glsl"] = armorcordsGlsl.toByteArray(Charsets.UTF_8)
 
         entries["assets/minecraft/textures/entity/equipment/humanoid/leather.png"] =
             generateLeatherLayer(armors, isLayerTwo = false)
