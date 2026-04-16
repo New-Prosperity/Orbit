@@ -36,7 +36,9 @@ import me.nebula.gravity.map.GameMapStore
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.orbit.subscriber.installNetworkSubscribers
 import me.nebula.gravity.messaging.ServerDeregistrationMessage
-import me.nebula.gravity.messaging.ServerRegistrationMessage
+import me.nebula.gravity.server.LiveServer
+import me.nebula.gravity.server.LiveServerRegistry
+import me.nebula.gravity.server.ServerType
 import me.nebula.gravity.server.ServerStore
 import me.nebula.gravity.mission.ActiveMission
 import me.nebula.gravity.mission.MissionData
@@ -643,17 +645,20 @@ object Orbit {
 
         server.start("0.0.0.0", port)
 
-        if (serverUuid.isNotEmpty()) {
-            logger.info { "Publishing ServerRegistrationMessage(serverUuid=$serverUuid, address=$serverHost, maxPlayers=${mode.maxPlayers}, gameMode=$gameMode)" }
-            NetworkMessenger.publish(ServerRegistrationMessage(serverUuid, serverHost, mode.maxPlayers, gameMode))
-            logger.info { "ServerRegistrationMessage published" }
-            globalTasks += repeat(Duration.ofSeconds(60)) {
-                runCatching {
-                    NetworkMessenger.publish(ServerRegistrationMessage(serverUuid, serverHost, mode.maxPlayers, gameMode))
-                }.onFailure { logger.warn(it) { "Registration heartbeat failed" } }
-            }
-        } else {
-            logger.warn { "P_SERVER_UUID is empty, skipping server registration" }
+        val serverName = env.optional("P_SERVER_NAME", "orbit-${serverUuid.take(8)}")
+        val serverTypeValue = if (gameMode == "limbo") ServerType.LIMBO else ServerType.GAME
+        LiveServerRegistry.register(LiveServer(
+            name = serverName,
+            address = serverHost ?: "127.0.0.1",
+            port = port,
+            serverType = serverTypeValue,
+            gameMode = gameMode,
+            maxPlayers = mode.maxPlayers,
+        ))
+        globalTasks += repeat(Duration.ofSeconds(LiveServerRegistry.heartbeatSeconds)) {
+            runCatching {
+                LiveServerRegistry.heartbeat(serverName) { it.copy(playerCount = MinecraftServer.getConnectionManager().onlinePlayers.size) }
+            }.onFailure { logger.warn(it) { "LiveServer heartbeat failed" } }
         }
 
         installNetworkSubscribers(gameMode)
