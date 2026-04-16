@@ -23,21 +23,10 @@ uniform sampler2D DissolveMaskSampler;
 
 in float sphericalVertexDistance;
 in float cylindricalVertexDistance;
-
-#ifdef PER_FACE_LIGHTING
-in vec4 vertexPerFaceColorBack;
-in vec4 vertexPerFaceColorFront;
-#else
 in vec4 vertexColor;
-#endif
-
 in vec2 texCoord0;
 in vec4 normal;
-
-#ifndef EMISSIVE
 in vec4 lightMapColor;
-#endif
-
 in vec4 tintColor;
 in vec2 uv;
 in vec4 cem_color;
@@ -52,10 +41,7 @@ flat in int markforremove;
 flat in int isTrim;
 flat in int armorType;
 flat in int isEnchantedArmor;
-
-#ifndef NO_OVERLAY
 in vec4 overlayColor;
-#endif
 
 out vec4 fragColor;
 
@@ -76,11 +62,7 @@ void main() {
         return;
     }
 
-#ifdef PER_FACE_LIGHTING
-    vec4 faceVertexColor = gl_FrontFacing ? vertexPerFaceColorFront : vertexPerFaceColorBack;
-#else
     vec4 faceVertexColor = vertexColor;
-#endif
 
 #ifdef DISSOLVE
     if (faceVertexColor.a < texture(DissolveMaskSampler, texCoord0).a) {
