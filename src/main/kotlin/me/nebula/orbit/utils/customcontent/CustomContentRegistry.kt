@@ -196,8 +196,8 @@ object CustomContentRegistry {
         val hudFontEntries = HudFontProvider.generate()
         logger.info { "Generated HUD font provider: ${hudFontEntries.size} entries" }
 
-        val effectsEntries = EffectsShaderPack.generate()
-        logger.info { "Generated effects shader pack: ${effectsEntries.size} entries" }
+        val effectsEntries = emptyMap<String, ByteArray>()
+        logger.info { "Effects shader pack disabled for 26.1 diagnostics" }
 
         val tooltipEntries = TooltipStylePack.generate()
         logger.info { "Generated tooltip style pack: ${tooltipEntries.size} entries" }
