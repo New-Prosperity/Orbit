@@ -32,6 +32,7 @@ in vec4 Color;
 in vec2 UV0;
 in ivec2 UV2;
 
+uniform sampler2D Sampler0;
 uniform sampler2D Sampler2;
 
 out float sphericalVertexDistance;
@@ -49,7 +50,9 @@ void main() {
     hudFlag = 0;
 
     bool isGui = ProjMat[2][3] == 0.0;
-    if (isGui) {
+    ivec2 texSize = textureSize(Sampler0, 0);
+    bool isHudAtlas = texSize.y <= 64;
+    if (isGui && isHudAtlas) {
         int blueVal = int(Color.b * 255.0 + 0.5);
         if (blueVal >= 128) {
             hudFlag = 1;
