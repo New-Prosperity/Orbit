@@ -54,6 +54,7 @@ import me.nebula.gravity.ranking.PlayerStatSummaryStore
 import me.nebula.gravity.ranking.RankingReportStore
 import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.reconnection.ReconnectionStore
+import me.nebula.gravity.resourcepack.ResourcePackStore
 import me.nebula.gravity.sanction.SanctionStore
 import me.nebula.gravity.server.ProvisionStore
 import me.nebula.gravity.session.SessionStore
@@ -295,6 +296,7 @@ object Orbit {
                         +PlayerStatSummaryStore
                         +ProvisionStore
                         +ReconnectionStore
+                        +ResourcePackStore
                         +CosmeticStore
                         +HostTicketStore
                         +HostRequestStore
