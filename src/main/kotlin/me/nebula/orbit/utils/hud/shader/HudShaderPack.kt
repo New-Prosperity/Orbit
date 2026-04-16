@@ -51,7 +51,8 @@ void main() {
 
     bool isGui = ProjMat[2][3] == 0.0;
     ivec2 texSize = textureSize(Sampler0, 0);
-    bool isHudAtlas = texSize.y <= 64;
+    vec4 marker = texelFetch(Sampler0, texSize - ivec2(1), 0);
+    bool isHudAtlas = abs(marker.r - 254.0/255.0) < 0.01 && marker.g < 0.01 && abs(marker.b - 254.0/255.0) < 0.01;
     if (isGui && isHudAtlas) {
         int blueVal = int(Color.b * 255.0 + 0.5);
         if (blueVal >= 128) {

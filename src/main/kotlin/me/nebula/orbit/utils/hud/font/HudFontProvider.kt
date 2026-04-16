@@ -139,6 +139,9 @@ object HudFontProvider {
             }
         }
 
+        g.color = Color(254, 0, 254, 255)
+        g.fillRect(atlasW - 1, atlasH - 1, 1, 1)
+
         g.dispose()
         val baos = ByteArrayOutputStream()
         ImageIO.write(image, "png", baos)
