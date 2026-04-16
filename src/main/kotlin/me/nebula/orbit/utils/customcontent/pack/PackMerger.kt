@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.customcontent.pack
 
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.logging.logger
@@ -106,6 +107,23 @@ object PackMerger {
             entries[path] = bytes
         }
 
+
+        val modelTextures = entries.keys
+            .filter { it.startsWith("assets/minecraft/textures/me_") && it.endsWith(".png") }
+            .map { it.removePrefix("assets/minecraft/textures/").removeSuffix(".png") }
+        if (modelTextures.isNotEmpty()) {
+            val atlasJson = JsonObject().apply {
+                add("sources", JsonArray().apply {
+                    for (tex in modelTextures) {
+                        add(JsonObject().apply {
+                            addProperty("type", "minecraft:single")
+                            addProperty("resource", "minecraft:$tex")
+                        })
+                    }
+                })
+            }
+            entries["assets/minecraft/atlases/blocks.json"] = GsonProvider.pretty.toJson(atlasJson).toByteArray(Charsets.UTF_8)
+        }
 
         val textures = entries.keys.count { it.endsWith(".png") }
         val models = entries.keys.count { it.contains("/models/") }
