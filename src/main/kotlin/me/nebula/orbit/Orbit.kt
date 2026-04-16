@@ -671,9 +671,9 @@ object Orbit {
         Runtime.getRuntime().addShutdownHook(Thread {
             if (!shuttingDown.compareAndSet(false, true)) return@Thread
 
-            if (serverUuid.isNotEmpty()) {
-                logger.info { "Publishing ServerDeregistrationMessage(serverUuid=$serverUuid)" }
-                runCatching { NetworkMessenger.publish(ServerDeregistrationMessage(serverUuid)) } // noqa: dangling runCatching
+            Thread.ofVirtual().name("shutdown-failsafe").start {
+                Thread.sleep(15_000)
+                Runtime.getRuntime().halt(1)
             }
 
             val players = MinecraftServer.getConnectionManager().onlinePlayers.toList()
@@ -682,7 +682,7 @@ object Orbit {
                 if (transferred > 0) Thread.sleep(2000)
 
                 for (player in MinecraftServer.getConnectionManager().onlinePlayers.toList()) {
-                    runCatching { player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid))) } // noqa: dangling runCatching
+                    runCatching { player.kick(deserialize("orbit.server_shutdown", localeOf(player.uuid))) }.onFailure { }
                 }
             }
             globalTasks.forEach { it.cancel() }
@@ -690,8 +690,9 @@ object Orbit {
             moduleRegistry.disableAll()
             mode.shutdown()
             PlayerCache.clear()
-            runCatching { Store.flushAll() } // noqa: dangling runCatching
-            app.stop().join()
+            runCatching { Store.flushAll() }.onFailure { }
+            runCatching { MinecraftServer.stopCleanly() }.onFailure { }
+            runCatching { app.stop().get(10, java.util.concurrent.TimeUnit.SECONDS) }.onFailure { }
         })
     }
 
