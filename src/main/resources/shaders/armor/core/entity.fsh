@@ -17,9 +17,6 @@
 
 uniform sampler2D Sampler0;
 
-#ifdef DISSOLVE
-uniform sampler2D DissolveMaskSampler;
-#endif
 
 in float sphericalVertexDistance;
 in float cylindricalVertexDistance;
@@ -62,15 +59,6 @@ void main() {
         return;
     }
 
-    vec4 faceVertexColor = vertexColor;
-
-#ifdef DISSOLVE
-    if (faceVertexColor.a < texture(DissolveMaskSampler, texCoord0).a) {
-        discard;
-    }
-    faceVertexColor.a = 1.0;
-#endif
-
     vec2 texSize = textureSize(Sampler0, 0);
     bool isHead = (texCoord0 * texSize).y <= 16;
     vec4 color = texture(Sampler0, texCoord0);
@@ -90,7 +78,7 @@ void main() {
         #moj_import <cem/frag_main_setup.glsl>
         modelSize /= res.y;
         modelSize *= cem_size;
-
+        
         mat3 rotMat = PIY25;
         if (bodypart != -1) {
             for (int cemId = 0; cemId < 2; cemId++) {
@@ -101,7 +89,7 @@ void main() {
                 switch (cemi) {
                     #moj_import <mods/armor/armor.glsl>
                 }
-
+                
             }
         } else {
             discard;
@@ -127,7 +115,7 @@ void main() {
             color.rgb += glint * vec3(0.45, 0.25, 0.8);
         }
     }
-
+    
     float opacity = ceil(color.a * 255);
     if (cem < 1) {
         #ifdef ALPHA_CUTOUT
@@ -138,14 +126,14 @@ void main() {
 
         if (opacity == 254) {
             float animationTime = GameTime * 1000;
-            color = mix(color * faceVertexColor, color, pow(sin(animationTime + texCoord0.x * 1.1), 2));
+            color = mix(color * vertexColor, color, pow(sin(animationTime + texCoord0.x * 1.1), 2));
         } else if (opacity==128){
 
-            color *= faceVertexColor;
+            color *= vertexColor;
 
         }else {
 
-            color *= faceVertexColor;
+            color *= vertexColor;
             #ifndef EMISSIVE
                 color *= lightMapColor;
             #endif

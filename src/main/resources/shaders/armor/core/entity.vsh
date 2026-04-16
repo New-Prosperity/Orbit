@@ -25,15 +25,7 @@ in vec2 UV0;
 in ivec2 UV1, UV2;
 in vec3 Normal;
 
-uniform sampler2D Sampler0;
-
-#ifndef NO_OVERLAY
-uniform sampler2D Sampler1;
-#endif
-
-#ifndef EMISSIVE
-uniform sampler2D Sampler2;
-#endif
+uniform sampler2D Sampler0,Sampler1, Sampler2;
 
 out float sphericalVertexDistance;
 out float cylindricalVertexDistance;
@@ -86,9 +78,9 @@ bool shouldApplyArmor(){
     int vertexColorId=colorId(Color.rgb);
     switch(vertexColorId){
         default:
-
+        
         #moj_import<armorcords.glsl>
-
+        
         return true;
     }
     return false;
@@ -96,7 +88,7 @@ bool shouldApplyArmor(){
 
 
 float getChannel(ivec2 rcords, ivec2 icords, int channel)
-{
+{       
     ivec2 cords = ivec2(rcords.x*64 + icords.x, rcords.y*32 + icords.y);
     vec4 color = texelFetch(Sampler0, cords, 0);
     if (channel == 0)
@@ -121,24 +113,18 @@ void main() {
     #moj_import <fog_reader.glsl>
     normal = ProjMat * ModelViewMat * vec4(Normal, 0.0);
 
+    
     #ifndef EMISSIVE
         lightMapColor = sample_lightmap(Sampler2, UV2);
-    #else
-        lightMapColor = vec4(1.0);
     #endif
-
-    #ifndef NO_OVERLAY
         overlayColor = texelFetch(Sampler1, UV1, 0);
-    #else
-        overlayColor = vec4(1.0);
-    #endif
 
     texCoord0 = UV0;
     tintColor = Color;
     emissive = 0.0;
     markforremove = 0;
     RelativeCords = ivec2(0);
-
+    
     bool isLeather = IS_LEATHER_LAYER;
     if (isLeather) {
         ivec2 atlasSize = textureSize(Sampler0, 0);
@@ -158,11 +144,7 @@ void main() {
     cem_pos1 = cem_pos2 = cem_pos3 = cem_pos4 = vec4(0);
     cem_uv1 = cem_uv2 = vec3(0);
     cem = cem_reverse = 0;
-    #ifndef EMISSIVE
-        cem_light = sample_lightmap(Sampler2, UV2);
-    #else
-        cem_light = vec4(1.0);
-    #endif
+    cem_light = sample_lightmap(Sampler2, UV2);
     cem_size = 1.0;
     cems = ivec4(-1);
     bodypart = -1;
@@ -211,7 +193,7 @@ void main() {
 
         int cube = (gl_VertexID / 24) % 10;
         bodypart = cube;
-
+        
         #moj_import <mods/armor/setup.glsl>
 
         #moj_import <mods/armor/armor.glsl>
