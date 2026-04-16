@@ -32,7 +32,6 @@ in vec4 Color;
 in vec2 UV0;
 in ivec2 UV2;
 
-uniform sampler2D Sampler0;
 uniform sampler2D Sampler2;
 
 out float sphericalVertexDistance;
@@ -50,11 +49,12 @@ void main() {
     hudFlag = 0;
 
     bool isGui = ProjMat[2][3] == 0.0;
-    vec4 marker = texelFetch(Sampler0, ivec2(0, 0), 0);
-    bool isHudAtlas = abs(marker.r - 254.0/255.0) < 0.01 && marker.g < 0.01 && abs(marker.b - 254.0/255.0) < 0.01;
-    if (isGui && isHudAtlas) {
+    if (isGui) {
         int blueVal = int(Color.b * 255.0 + 0.5);
-        if (blueVal >= 128) {
+        int redVal = int(Color.r * 255.0 + 0.5);
+        int greenVal = int(Color.g * 255.0 + 0.5);
+        bool isGrayscale = abs(redVal - greenVal) <= 2 && abs(redVal - blueVal) <= 2;
+        if (blueVal >= 128 && !isGrayscale) {
             hudFlag = 1;
             int encoded = blueVal - 128;
             int tierIndex = encoded >> 4;
