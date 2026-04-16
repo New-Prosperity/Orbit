@@ -16,7 +16,7 @@ object PackWriter {
         packDescription: String,
         models: Map<String, GeneratedBoneModel>,
         textureBytes: Map<String, ByteArray>,
-        packFormat: Int = 75,
+        packFormat: Int = 84,
     ): ByteArray {
         val baos = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zip ->

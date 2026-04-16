@@ -43,7 +43,7 @@ object PackMerger {
         modelsDirectory: String,
         modelEngineRawResults: List<RawGenerationResult>,
         armorShaderEntries: Map<String, ByteArray> = emptyMap(),
-        packFormat: Int = 75,
+        packFormat: Int = 84,
     ): MergeResult {
         val entries = LinkedHashMap<String, ByteArray>()
 

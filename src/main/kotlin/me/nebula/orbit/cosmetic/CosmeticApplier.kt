@@ -193,6 +193,15 @@ object CosmeticApplier {
                 val to = parseColor(resolved["toColor"]) ?: from
                 base.withProperties(from, to, scale)
             }
+            is Particle.SculkCharge -> {
+                val roll = resolved["roll"]?.toFloatOrNull() ?: 0f
+                base.withRoll(roll)
+            }
+            is Particle.Trail -> {
+                val color = parseColor(resolved["color"]) ?: Color(255, 255, 255)
+                val duration = resolved["duration"]?.toIntOrNull() ?: 20
+                base.withProperties(base.target(), color, duration)
+            }
             else -> base
         }
     }

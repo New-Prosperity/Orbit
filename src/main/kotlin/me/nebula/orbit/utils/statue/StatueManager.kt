@@ -47,7 +47,6 @@ import net.minestom.server.entity.Player
 import net.minestom.server.entity.PlayerSkin
 import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.instance.Instance
-import net.minestom.server.particle.Particle
 import net.minestom.server.sound.SoundEvent
 import net.minestom.server.timer.Task
 import java.time.Duration

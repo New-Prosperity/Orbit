@@ -50,6 +50,7 @@ import me.nebula.gravity.queue.PoolConfigStore
 import me.nebula.gravity.queue.QueueStore
 import me.nebula.gravity.rank.PlayerRankStore
 import me.nebula.gravity.rank.RankStore
+import me.nebula.gravity.ranking.PlayerStatSummaryStore
 import me.nebula.gravity.ranking.RankingReportStore
 import me.nebula.gravity.ranking.RankingStore
 import me.nebula.gravity.reconnection.ReconnectionStore
@@ -300,6 +301,7 @@ object Orbit {
                         +RankingStore
                         +StatsStore
                         +RankingReportStore
+                        +PlayerStatSummaryStore
                         +ServerStore
                         +ProvisionStore
                         +ReconnectionStore

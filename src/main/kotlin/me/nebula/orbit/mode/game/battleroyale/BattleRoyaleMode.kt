@@ -50,7 +50,6 @@ import me.nebula.orbit.utils.mapgen.MapPresets
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.utils.matchresult.matchResult
 import me.nebula.orbit.utils.deathrecap.DamageEntry
-import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.spectatortoolkit.SpectatorTargetStats
 import me.nebula.orbit.utils.spectatortoolkit.SpectatorToolkit

@@ -7,6 +7,7 @@ import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.text.minimessage.tag.Tag
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
+import net.kyori.adventure.text.`object`.ObjectContents
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
@@ -19,10 +20,17 @@ private val spriteTagResolver = TagResolver.resolver("sprite") { args, _ ->
     Tag.inserting(Component.text(sprite.columns.first().char.toString()).font(HUD_FONT))
 }
 
+private val vanillaSpriteTagResolver = TagResolver.resolver("vsprite") { args, _ ->
+    val id = args.popOr("vsprite tag requires a sprite id").value()
+    val atlas = if (args.hasNext()) Key.key(args.pop().value()) else Key.key("minecraft", "sprite")
+    Tag.inserting(Component.`object`(ObjectContents.sprite(atlas, Key.key(id))))
+}
+
 val miniMessage: MiniMessage = MiniMessage.builder()
     .tags(TagResolver.builder()
         .resolver(TagResolver.standard())
         .resolver(spriteTagResolver)
+        .resolver(vanillaSpriteTagResolver)
         .build())
     .build()
 
