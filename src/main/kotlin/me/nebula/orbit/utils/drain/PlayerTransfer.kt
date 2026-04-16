@@ -3,7 +3,7 @@ package me.nebula.orbit.utils.drain
 import me.nebula.ether.utils.logging.logger
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.TransferPlayerMessage
-import me.nebula.gravity.server.ServerData
+import me.nebula.gravity.server.LiveServer
 import me.nebula.orbit.Orbit
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
@@ -13,7 +13,7 @@ object PlayerTransfer {
 
     private val logger = logger("PlayerTransfer")
 
-    fun transferToHub(player: Player, target: ServerData? = null): Boolean {
+    fun transferToHub(player: Player, target: LiveServer? = null): Boolean {
         val resolved = target ?: HubSelector.selectFallback() ?: run {
             logger.warn { "No hub or limbo available to transfer ${player.username}" }
             return false
@@ -22,7 +22,7 @@ object PlayerTransfer {
         return publishTransfer(player.uuid, resolved.name)
     }
 
-    fun transferToHubByUuid(uuid: UUID, target: ServerData? = null): Boolean {
+    fun transferToHubByUuid(uuid: UUID, target: LiveServer? = null): Boolean {
         val resolved = target ?: HubSelector.selectFallback() ?: run {
             logger.warn { "No hub or limbo available to transfer $uuid" }
             return false
@@ -47,9 +47,11 @@ object PlayerTransfer {
     }
 
     private fun despawnCosmetics(player: Player) {
-        runCatching { Orbit.cosmetics.despawnAll(player) } // noqa: dangling runCatching
+        runCatching { Orbit.cosmetics.despawnAll(player) }.onFailure { }
     }
 
     private fun publishTransfer(uuid: UUID, serverName: String): Boolean =
-        runCatching { NetworkMessenger.publish(TransferPlayerMessage(uuid, serverName)) }.onFailure { logger.warn(it) { "Failed to publish transfer for $uuid" } }.isSuccess
+        runCatching { NetworkMessenger.publish(TransferPlayerMessage(uuid, serverName)) }
+            .onFailure { logger.warn(it) { "Failed to publish transfer for $uuid" } }
+            .isSuccess
 }
