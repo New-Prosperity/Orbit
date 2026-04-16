@@ -25,11 +25,32 @@ in vec2 UV0;
 in ivec2 UV1, UV2;
 in vec3 Normal;
 
-uniform sampler2D Sampler0,Sampler1, Sampler2;
+uniform sampler2D Sampler0;
+
+#ifndef NO_OVERLAY
+uniform sampler2D Sampler1;
+#endif
+
+#ifndef EMISSIVE
+uniform sampler2D Sampler2;
+#endif
 
 out float sphericalVertexDistance;
 out float cylindricalVertexDistance;
-out vec4 vertexColor, tintColor, lightMapColor;
+
+#ifdef PER_FACE_LIGHTING
+out vec4 vertexPerFaceColorBack;
+out vec4 vertexPerFaceColorFront;
+#else
+out vec4 vertexColor;
+#endif
+
+out vec4 tintColor;
+
+#ifndef EMISSIVE
+out vec4 lightMapColor;
+#endif
+
 out vec2 texCoord0;
 out vec4 normal;
 out vec4 cem_pos1, cem_pos2, cem_pos3, cem_pos4;
@@ -37,7 +58,9 @@ out vec3 cem_glPos;
 out vec3 cem_uv1, cem_uv2;
 out vec4 cem_lightMapColor;
 
+#ifndef NO_OVERLAY
 out vec4 overlayColor;
+#endif
 
 flat out int cem;
 flat out int bodypart;
@@ -78,9 +101,9 @@ bool shouldApplyArmor(){
     int vertexColorId=colorId(Color.rgb);
     switch(vertexColorId){
         default:
-        
+
         #moj_import<armorcords.glsl>
-        
+
         return true;
     }
     return false;
@@ -88,7 +111,7 @@ bool shouldApplyArmor(){
 
 
 float getChannel(ivec2 rcords, ivec2 icords, int channel)
-{       
+{
     ivec2 cords = ivec2(rcords.x*64 + icords.x, rcords.y*32 + icords.y);
     vec4 color = texelFetch(Sampler0, cords, 0);
     if (channel == 0)
@@ -113,18 +136,21 @@ void main() {
     #moj_import <fog_reader.glsl>
     normal = ProjMat * ModelViewMat * vec4(Normal, 0.0);
 
-    
+
     #ifndef EMISSIVE
         lightMapColor = sample_lightmap(Sampler2, UV2);
     #endif
+
+    #ifndef NO_OVERLAY
         overlayColor = texelFetch(Sampler1, UV1, 0);
+    #endif
 
     texCoord0 = UV0;
     tintColor = Color;
     emissive = 0.0;
     markforremove = 0;
     RelativeCords = ivec2(0);
-    
+
     bool isLeather = IS_LEATHER_LAYER;
     if (isLeather) {
         ivec2 atlasSize = textureSize(Sampler0, 0);
@@ -139,24 +165,34 @@ void main() {
             texCoord0 += vec2(offset.x * cords.x, offset.y * cords.y);
         }
     }
-    vec4 light = minecraft_mix_light(Light0_Direction, Light1_Direction, Normal, tintColor);
 
-    cem_pos1 = cem_pos2 = cem_pos3 = cem_pos4 = vec4(0);
-    cem_uv1 = cem_uv2 = vec3(0);
-    cem = cem_reverse = 0;
-    cem_light = sample_lightmap(Sampler2, UV2);
-    cem_size = 1.0;
-    cems = ivec4(-1);
-    bodypart = -1;
-
-    #ifdef NO_CARDINAL_LIGHTING
+    #ifdef PER_FACE_LIGHTING
+        vec2 light = minecraft_compute_light(Light0_Direction, Light1_Direction, Normal);
+        vec4 baseLightBack = minecraft_mix_light_separate(-light, tintColor);
+        vec4 baseLightFront = minecraft_mix_light_separate(light, tintColor);
+        vertexPerFaceColorBack = baseLightBack;
+        vertexPerFaceColorFront = baseLightFront;
+    #elif defined(NO_CARDINAL_LIGHTING)
         vertexColor = Color;
     #else
+        vec4 light = minecraft_mix_light(Light0_Direction, Light1_Direction, Normal, tintColor);
         vertexColor = light;
         if(isLeather){
             vertexColor *= ColorModulator;
         }
     #endif
+
+    cem_pos1 = cem_pos2 = cem_pos3 = cem_pos4 = vec4(0);
+    cem_uv1 = cem_uv2 = vec3(0);
+    cem = cem_reverse = 0;
+    #ifndef EMISSIVE
+        cem_light = sample_lightmap(Sampler2, UV2);
+    #else
+        cem_light = vec4(1.0);
+    #endif
+    cem_size = 1.0;
+    cems = ivec4(-1);
+    bodypart = -1;
 
     #ifdef APPLY_TEXTURE_MATRIX
         texCoord0 = (TextureMat * vec4(UV0, 0.0, 1.0)).xy;
@@ -177,7 +213,9 @@ void main() {
         if(RVC_0==0 && RVC_1==0 && RVC_2==0){
             markforremove = 1;
             gl_Position = vec4(0,0,0,1);
-            overlayColor = vec4(0,0,0,0);
+            #ifndef NO_OVERLAY
+                overlayColor = vec4(0,0,0,0);
+            #endif
             return;
         }
         vec2 texSize = textureSize(Sampler0, 0);
@@ -193,7 +231,7 @@ void main() {
 
         int cube = (gl_VertexID / 24) % 10;
         bodypart = cube;
-        
+
         #moj_import <mods/armor/setup.glsl>
 
         #moj_import <mods/armor/armor.glsl>
@@ -212,7 +250,9 @@ void main() {
             if(removeAll==1){
                 markforremove = 1;
                 gl_Position = vec4(0,0,0,1);
-                overlayColor = vec4(0,0,0,0);
+                #ifndef NO_OVERLAY
+                    overlayColor = vec4(0,0,0,0);
+                #endif
                 return;
             }else{
               bodypart = -1;
