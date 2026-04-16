@@ -149,11 +149,7 @@ object HudFontProvider {
                 generateTierAtlas(tierIndex, tierHeight, tierSprites)
         }
 
-        val yPositions = collectUniqueYPositions()
-        for (guiY in yPositions) {
-            val fontKey = fontKeyForY(guiY)
-            entries["assets/minecraft/font/$fontKey.json"] = generateFontJson(ascentForY(guiY))
-        }
+        entries["assets/minecraft/font/hud.json"] = generateFontJson(8)
 
         return entries
     }
