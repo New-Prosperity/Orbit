@@ -73,7 +73,7 @@ object PackUploader {
 
         val existing = ResourcePackStore.load(packId)
         val updated = existing?.copy(url = publicUrl, hash = sha1)
-            ?: ResourcePackData(id = packId, url = publicUrl, hash = sha1)
+            ?: ResourcePackData(id = packId, url = publicUrl, hash = sha1, servers = listOf(""), exactMatch = false)
         ResourcePackStore.save(packId, updated)
         log.info { "ResourcePackStore updated: id=$packId, url=$publicUrl, sha1=${sha1.take(8)}..." }
 
