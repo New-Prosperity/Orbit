@@ -1,91 +1,102 @@
 package me.nebula.orbit.utils.hud
 
+import me.nebula.orbit.utils.hud.font.HudFontProvider
 import me.nebula.orbit.utils.hud.font.HudSpriteRegistry
 import net.kyori.adventure.key.Key
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.JoinConfiguration
-import net.kyori.adventure.text.format.TextColor
+import net.kyori.adventure.text.format.NamedTextColor
 
 object HudRenderer {
 
-    val HUD_FONT: Key = Key.key("minecraft", "hud")
-
     fun render(hud: PlayerHud): Component {
         val parts = mutableListOf<Component>()
+        var cursorX = 0
 
         for (element in hud.layout.elements) {
             if (!hud.isElementVisible(element.id)) continue
             when (element) {
-                is SpriteElement -> renderSprite(parts, element)
-                is BarElement -> renderBar(parts, element, hud)
-                is TextElement -> renderText(parts, element, hud)
-                is GroupElement -> renderGroup(parts, element, hud)
-                is AnimatedSpriteElement -> renderAnimated(parts, element, hud)
+                is SpriteElement -> renderSprite(parts, element, cursorX).also { cursorX = it }
+                is BarElement -> renderBar(parts, element, hud, cursorX).also { cursorX = it }
+                is TextElement -> renderText(parts, element, hud, cursorX).also { cursorX = it }
+                is GroupElement -> renderGroup(parts, element, hud, cursorX).also { cursorX = it }
+                is AnimatedSpriteElement -> renderAnimated(parts, element, hud, cursorX).also { cursorX = it }
             }
         }
 
         return Component.join(JoinConfiguration.noSeparators(), parts)
     }
 
-    private fun computePosition(element: HudElement): Pair<Float, Float> {
-        val absX = (element.anchor.nx + element.offsetX).coerceIn(0f, 1f)
-        val absY = (element.anchor.ny + element.offsetY).coerceIn(0f, 1f)
-        return absX to absY
+    private fun elementGuiY(element: HudElement): Int =
+        element.anchor.guiY + element.offsetY
+
+    private fun elementGuiX(element: HudElement): Int =
+        element.anchor.guiX + element.offsetX
+
+    private fun fontKeyFor(element: HudElement): Key =
+        Key.key("minecraft", HudFontProvider.fontKeyForY(elementGuiY(element)))
+
+    private fun emitCursorShift(parts: MutableList<Component>, from: Int, to: Int, font: Key) {
+        val delta = to - from
+        if (delta == 0) return
+        val shiftChars = HudFontProvider.buildShiftChars(delta)
+        if (shiftChars.isNotEmpty()) {
+            parts += Component.text(shiftChars)
+                .color(NamedTextColor.WHITE)
+                .font(font)
+        }
     }
 
-    private fun encodeColor(x: Float, y: Float, tierIndex: Int, charOffset: Int): TextColor {
-        val b = 128 + (tierIndex.coerceIn(0, 7) shl 4) + charOffset.coerceIn(0, 15)
-        return TextColor.color(
-            (x * 255).toInt().coerceIn(0, 255),
-            (y * 255).toInt().coerceIn(0, 255),
-            b,
-        )
-    }
-
-    private fun spriteColumnComponent(spriteId: String, columnIndex: Int, x: Float, y: Float, charOffset: Int): Component {
-        val sprite = HudSpriteRegistry.get(spriteId)
-        val ch = sprite.columns[columnIndex].char
-        return Component.text(ch.toString())
-            .color(encodeColor(x, y, sprite.tierIndex, charOffset))
-            .font(HUD_FONT)
-    }
-
-    private fun emitSprite(parts: MutableList<Component>, spriteId: String, x: Float, y: Float, baseOffset: Int) {
+    private fun emitSpriteChars(
+        parts: MutableList<Component>,
+        spriteId: String,
+        font: Key,
+    ): Int {
         val sprite = HudSpriteRegistry.get(spriteId)
         for (col in sprite.columns) {
             parts += Component.text(col.char.toString())
-                .color(encodeColor(x, y, sprite.tierIndex, baseOffset + col.columnIndex))
-                .font(HUD_FONT)
+                .color(NamedTextColor.WHITE)
+                .font(font)
         }
+        return sprite.columns.size * HudSpriteRegistry.CELL_WIDTH
     }
 
-    private fun renderSprite(parts: MutableList<Component>, element: SpriteElement) {
-        val (x, y) = computePosition(element)
-        emitSprite(parts, element.spriteId, x, y, 0)
+    private fun renderSprite(parts: MutableList<Component>, element: SpriteElement, cursorX: Int): Int {
+        val font = fontKeyFor(element)
+        val targetX = elementGuiX(element)
+        emitCursorShift(parts, cursorX, targetX, font)
+        val width = emitSpriteChars(parts, element.spriteId, font)
+        return targetX + width
     }
 
-    private fun renderBar(parts: MutableList<Component>, element: BarElement, hud: PlayerHud) {
-        val (baseX, baseY) = computePosition(element)
+    private fun renderBar(parts: MutableList<Component>, element: BarElement, hud: PlayerHud, cursorX: Int): Int {
+        val font = fontKeyFor(element)
+        val targetX = elementGuiX(element)
+        emitCursorShift(parts, cursorX, targetX, font)
+
         val value = (hud.values[element.id] as? Number)?.toInt() ?: 0
         val filled = value.coerceIn(0, element.segments)
+        var x = targetX
 
-        val bgCols = HudSpriteRegistry.columnCount(element.bgSprite)
-        emitSprite(parts, element.bgSprite, baseX, baseY, 0)
+        x += emitSpriteChars(parts, element.bgSprite, font)
 
         for (i in 0 until element.segments) {
             val sprite = if (i < filled) element.fillSprite else element.emptySprite
-            val segCols = HudSpriteRegistry.columnCount(sprite)
-            val offset = bgCols + i * segCols
-            emitSprite(parts, sprite, baseX, baseY, offset)
+            x += emitSpriteChars(parts, sprite, font)
         }
+
+        return x
     }
 
-    private fun renderText(parts: MutableList<Component>, element: TextElement, hud: PlayerHud) {
-        val (baseX, baseY) = computePosition(element)
-        val text = hud.values[element.id]?.toString() ?: return
+    private fun renderText(parts: MutableList<Component>, element: TextElement, hud: PlayerHud, cursorX: Int): Int {
+        val font = fontKeyFor(element)
+        val targetX = elementGuiX(element)
+        emitCursorShift(parts, cursorX, targetX, font)
 
-        var offset = 0
+        val text = hud.values[element.id]?.toString() ?: return targetX
+        var x = targetX
         var i = 0
+
         while (i < text.length) {
             if (text[i] == '{') {
                 val end = text.indexOf('}', i + 1)
@@ -93,8 +104,7 @@ object HudRenderer {
                     val spriteId = text.substring(i + 1, end)
                     val def = HudSpriteRegistry.getOrNull(spriteId)
                     if (def != null) {
-                        emitSprite(parts, spriteId, baseX, baseY, offset)
-                        offset += def.columns.size
+                        x += emitSpriteChars(parts, spriteId, font)
                     }
                     i = end + 1
                     continue
@@ -102,35 +112,49 @@ object HudRenderer {
             }
             val ch = text[i]
             if (ch == ' ') {
-                offset++
+                x += HudSpriteRegistry.CELL_WIDTH
+                emitCursorShift(parts, x - HudSpriteRegistry.CELL_WIDTH, x, font)
             } else {
                 val spriteId = charToSpriteId(ch)
                 if (spriteId != null) {
-                    emitSprite(parts, spriteId, baseX, baseY, offset)
-                    offset += HudSpriteRegistry.columnCount(spriteId)
+                    x += emitSpriteChars(parts, spriteId, font)
                 }
             }
             i++
         }
+
+        return x
     }
 
-    private fun renderGroup(parts: MutableList<Component>, element: GroupElement, hud: PlayerHud) {
-        val (baseX, baseY) = computePosition(element)
-        val items = hud.groupItems[element.id] ?: return
+    private fun renderGroup(parts: MutableList<Component>, element: GroupElement, hud: PlayerHud, cursorX: Int): Int {
+        val font = fontKeyFor(element)
+        val targetX = elementGuiX(element)
+        emitCursorShift(parts, cursorX, targetX, font)
 
-        var offset = 0
+        val items = hud.groupItems[element.id] ?: return targetX
+        var x = targetX
+
         for (spriteId in items) {
-            val def = HudSpriteRegistry.getOrNull(spriteId) ?: continue
-            emitSprite(parts, spriteId, baseX, baseY, offset)
-            offset += def.columns.size
+            if (HudSpriteRegistry.getOrNull(spriteId) == null) continue
+            x += emitSpriteChars(parts, spriteId, font)
         }
+
+        return x
     }
 
-    private fun renderAnimated(parts: MutableList<Component>, element: AnimatedSpriteElement, hud: PlayerHud) {
-        if (element.frames.isEmpty()) return
-        val (x, y) = computePosition(element)
+    private fun renderAnimated(
+        parts: MutableList<Component>,
+        element: AnimatedSpriteElement,
+        hud: PlayerHud,
+        cursorX: Int,
+    ): Int {
+        if (element.frames.isEmpty()) return cursorX
+        val font = fontKeyFor(element)
+        val targetX = elementGuiX(element)
+        emitCursorShift(parts, cursorX, targetX, font)
         val frameIndex = ((hud.animationTick / element.intervalTicks) % element.frames.size).toInt()
-        emitSprite(parts, element.frames[frameIndex], x, y, 0)
+        val width = emitSpriteChars(parts, element.frames[frameIndex], font)
+        return targetX + width
     }
 
     private fun charToSpriteId(ch: Char): String? = when (ch) {

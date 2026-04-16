@@ -26,40 +26,40 @@ internal object SpectatorHud {
             val layout = hudLayout(LAYOUT_ID) {
                 text(ELEMENT_TIMER) {
                     anchor(HudAnchor.TOP_CENTER)
-                    offset(-0.04f, 0.02f)
+                    offset(-18, 5)
                 }
                 text(ELEMENT_ALIVE) {
                     anchor(HudAnchor.TOP_RIGHT)
-                    offset(-0.10f, 0.02f)
+                    offset(-46, 5)
                 }
                 text(ELEMENT_TARGET_NAME) {
                     anchor(HudAnchor.BOTTOM_CENTER)
-                    offset(-0.12f, -0.24f)
+                    offset(-55, -61)
                 }
                 bar(ELEMENT_TARGET_HEALTH) {
                     anchor(HudAnchor.BOTTOM_CENTER)
-                    offset(-0.12f, -0.20f)
+                    offset(-55, -51)
                     sprites(bg = "bar_bg", fill = "bar_fill_red", empty = "bar_empty")
                     segments(maxHealth)
                 }
                 bar(ELEMENT_TARGET_ARMOR) {
                     anchor(HudAnchor.BOTTOM_CENTER)
-                    offset(-0.12f, -0.16f)
+                    offset(-55, -41)
                     sprites(bg = "bar_bg", fill = "bar_fill_blue", empty = "bar_empty")
                     segments(maxArmor)
                 }
                 text(ELEMENT_TARGET_KILLS) {
                     anchor(HudAnchor.BOTTOM_CENTER)
-                    offset(-0.02f, -0.12f)
+                    offset(-9, -31)
                 }
                 sprite(ELEMENT_FREECAM_INDICATOR) {
                     anchor(HudAnchor.TOP_LEFT)
-                    offset(0.02f, 0.02f)
+                    offset(9, 5)
                     sprite("icon_speed")
                 }
                 text(ELEMENT_KILLFEED) {
                     anchor(HudAnchor.TOP_LEFT)
-                    offset(0.02f, 0.06f)
+                    offset(9, 15)
                 }
             }
             HudManager.register(layout)

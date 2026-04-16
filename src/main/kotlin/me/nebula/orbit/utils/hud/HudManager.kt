@@ -33,6 +33,8 @@ object HudManager {
         layouts[layout.id] = layout
     }
 
+    fun allLayouts(): Collection<HudLayout> = layouts.values
+
     fun show(player: Player, layoutId: String) {
         val layout = layouts[layoutId] ?: error("Unknown HUD layout: $layoutId")
         val layers = playerLayers.getOrPut(player.uuid) { ConcurrentHashMap() }

@@ -3,6 +3,7 @@ package me.nebula.orbit.utils.hud.font
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import me.nebula.ether.utils.gson.GsonProvider
+import me.nebula.orbit.utils.hud.HudManager
 import java.awt.Color
 import java.awt.Graphics2D
 import java.awt.image.BufferedImage
@@ -11,9 +12,23 @@ import javax.imageio.ImageIO
 
 object HudFontProvider {
 
+    const val BOSSBAR_BASELINE = 12
+
     private val gson = GsonProvider.pretty
 
     private const val BITMAP_WIDTH = 5
+
+    private val POSITIVE_SHIFTS = intArrayOf(1, 2, 4, 8, 16, 32, 64, 128)
+    private val NEGATIVE_SHIFTS = intArrayOf(-1, -2, -4, -8, -16, -32, -64, -128)
+
+    private val POSITIVE_CHARS = charArrayOf(
+        '\uF801', '\uF802', '\uF804', '\uF808',
+        '\uF810', '\uF820', '\uF840', '\uF880',
+    )
+    private val NEGATIVE_CHARS = charArrayOf(
+        '\uF901', '\uF902', '\uF904', '\uF908',
+        '\uF910', '\uF920', '\uF940', '\uF980',
+    )
 
     @Suppress("MagicNumber")
     private val DIGIT_PATTERNS = arrayOf(
@@ -68,7 +83,6 @@ object HudFontProvider {
         'X' to intArrayOf(0b10001, 0b10001, 0b01010, 0b00100, 0b01010, 0b10001, 0b10001),
         'Y' to intArrayOf(0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100),
         'Z' to intArrayOf(0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b11111),
-
         'a' to intArrayOf(0b00000, 0b00000, 0b01110, 0b00001, 0b01111, 0b10001, 0b01111, 0b00000),
         'b' to intArrayOf(0b10000, 0b10000, 0b10000, 0b11110, 0b10001, 0b10001, 0b11110, 0b00000),
         'c' to intArrayOf(0b00000, 0b00000, 0b01111, 0b10000, 0b10000, 0b10000, 0b01111, 0b00000),
@@ -97,17 +111,50 @@ object HudFontProvider {
         'z' to intArrayOf(0b00000, 0b00000, 0b11110, 0b00010, 0b00100, 0b01000, 0b11110, 0b00000),
     )
 
+    fun collectUniqueYPositions(): Set<Int> {
+        val positions = mutableSetOf<Int>()
+        for (layout in HudManager.allLayouts()) {
+            for (element in layout.elements) {
+                positions += element.anchor.guiY + element.offsetY
+            }
+        }
+        return positions
+    }
+
+    fun fontKeyForY(guiY: Int): String = "hud_y$guiY"
+
+    fun ascentForY(guiY: Int): Int = BOSSBAR_BASELINE - guiY
+
+    fun buildShiftChars(pixels: Int): String = buildString {
+        if (pixels == 0) return@buildString
+        val chars = if (pixels > 0) POSITIVE_CHARS else NEGATIVE_CHARS
+        val shifts = if (pixels > 0) POSITIVE_SHIFTS else NEGATIVE_SHIFTS
+        var remaining = if (pixels > 0) pixels else -pixels
+        for (i in shifts.indices.reversed()) {
+            val shiftAbs = if (pixels > 0) shifts[i] else -shifts[i]
+            while (remaining >= shiftAbs) {
+                append(chars[i])
+                remaining -= shiftAbs
+            }
+        }
+    }
+
     fun generate(): Map<String, ByteArray> {
         val entries = LinkedHashMap<String, ByteArray>()
 
         for ((tierIndex, tierHeight) in HEIGHT_TIERS.withIndex()) {
             val tierSprites = HudSpriteRegistry.spritesForTier(tierIndex)
             if (tierSprites.isEmpty()) continue
-            val atlasBytes = generateTierAtlas(tierIndex, tierHeight, tierSprites)
-            entries["assets/nebula/textures/hud/tier_$tierIndex.png"] = atlasBytes
+            entries["assets/nebula/textures/hud/tier_$tierIndex.png"] =
+                generateTierAtlas(tierIndex, tierHeight, tierSprites)
         }
 
-        entries["assets/minecraft/font/hud.json"] = generateFontJson()
+        val yPositions = collectUniqueYPositions()
+        for (guiY in yPositions) {
+            val fontKey = fontKeyForY(guiY)
+            entries["assets/minecraft/font/$fontKey.json"] = generateFontJson(ascentForY(guiY))
+        }
+
         return entries
     }
 
@@ -182,15 +229,18 @@ object HudFontProvider {
         }
     }
 
-    private fun generateFontJson(): ByteArray {
+    private fun generateFontJson(ascent: Int): ByteArray {
         val json = JsonObject().apply {
             add("providers", JsonArray().apply {
+                add(buildSpaceProvider())
+
                 for ((tierIndex, tierHeight) in HEIGHT_TIERS.withIndex()) {
                     val tierSprites = HudSpriteRegistry.spritesForTier(tierIndex)
                     if (tierSprites.isEmpty()) continue
 
                     val rows = HudSpriteRegistry.tierRowCount(tierIndex)
                     val allColumns = tierSprites.flatMap { it.columns }
+                    val clampedAscent = ascent.coerceIn(-256, tierHeight)
 
                     val charRows = (0 until rows).map { row ->
                         buildString {
@@ -205,7 +255,7 @@ object HudFontProvider {
                         addProperty("type", "bitmap")
                         addProperty("file", "nebula:hud/tier_$tierIndex.png")
                         addProperty("height", tierHeight)
-                        addProperty("ascent", tierHeight)
+                        addProperty("ascent", clampedAscent)
                         add("chars", JsonArray().apply {
                             charRows.forEach { add(it) }
                         })
@@ -214,5 +264,17 @@ object HudFontProvider {
             })
         }
         return gson.toJson(json).toByteArray(Charsets.UTF_8)
+    }
+
+    private fun buildSpaceProvider(): JsonObject = JsonObject().apply {
+        addProperty("type", "space")
+        add("advances", JsonObject().apply {
+            for (i in POSITIVE_CHARS.indices) {
+                addProperty(POSITIVE_CHARS[i].toString(), POSITIVE_SHIFTS[i])
+            }
+            for (i in NEGATIVE_CHARS.indices) {
+                addProperty(NEGATIVE_CHARS[i].toString(), NEGATIVE_SHIFTS[i])
+            }
+        })
     }
 }

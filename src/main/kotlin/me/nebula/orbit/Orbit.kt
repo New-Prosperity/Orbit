@@ -426,28 +426,28 @@ object Orbit {
         HudManager.register(hudLayout("test-hud") {
             bar("health") {
                 anchor(HudAnchor.BOTTOM_LEFT)
-                offset(0.02f, -0.12f)
+                offset(9, -31)
                 sprites(bg = "bar_bg", fill = "bar_fill_red", empty = "bar_empty")
                 segments(10)
             }
             bar("mana") {
                 anchor(HudAnchor.BOTTOM_LEFT)
-                offset(0.02f, -0.16f)
+                offset(9, -41)
                 sprites(bg = "bar_bg", fill = "bar_fill_blue", empty = "bar_empty")
                 segments(10)
             }
             sprite("compass") {
                 anchor(HudAnchor.TOP_CENTER)
-                offset(0f, 0.02f)
+                offset(0, 5)
                 sprite("icon_health")
             }
             text("score") {
                 anchor(HudAnchor.TOP_RIGHT)
-                offset(-0.05f, 0.02f)
+                offset(-23, 5)
             }
             text("timer") {
                 anchor(HudAnchor.TOP_CENTER)
-                offset(0f, 0.06f)
+                offset(0, 15)
             }
         })
 
