@@ -51,35 +51,77 @@ object ModelGenerator {
         val flatGroups by lazy { model.groups.flatMap { flattenGroups(it) } }
 
         fun processGroup(group: BbGroup, parentName: String?, parentOrigin: Vec) {
-            val childNames = group.children.filterIsInstance<BbGroupChild.SubGroup>()
+            val subGroupNames = group.children.filterIsInstance<BbGroupChild.SubGroup>()
                 .filter { it.group.visibility }
                 .map { it.group.name }
-            val elements = group.children.filterIsInstance<BbGroupChild.ElementRef>()
+                .toMutableList()
+            val allElements = group.children.filterIsInstance<BbGroupChild.ElementRef>()
                 .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
                 .filter { it.visibility }
 
-            val (boneElements, boneModelScale) = buildBoneElements(elements, group, atlas, model.resolution)
+            val standardElements = allElements.filter { elem ->
+                elem.rotation == Vec.ZERO || isValidMcRotation(elem.rotation)
+            }
+            val nonStandardElements = allElements.filter { elem ->
+                elem.rotation != Vec.ZERO && !isValidMcRotation(elem.rotation)
+            }
+
+            val (boneElements, boneModelScale) = buildBoneElements(standardElements, group, atlas, model.resolution)
+
+            val lowerModelName = model.name.lowercase()
+            val texturePath = "minecraft:me_${lowerModelName}_atlas"
 
             val modelItem = if (boneElements.isNotEmpty()) {
-                val lowerModelName = model.name.lowercase()
-                val lowerBoneName = group.name.lowercase()
-                val boneKey = "me_${lowerModelName}_${lowerBoneName}"
-                val texturePath = "minecraft:me_${lowerModelName}_atlas"
+                val boneKey = "me_${lowerModelName}_${group.name.lowercase()}"
                 boneModels[boneKey] = GeneratedBoneModel(
                     textures = listOf(texturePath),
                     elements = boneElements,
                     display = model.display,
                 )
-                val itemModelValue = "minecraft:$boneKey"
-                ItemStack.of(Material.PAPER).with(DataComponents.ITEM_MODEL, itemModelValue)
+                ItemStack.of(Material.PAPER).with(DataComponents.ITEM_MODEL, "minecraft:$boneKey")
             } else null
+
+            for ((idx, elem) in nonStandardElements.withIndex()) {
+                val subBoneName = "${group.name}_rot$idx"
+                subGroupNames += subBoneName
+
+                val (subElements, subScale) = buildBoneElements(
+                    listOf(elem.copy(rotation = Vec.ZERO)),
+                    group, atlas, model.resolution,
+                )
+
+                val subItem = if (subElements.isNotEmpty()) {
+                    val subKey = "me_${lowerModelName}_${subBoneName.lowercase()}"
+                    boneModels[subKey] = GeneratedBoneModel(
+                        textures = listOf(texturePath),
+                        elements = subElements,
+                        display = model.display,
+                    )
+                    ItemStack.of(Material.PAPER).with(DataComponents.ITEM_MODEL, "minecraft:$subKey")
+                } else null
+
+                val elemRotation = Vec(-elem.rotation.x(), elem.rotation.y(), -elem.rotation.z())
+                blueprintBones[subBoneName] = BlueprintBone(
+                    name = subBoneName,
+                    parentName = group.name,
+                    childNames = emptyList(),
+                    offset = BbConverter.boneOffset(elem.origin, group.origin),
+                    rotation = BbConverter.boneRotation(elem.rotation),
+                    rotationEuler = elemRotation,
+                    scale = Vec(1.0, 1.0, 1.0),
+                    modelItem = subItem,
+                    behaviors = emptyMap(),
+                    visible = true,
+                    modelScale = subScale,
+                )
+            }
 
             val convertedEuler = Vec(-group.rotation.x(), group.rotation.y(), -group.rotation.z())
 
             blueprintBones[group.name] = BlueprintBone(
                 name = group.name,
                 parentName = parentName,
-                childNames = childNames,
+                childNames = subGroupNames,
                 offset = BbConverter.boneOffset(group.origin, parentOrigin),
                 rotation = BbConverter.boneRotation(group.rotation),
                 rotationEuler = convertedEuler,
@@ -285,6 +327,16 @@ object ModelGenerator {
 
     private fun snapAngle(angle: Float): Float =
         validAngles.minByOrNull { kotlin.math.abs(it - angle) } ?: 0f
+
+    private fun isValidMcRotation(rotation: Vec): Boolean {
+        val (axis, _) = dominantAxis(rotation)
+        val angle = when (axis) {
+            "x" -> rotation.x().toFloat()
+            "y" -> rotation.y().toFloat()
+            else -> rotation.z().toFloat()
+        }
+        return validAngles.any { kotlin.math.abs(it - angle) < 0.1f }
+    }
 }
 
 data class RawGenerationResult(
