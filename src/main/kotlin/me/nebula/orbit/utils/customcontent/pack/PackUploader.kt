@@ -54,7 +54,7 @@ object PackUploader {
     fun upload(packId: String = "default"): UploadResult {
         check(isConfigured) { "R2 not configured — set R2_ENDPOINT, R2_ACCESS_KEY, R2_SECRET_KEY, R2_PUBLIC_URL" }
 
-        val result = CustomContentRegistry.mergePack()
+        val result = CustomContentRegistry.mergePack(forceRegenerate = true)
         val bytes = result.packBytes
         val sha1 = result.sha1
 

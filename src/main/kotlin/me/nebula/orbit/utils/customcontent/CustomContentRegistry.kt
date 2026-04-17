@@ -151,14 +151,14 @@ object CustomContentRegistry {
         mergePack()
     }
 
-    fun mergePack(): PackMerger.MergeResult {
+    fun mergePack(forceRegenerate: Boolean = false): PackMerger.MergeResult {
         val modelFiles = resources.list("models", "bbmodel")
         val inputHash = computeInputHash(modelFiles)
         val cacheHashPath = "$BASE_DIR/pack.hash"
         val cachePackPath = "$BASE_DIR/pack.zip"
         val cachedHash = if (resources.exists(cacheHashPath)) resources.readText(cacheHashPath).trim() else null
 
-        if (cachedHash == inputHash && resources.exists(cachePackPath)) {
+        if (!forceRegenerate && cachedHash == inputHash && resources.exists(cachePackPath)) {
             val packBytes = resources.readBytes(cachePackPath)
             logger.info { "Pack cache hit: ${packBytes.size / 1024}KB, hash=$inputHash — skipping merge" }
             modelFiles.forEach { path ->

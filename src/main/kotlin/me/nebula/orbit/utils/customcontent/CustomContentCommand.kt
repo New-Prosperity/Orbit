@@ -149,7 +149,7 @@ fun customContentCommand(resources: ResourceManager): Command = command("cc") {
     subCommand("pack") {
         onPlayerExecute {
             try {
-                val result = CustomContentRegistry.mergePack()
+                val result = CustomContentRegistry.mergePack(forceRegenerate = true)
                 player.sendMessage(player.translate("orbit.command.cc.pack.merged",
                     "size" to (result.packBytes.size / 1024).toString(),
                     "sha" to result.sha1,
