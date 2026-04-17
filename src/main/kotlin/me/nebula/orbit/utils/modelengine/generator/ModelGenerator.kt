@@ -13,6 +13,7 @@ import net.minestom.server.component.DataComponents
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
+import kotlin.math.abs
 
 object ModelGenerator {
 
@@ -50,6 +51,19 @@ object ModelGenerator {
         val rootBoneNames = mutableListOf<String>()
         val flatGroups by lazy { model.groups.flatMap { flattenGroups(it) } }
 
+        fun registerBoneModel(boneName: String, elements: List<GeneratedElement>): ItemStack? {
+            if (elements.isEmpty()) return null
+            val lowerModelName = model.name.lowercase()
+            val boneKey = "me_${lowerModelName}_${boneName.lowercase()}"
+            val texturePath = "minecraft:me_${lowerModelName}_atlas"
+            boneModels[boneKey] = GeneratedBoneModel(
+                textures = listOf(texturePath),
+                elements = elements,
+                display = model.display,
+            )
+            return ItemStack.of(Material.PAPER).with(DataComponents.ITEM_MODEL, "minecraft:$boneKey")
+        }
+
         fun processGroup(group: BbGroup, parentName: String?, parentOrigin: Vec) {
             val childNames = group.children.filterIsInstance<BbGroupChild.SubGroup>()
                 .filter { it.group.visibility }
@@ -59,20 +73,7 @@ object ModelGenerator {
                 .filter { it.visibility }
 
             val (boneElements, boneModelScale) = buildBoneElements(elements, group, atlas, model.resolution)
-
-            val modelItem = if (boneElements.isNotEmpty()) {
-                val lowerModelName = model.name.lowercase()
-                val lowerBoneName = group.name.lowercase()
-                val boneKey = "me_${lowerModelName}_${lowerBoneName}"
-                val texturePath = "minecraft:me_${lowerModelName}_atlas"
-                boneModels[boneKey] = GeneratedBoneModel(
-                    textures = listOf(texturePath),
-                    elements = boneElements,
-                    display = model.display,
-                )
-                val itemModelValue = "minecraft:$boneKey"
-                ItemStack.of(Material.PAPER).with(DataComponents.ITEM_MODEL, itemModelValue)
-            } else null
+            val modelItem = registerBoneModel(group.name, boneElements)
 
             val convertedEuler = Vec(-group.rotation.x(), group.rotation.y(), -group.rotation.z())
 
@@ -103,17 +104,28 @@ object ModelGenerator {
             anim.name to convertAnimation(anim, flatGroups)
         }
 
+        val modelHasIllegal = model.elements.any { elem ->
+            if (elem.rotation == Vec.ZERO) return@any false
+            val axes = floatArrayOf(elem.rotation.x().toFloat(), elem.rotation.y().toFloat(), elem.rotation.z().toFloat())
+            val nonZero = axes.count { abs(it) > 0.001f }
+            if (nonZero > 1) return@any true
+            val angle = axes.first { abs(it) > 0.001f }
+            VALID_ANGLES.none { abs(it - angle) < 0.01f }
+        }
+
         val blueprint = ModelBlueprint(
             name = model.name,
             bones = blueprintBones,
             rootBoneNames = rootBoneNames,
             animations = animations,
+            hasIllegalRotations = modelHasIllegal,
         )
 
         val textureBytes = mapOf("me_${model.name.lowercase()}_atlas.png" to atlasBytes)
         return RawGenerationResult(blueprint, boneModels, textureBytes)
     }
 
+    private val VALID_ANGLES = floatArrayOf(-45f, -22.5f, 0f, 22.5f, 45f)
     private const val MAX_ELEMENT_EXTENT = 24f
 
     data class BoneElementResult(val elements: List<GeneratedElement>, val modelScale: Float)
@@ -124,17 +136,25 @@ object ModelGenerator {
         atlas: AtlasResult,
         resolution: BbResolution,
         centerOffset: Float = 8f,
+    ): BoneElementResult = buildBoneElements(elements, group.origin, atlas, resolution, centerOffset)
+
+    fun buildBoneElements(
+        elements: List<BbElement>,
+        boneOrigin: Vec,
+        atlas: AtlasResult,
+        resolution: BbResolution,
+        centerOffset: Float = 8f,
     ): BoneElementResult {
         if (elements.isEmpty()) return BoneElementResult(emptyList(), 1f)
 
         var maxAbs = 0f
         elements.forEach { element ->
             val inf = element.inflate.toDouble()
-            val rel = element.from.sub(inf, inf, inf).sub(group.origin)
-            val relTo = element.to.add(inf, inf, inf).sub(group.origin)
+            val rel = element.from.sub(inf, inf, inf).sub(boneOrigin)
+            val relTo = element.to.add(inf, inf, inf).sub(boneOrigin)
             maxAbs = maxOf(maxAbs,
-                kotlin.math.abs(rel.x().toFloat()), kotlin.math.abs(rel.y().toFloat()), kotlin.math.abs(rel.z().toFloat()),
-                kotlin.math.abs(relTo.x().toFloat()), kotlin.math.abs(relTo.y().toFloat()), kotlin.math.abs(relTo.z().toFloat()),
+                abs(rel.x().toFloat()), abs(rel.y().toFloat()), abs(rel.z().toFloat()),
+                abs(relTo.x().toFloat()), abs(relTo.y().toFloat()), abs(relTo.z().toFloat()),
             )
         }
 
@@ -148,19 +168,30 @@ object ModelGenerator {
             val inf = element.inflate.toDouble()
             val inflatedFrom = element.from.sub(inf, inf, inf)
             val inflatedTo = element.to.add(inf, inf, inf)
-            val (from, to) = BbConverter.elementCoords(inflatedFrom, inflatedTo, group.origin, inv, centerOffset)
+            val (from, to) = BbConverter.elementCoords(inflatedFrom, inflatedTo, boneOrigin, inv, centerOffset)
 
             val rotation = if (element.rotation != Vec.ZERO) {
-                val origin = BbConverter.rotationOrigin(element.origin, group.origin, inv, centerOffset)
-                val (axis, angle) = dominantAxis(element.rotation)
-                GeneratedRotation(angle, axis, origin)
+                val origin = BbConverter.rotationOrigin(element.origin, boneOrigin, inv, centerOffset)
+                val rx = element.rotation.x().toFloat()
+                val ry = element.rotation.y().toFloat()
+                val rz = element.rotation.z().toFloat()
+                val nonZeroCount = (if (abs(rx) > 0.001f) 1 else 0) +
+                    (if (abs(ry) > 0.001f) 1 else 0) +
+                    (if (abs(rz) > 0.001f) 1 else 0)
+                if (nonZeroCount > 1) {
+                    GeneratedRotation(0f, "x", origin, euler = floatArrayOf(rx, ry, rz))
+                } else when {
+                    abs(rx) > 0.001f -> GeneratedRotation(rx, "x", origin)
+                    abs(ry) > 0.001f -> GeneratedRotation(ry, "y", origin)
+                    else -> GeneratedRotation(rz, "z", origin)
+                }
             } else null
 
             val faces = element.faces
                 .filter { (_, face) ->
                     face.texture >= 0 &&
-                        kotlin.math.abs(face.uv[2] - face.uv[0]) > 0.001f &&
-                        kotlin.math.abs(face.uv[3] - face.uv[1]) > 0.001f &&
+                        abs(face.uv[2] - face.uv[0]) > 0.001f &&
+                        abs(face.uv[3] - face.uv[1]) > 0.001f &&
                         face.uv[0] in 0f..maxU && face.uv[1] in 0f..maxV &&
                         face.uv[2] in 0f..maxU && face.uv[3] in 0f..maxV
                 }
@@ -270,21 +301,6 @@ object ModelGenerator {
     private fun flattenGroups(group: BbGroup): List<BbGroup> = listOf(group) +
         group.children.filterIsInstance<BbGroupChild.SubGroup>().flatMap { flattenGroups(it.group) }
 
-    private fun dominantAxis(rotation: Vec): Pair<String, Float> {
-        val ax = kotlin.math.abs(rotation.x())
-        val ay = kotlin.math.abs(rotation.y())
-        val az = kotlin.math.abs(rotation.z())
-        return when {
-            ax >= ay && ax >= az -> "x" to snapAngle(rotation.x().toFloat())
-            ay >= ax && ay >= az -> "y" to snapAngle(rotation.y().toFloat())
-            else -> "z" to snapAngle(rotation.z().toFloat())
-        }
-    }
-
-    private val validAngles = floatArrayOf(-45f, -22.5f, 0f, 22.5f, 45f)
-
-    private fun snapAngle(angle: Float): Float =
-        validAngles.minByOrNull { kotlin.math.abs(it - angle) } ?: 0f
 }
 
 data class RawGenerationResult(

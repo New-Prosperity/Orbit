@@ -99,8 +99,15 @@ object PackWriter {
                     add("to", element.to.toJsonArray())
                     if (element.rotation != null) {
                         add("rotation", JsonObject().apply {
-                            addProperty("angle", element.rotation.angle)
-                            addProperty("axis", element.rotation.axis)
+                            val euler = element.rotation.euler
+                            if (euler != null) {
+                                addProperty("x", euler[0])
+                                addProperty("y", euler[1])
+                                addProperty("z", euler[2])
+                            } else {
+                                addProperty("angle", element.rotation.angle)
+                                addProperty("axis", element.rotation.axis)
+                            }
                             add("origin", element.rotation.origin.toJsonArray())
                         })
                     }
@@ -171,17 +178,20 @@ data class GeneratedRotation(
     val angle: Float,
     val axis: String,
     val origin: FloatArray,
+    val euler: FloatArray? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is GeneratedRotation) return false
-        return angle == other.angle && axis == other.axis && origin.contentEquals(other.origin)
+        return angle == other.angle && axis == other.axis && origin.contentEquals(other.origin) &&
+            ((euler == null && other.euler == null) || (euler != null && other.euler != null && euler.contentEquals(other.euler)))
     }
 
     override fun hashCode(): Int {
         var result = angle.hashCode()
         result = 31 * result + axis.hashCode()
         result = 31 * result + origin.contentHashCode()
+        result = 31 * result + (euler?.contentHashCode() ?: 0)
         return result
     }
 }

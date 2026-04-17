@@ -40,9 +40,7 @@ data class AnimationProperty(
             val pos = posInterp.evaluate(time)?.let {
                 Vec(it.x() / 16.0, it.y() / 16.0, -(it.z() / 16.0))
             } ?: Vec.ZERO
-            val rotEuler = rotInterp.evaluate(time)?.let {
-                Vec(it.x(), -it.y(), -it.z())
-            } ?: Vec.ZERO
+            val rotEuler = rotInterp.evaluate(time) ?: Vec.ZERO
             val scale = scaleInterp.evaluate(time) ?: Vec(1.0, 1.0, 1.0)
             return AnimationProperty(pos, rotEuler, scale)
         }

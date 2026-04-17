@@ -10,6 +10,8 @@ import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.modelengine.generator.BbDisplaySlot
 import me.nebula.orbit.utils.modelengine.generator.BlockbenchParser
 import me.nebula.orbit.utils.modelengine.generator.GeneratedBoneModel
+import me.nebula.orbit.utils.modelengine.generator.GeneratedElement
+import me.nebula.orbit.utils.modelengine.generator.GeneratedFace
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.generator.RawGenerationResult
 import net.minestom.server.item.Material
@@ -76,7 +78,7 @@ object PackMerger {
         val customBlockTextures = mutableMapOf<String, ByteArray>()
 
         CustomBlockRegistry.all().forEach { block ->
-            processCustomContentModel(resources, block.id, block.modelPath, modelsDirectory,
+            processTextureBlock(resources, block.id, block.texturePath, modelsDirectory,
                 customBlockModels, customBlockTextures)
         }
 
@@ -110,7 +112,12 @@ object PackMerger {
 
 
         val customTextures = entries.keys
-            .filter { it.startsWith("assets/minecraft/textures/me_") && it.endsWith(".png") }
+            .filter {
+                it.endsWith(".png") && (
+                    it.startsWith("assets/minecraft/textures/me_") ||
+                        it.startsWith("assets/minecraft/textures/customcontent/")
+                )
+            }
             .map { it.removePrefix("assets/minecraft/textures/").removeSuffix(".png") }
         if (customTextures.isNotEmpty()) {
             val atlasJson = JsonObject().apply {
@@ -134,6 +141,41 @@ object PackMerger {
         val packBytes = writeZip(entries)
         val sha1 = sha1Hex(packBytes)
         return MergeResult(packBytes, sha1)
+    }
+
+    private fun processTextureBlock(
+        resources: ResourceManager,
+        id: String,
+        texturePath: String,
+        modelsDirectory: String,
+        modelOutput: MutableMap<String, GeneratedBoneModel>,
+        textureOutput: MutableMap<String, ByteArray>,
+    ) {
+        val filePath = "$modelsDirectory/$texturePath"
+        if (!resources.exists(filePath)) return
+
+        val textureBytes = resources.readBytes(filePath)
+        val textureKey = "${id}_tex.png"
+        textureOutput[textureKey] = textureBytes
+
+        val texRef = "customcontent/${textureKey.removeSuffix(".png")}"
+        val cube = GeneratedElement(
+            from = floatArrayOf(0f, 0f, 0f),
+            to = floatArrayOf(16f, 16f, 16f),
+            rotation = null,
+            faces = mapOf(
+                "north" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
+                "south" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
+                "east" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
+                "west" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
+                "up" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
+                "down" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
+            ),
+        )
+        modelOutput[id] = GeneratedBoneModel(
+            textures = listOf(texRef),
+            elements = listOf(cube),
+        )
     }
 
     private fun processCustomContentModel(
@@ -216,8 +258,15 @@ object PackMerger {
                         add("to", element.to.toJsonArray())
                         if (element.rotation != null) {
                             add("rotation", JsonObject().apply {
-                                addProperty("angle", element.rotation.angle)
-                                addProperty("axis", element.rotation.axis)
+                                val euler = element.rotation.euler
+                                if (euler != null) {
+                                    addProperty("x", euler[0])
+                                    addProperty("y", euler[1])
+                                    addProperty("z", euler[2])
+                                } else {
+                                    addProperty("angle", element.rotation.angle)
+                                    addProperty("axis", element.rotation.axis)
+                                }
                                 add("origin", element.rotation.origin.toJsonArray())
                             })
                         }

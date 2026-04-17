@@ -37,6 +37,7 @@ data class ModelBlueprint(
     val hitboxWidth: Float = 1f,
     val hitboxHeight: Float = 2f,
     val eyeHeight: Float = 1.6f,
+    val hasIllegalRotations: Boolean = false,
 ) {
     fun bone(name: String): BlueprintBone = requireNotNull(bones[name]) { "Bone '$name' not found in blueprint '${this.name}'" }
 

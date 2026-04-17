@@ -17,6 +17,9 @@ import java.util.EnumSet
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+private const val HEAD_GAP_PX = -10
+private val HEAD_SHIFT = Component.text(NegativeSpaceFont.shift(HEAD_GAP_PX))
+
 class TabEntryDef(
     val id: String,
     val uuid: UUID,
@@ -201,10 +204,11 @@ object TabListManager {
 
     private fun applyPlayerFormat(player: Player, format: PlayerFormatDef) {
         format.displayName?.invoke(player)?.let { player.displayName = it }
+        val shiftedName = player.displayName?.let { HEAD_SHIFT.append(it) }
         val entry = PlayerInfoUpdatePacket.Entry(
             player.uuid, player.username, emptyList(),
             true, player.latency, player.gameMode,
-            player.displayName, null, format.listOrder, true,
+            shiftedName, null, format.listOrder, true,
         )
         player.sendPacketToViewersAndSelf(
             PlayerInfoUpdatePacket(EnumSet.of(Action.UPDATE_LIST_ORDER, Action.UPDATE_DISPLAY_NAME), listOf(entry))
@@ -213,7 +217,7 @@ object TabListManager {
 
     private fun sendAddPacket(viewer: Player, def: TabEntryDef) {
         val properties = buildSkinProperties(def.skinValue, def.skinSignature)
-        val resolved = def.contentProvider?.invoke(viewer) ?: def.displayName
+        val resolved = HEAD_SHIFT.append(def.contentProvider?.invoke(viewer) ?: def.displayName)
         val entry = PlayerInfoUpdatePacket.Entry(
             def.uuid, def.id, properties,
             true, def.ping, GameMode.SURVIVAL,
@@ -228,7 +232,7 @@ object TabListManager {
     }
 
     private fun sendUpdatePacket(viewer: Player, def: TabEntryDef) {
-        val resolved = def.contentProvider?.invoke(viewer) ?: def.displayName
+        val resolved = HEAD_SHIFT.append(def.contentProvider?.invoke(viewer) ?: def.displayName)
         val entry = PlayerInfoUpdatePacket.Entry(
             def.uuid, def.id, emptyList(),
             true, def.ping, GameMode.SURVIVAL,

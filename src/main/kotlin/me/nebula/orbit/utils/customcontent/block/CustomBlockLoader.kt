@@ -14,7 +14,7 @@ data class CustomBlockDefinition(
     val itemId: String,
     val hardness: Float,
     val drops: CustomBlockDrops,
-    val modelPath: String,
+    val texturePath: String,
     val placeSound: String,
     val breakSound: String,
 )
@@ -36,7 +36,7 @@ object CustomBlockLoader {
         val hardness = obj["hardness"]?.asFloat ?: 1.5f
         val placeSound = obj["place_sound"]?.asString ?: "block.stone.place"
         val breakSound = obj["break_sound"]?.asString ?: "block.stone.break"
-        val model = obj["model"].asString
+        val texture = obj["texture"]?.asString ?: "$id.png"
         val drops = parseDrops(id, obj.getAsJsonObject("drops"))
 
         return CustomBlockDefinition(
@@ -45,7 +45,7 @@ object CustomBlockLoader {
             itemId = itemId,
             hardness = hardness,
             drops = drops,
-            modelPath = model,
+            texturePath = texture,
             placeSound = placeSound,
             breakSound = breakSound,
         )
@@ -81,7 +81,7 @@ class CustomBlockDsl @PublishedApi internal constructor(val id: String) {
     @PublishedApi internal var itemId: String = id
     @PublishedApi internal var hardness = 1.5f
     @PublishedApi internal var drops: CustomBlockDrops = CustomBlockDrops.SelfDrop
-    @PublishedApi internal var modelPath: String = "$id.bbmodel"
+    @PublishedApi internal var texturePath: String = "$id.png"
     @PublishedApi internal var placeSound = "block.stone.place"
     @PublishedApi internal var breakSound = "block.stone.break"
 
@@ -90,7 +90,7 @@ class CustomBlockDsl @PublishedApi internal constructor(val id: String) {
     fun hardness(value: Float) { hardness = value }
     fun placeSound(sound: String) { placeSound = sound }
     fun breakSound(sound: String) { breakSound = sound }
-    fun model(path: String) { modelPath = path }
+    fun texture(path: String) { texturePath = path }
 
     fun drops(block: CustomBlockDropsDsl.() -> Unit) {
         drops = CustomBlockDropsDsl().apply(block).build()
@@ -102,7 +102,7 @@ class CustomBlockDsl @PublishedApi internal constructor(val id: String) {
         itemId = itemId,
         hardness = hardness,
         drops = drops,
-        modelPath = modelPath,
+        texturePath = texturePath,
         placeSound = placeSound,
         breakSound = breakSound,
     )

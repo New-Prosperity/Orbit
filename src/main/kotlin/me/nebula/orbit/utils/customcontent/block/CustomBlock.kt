@@ -12,7 +12,7 @@ data class CustomBlock(
     val customModelDataId: Int,
     val hardness: Float,
     val drops: CustomBlockDrops,
-    val modelPath: String,
+    val texturePath: String,
     val placeSound: String,
     val breakSound: String,
     val allocatedState: Block,

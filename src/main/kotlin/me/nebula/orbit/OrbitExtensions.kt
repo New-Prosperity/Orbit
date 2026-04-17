@@ -44,6 +44,9 @@ val Player.rankPrefix: String
 val Player.rankSuffix: String
     get() = rank?.let { Orbit.translations.get("rank.${it.name}.suffix", localeCode) } ?: ""
 
+val Player.rankBadge: String
+    get() = rank?.let { Orbit.translations.get("rank.${it.name}.badge", localeCode) } ?: ""
+
 val Player.rankColor: String
     get() = rank?.color ?: "white"
 

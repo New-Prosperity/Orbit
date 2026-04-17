@@ -160,13 +160,14 @@ class BoneRenderer(
         ))
 
         val worldRot = transform.toWorldRotation(modelPosition.yaw())
-        val meta = buildFullMetadata(boneEntity, relPos, worldRot, effectiveScale, bone.modelItem)
+        val item = bone.modelItem
+        val meta = buildFullMetadata(boneEntity, relPos, worldRot, effectiveScale, item)
         player.sendPacket(EntityMetaDataPacket(boneEntity.entityId, meta))
 
         boneEntity.lastPosition = relPos
         boneEntity.lastRotation = worldRot
         boneEntity.lastScale = effectiveScale
-        boneEntity.lastItem = bone.modelItem
+        boneEntity.lastItem = item
         boneEntity.lastVisible = bone.visible
         boneEntity.spawned = true
     }

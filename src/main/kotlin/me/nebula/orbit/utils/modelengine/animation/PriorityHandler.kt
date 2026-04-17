@@ -4,6 +4,7 @@ import me.nebula.orbit.utils.modelengine.blueprint.AnimationBlueprint
 import me.nebula.orbit.utils.modelengine.blueprint.LoopMode
 import me.nebula.orbit.utils.modelengine.math.eulerToQuat
 import me.nebula.orbit.utils.modelengine.model.ActiveModel
+import net.minestom.server.coordinate.Vec
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -141,11 +142,17 @@ class PriorityHandler : AnimationHandler {
             model.bones[boneName]?.resetAnimation()
         }
 
+        val illegalModel = model.blueprint.hasIllegalRotations
         boneProperties.forEach { (boneName, prop) ->
             val bone = model.bones[boneName] ?: return@forEach
             bone.animatedPosition = prop.position
             val boneEuler = bone.blueprint.rotationEuler
-            val combinedEuler = boneEuler.add(prop.rotationEuler)
+            val animRot = if (illegalModel) {
+                Vec(-prop.rotationEuler.x(), prop.rotationEuler.y(), -prop.rotationEuler.z())
+            } else {
+                Vec(prop.rotationEuler.x(), -prop.rotationEuler.y(), -prop.rotationEuler.z())
+            }
+            val combinedEuler = boneEuler.add(animRot)
             bone.localRotation = eulerToQuat(
                 combinedEuler.x().toFloat(),
                 combinedEuler.y().toFloat(),

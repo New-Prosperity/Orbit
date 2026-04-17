@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.customcontent
 
+import com.google.gson.JsonObject
+import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.commandbuilder.command
@@ -120,7 +122,7 @@ fun customContentCommand(resources: ResourceManager): Command = command("cc") {
                 player.sendMessage(player.translate("orbit.command.cc.info.block.state", "value" to block.allocatedState.name()))
                 player.sendMessage(player.translate("orbit.command.cc.info.block.place_sound", "value" to block.placeSound))
                 player.sendMessage(player.translate("orbit.command.cc.info.block.break_sound", "value" to block.breakSound))
-                player.sendMessage(player.translate("orbit.command.cc.info.block.model", "value" to block.modelPath))
+                player.sendMessage(player.translate("orbit.command.cc.info.block.model", "value" to block.texturePath))
             }
         }
     }
@@ -142,6 +144,52 @@ fun customContentCommand(resources: ResourceManager): Command = command("cc") {
                 ))
             } catch (e: Exception) {
                 player.sendMessage(player.translate("orbit.command.cc.reload.failed", "error" to (e.message ?: "")))
+            }
+        }
+    }
+
+    subCommand("scaffold") {
+        stringArrayArgument("args")
+        tabComplete { _, input ->
+            val tokens = input.split(" ")
+            if (tokens.size <= 1) {
+                resources.list("customcontent/models", "bbmodel")
+                    .map { it.substringAfterLast('/').substringBeforeLast('.') }
+                    .filter { it.startsWith(tokens[0], ignoreCase = true) }
+            } else emptyList()
+        }
+        onPlayerExecute {
+            @Suppress("UNCHECKED_CAST")
+            val cmdArgs = args.get("args") as? Array<String>
+            val name = cmdArgs?.getOrNull(0)
+            if (name.isNullOrEmpty()) {
+                player.sendMessage(player.translate("orbit.command.cc.scaffold.usage"))
+                return@onPlayerExecute
+            }
+            val force = cmdArgs.any { it.equals("force", ignoreCase = true) }
+            val bbmodelPath = "customcontent/models/$name.bbmodel"
+            if (!resources.exists(bbmodelPath)) {
+                player.sendMessage(player.translate("orbit.command.cc.scaffold.not_found", "name" to name))
+                return@onPlayerExecute
+            }
+            val jsonPath = "customcontent/items/$name.json"
+            if (resources.exists(jsonPath) && !force) {
+                player.sendMessage(player.translate("orbit.command.cc.scaffold.exists", "path" to jsonPath))
+                return@onPlayerExecute
+            }
+            try {
+                val obj = JsonObject().apply {
+                    addProperty("id", name)
+                    addProperty("base_material", "minecraft:paper")
+                    addProperty("model", "$name.bbmodel")
+                }
+                resources.writeText(jsonPath, GsonProvider.pretty.toJson(obj))
+                CustomContentRegistry.reload()
+                player.sendMessage(player.translate("orbit.command.cc.scaffold.success",
+                    "id" to name, "path" to jsonPath))
+            } catch (e: Exception) {
+                player.sendMessage(player.translate("orbit.command.cc.scaffold.failed",
+                    "error" to (e.message ?: "")))
             }
         }
     }

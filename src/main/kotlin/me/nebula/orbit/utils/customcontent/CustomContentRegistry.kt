@@ -30,6 +30,7 @@ import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.customcontent.pack.PackMerger
 import me.nebula.orbit.utils.customcontent.pack.SpriteItemPack
 import me.nebula.orbit.utils.modelengine.ModelEngine
+import me.nebula.orbit.utils.tablist.NegativeSpaceFont
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.generator.ModelIdRegistry
 import net.minestom.server.event.Event
@@ -116,7 +117,7 @@ object CustomContentRegistry {
             customModelDataId = cmdId,
             hardness = def.hardness,
             drops = def.drops,
-            modelPath = def.modelPath,
+            texturePath = def.texturePath,
             placeSound = def.placeSound,
             breakSound = def.breakSound,
             allocatedState = allocatedState,
@@ -295,6 +296,8 @@ object CustomContentRegistry {
             entries["assets/minecraft/textures/entity/player/wide/$name.png"] = transparentSkin
             entries["assets/minecraft/textures/entity/player/slim/$name.png"] = transparentSkin
         }
+
+        entries.putAll(NegativeSpaceFont.generate())
 
         return entries
     }
