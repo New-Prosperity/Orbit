@@ -109,6 +109,23 @@ object PackMerger {
 
 
 
+        val customTextures = entries.keys
+            .filter { it.startsWith("assets/minecraft/textures/me_") && it.endsWith(".png") }
+            .map { it.removePrefix("assets/minecraft/textures/").removeSuffix(".png") }
+        if (customTextures.isNotEmpty()) {
+            val atlasJson = JsonObject().apply {
+                add("sources", JsonArray().apply {
+                    for (tex in customTextures) {
+                        add(JsonObject().apply {
+                            addProperty("type", "minecraft:single")
+                            addProperty("resource", "minecraft:$tex")
+                        })
+                    }
+                })
+            }
+            entries["assets/minecraft/atlases/blocks.json"] = GsonProvider.pretty.toJson(atlasJson).toByteArray(Charsets.UTF_8)
+        }
+
         val textures = entries.keys.count { it.endsWith(".png") }
         val models = entries.keys.count { it.contains("/models/") }
         val shaders = entries.keys.count { it.contains("/shaders/") }
