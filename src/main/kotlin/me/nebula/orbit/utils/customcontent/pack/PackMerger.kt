@@ -108,40 +108,6 @@ object PackMerger {
         }
 
 
-        val modelTextures = entries.keys
-            .filter { it.startsWith("assets/minecraft/textures/me_") && it.endsWith(".png") }
-            .map { it.removePrefix("assets/minecraft/textures/").removeSuffix(".png") }
-        if (modelTextures.isNotEmpty()) {
-            val atlasJson = JsonObject().apply {
-                add("sources", JsonArray().apply {
-                    add(JsonObject().apply {
-                        addProperty("type", "minecraft:directory")
-                        addProperty("source", "block")
-                        addProperty("prefix", "block/")
-                    })
-                    add(JsonObject().apply {
-                        addProperty("type", "minecraft:directory")
-                        addProperty("source", "entity/conduit")
-                        addProperty("prefix", "entity/conduit/")
-                    })
-                    add(JsonObject().apply {
-                        addProperty("type", "minecraft:single")
-                        addProperty("resource", "minecraft:entity/bell/bell_body")
-                    })
-                    add(JsonObject().apply {
-                        addProperty("type", "minecraft:single")
-                        addProperty("resource", "minecraft:entity/enchantment/enchanting_table_book")
-                    })
-                    for (tex in modelTextures) {
-                        add(JsonObject().apply {
-                            addProperty("type", "minecraft:single")
-                            addProperty("resource", "minecraft:$tex")
-                        })
-                    }
-                })
-            }
-            entries["assets/minecraft/atlases/blocks.json"] = GsonProvider.pretty.toJson(atlasJson).toByteArray(Charsets.UTF_8)
-        }
 
         val textures = entries.keys.count { it.endsWith(".png") }
         val models = entries.keys.count { it.contains("/models/") }
