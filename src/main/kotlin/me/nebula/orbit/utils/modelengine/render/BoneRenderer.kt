@@ -119,7 +119,7 @@ class BoneRenderer(
             if (!boneEntity.spawned) return@forEach
 
             val transform = bone.globalTransform
-            val relPos = transform.toRelativePosition(modelPosition.yaw())
+            val relPos = applySkinOffset(transform.toRelativePosition(modelPosition.yaw()), bone.skinPartId)
             val worldRot = transform.toWorldRotation(modelPosition.yaw())
             val effectiveScale = applyModelScale(transform.scale, bone.blueprint.modelScale)
 
@@ -150,7 +150,7 @@ class BoneRenderer(
     private fun spawnBoneFor(player: Player, boneEntity: BoneEntity, modelPosition: Pos) {
         val bone = boneEntity.bone
         val transform = bone.globalTransform
-        val relPos = transform.toRelativePosition(modelPosition.yaw())
+        val relPos = applySkinOffset(transform.toRelativePosition(modelPosition.yaw()), bone.skinPartId)
         val effectiveScale = applyModelScale(transform.scale, bone.blueprint.modelScale)
 
         val spawnPos = Pos(modelPosition.x(), modelPosition.y(), modelPosition.z())
@@ -186,7 +186,8 @@ class BoneRenderer(
         put(META_SCALE, Metadata.Vector3(scale))
         put(META_ROTATION_RIGHT, Metadata.Quaternion(boneRotation.toFloatArray()))
         put(META_BILLBOARD, Metadata.Byte(AbstractDisplayMeta.BillboardConstraints.FIXED.ordinal.toByte()))
-        put(META_VIEW_RANGE, Metadata.Float(1.0f))
+        val viewRange = if (entity.bone.skinPartId != null && entity.bone.skinPartId != 0) 1000f else 1.0f
+        put(META_VIEW_RANGE, Metadata.Float(viewRange))
         if (item != null) {
             put(META_DISPLAYED_ITEM, Metadata.ItemStack(item))
             put(META_DISPLAY_TYPE, Metadata.Byte(2))
@@ -242,4 +243,11 @@ class BoneRenderer(
         val ms = modelScale.toDouble()
         return Vec(transformScale.x() * ms, transformScale.y() * ms, transformScale.z() * ms)
     }
+
+    private fun applySkinOffset(pos: Vec, partId: Int?): Vec {
+        if (partId == null || partId == 0) return pos
+        return Vec(pos.x(), pos.y() - SKIN_SPACING * partId, pos.z())
+    }
 }
+
+private const val SKIN_SPACING = 1024.0

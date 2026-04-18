@@ -7,6 +7,9 @@ import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.generator.ModelIdRegistry
 import me.nebula.orbit.utils.modelengine.model.StandaloneModelOwner
 import me.nebula.orbit.utils.modelengine.model.standAloneModel
+import me.nebula.orbit.utils.scheduler.delay
+import me.nebula.orbit.utils.statue.PlayerModelGenerator
+import me.nebula.orbit.utils.statue.PlayerSkinPack
 import net.minestom.server.command.builder.Command
 import net.minestom.server.component.DataComponents
 import net.minestom.server.coordinate.Vec
@@ -103,6 +106,9 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
             val owner = standAloneModel(player.position) {
                 model(blueprintName, autoPlayIdle = !noIdle) { scale(scale) }
             }
+            if (blueprintName == PlayerModelGenerator.BLUEPRINT_NAME) {
+                player.skin?.let { PlayerSkinPack.applyTo(owner, it) }
+            }
             owner.show(player)
             spawnedModels += owner
             val key = if (noIdle) "orbit.command.me.spawn.success_noidle" else "orbit.command.me.spawn.success"
@@ -120,6 +126,60 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
             spawnedModels.forEach { it.remove() }
             spawnedModels.clear()
             player.sendMessage(player.translate("orbit.command.me.despawn.success", "count" to count.toString()))
+        }
+    }
+
+    subCommand("animate") {
+        stringArrayArgument("args")
+        tabComplete { _, input ->
+            val tokens = input.split(" ")
+            if (tokens.size <= 1) {
+                spawnedModels.asSequence()
+                    .flatMap { it.modeledEntity?.models?.values?.asSequence().orEmpty() }
+                    .flatMap { it.blueprint.animations.keys.asSequence() }
+                    .distinct()
+                    .filter { it.startsWith(tokens[0], ignoreCase = true) }
+                    .toList()
+            } else emptyList()
+        }
+        onPlayerExecute {
+            if (spawnedModels.isEmpty()) {
+                player.sendMessage(player.translate("orbit.command.me.animate.empty"))
+                return@onPlayerExecute
+            }
+            @Suppress("UNCHECKED_CAST")
+            val cmdArgs = args.get("args") as? Array<String>
+            val animationName = cmdArgs?.getOrNull(0)
+            if (animationName.isNullOrEmpty()) {
+                player.sendMessage(player.translate("orbit.command.me.animate.usage"))
+                return@onPlayerExecute
+            }
+            val speed = cmdArgs.getOrNull(1)?.toFloatOrNull() ?: 1f
+            val lerpIn = cmdArgs.getOrNull(2)?.toFloatOrNull() ?: 0.2f
+            val lerpOut = cmdArgs.getOrNull(3)?.toFloatOrNull() ?: 0.2f
+            var played = 0
+            spawnedModels.forEach { owner ->
+                owner.modeledEntity?.models?.values?.forEach { active ->
+                    val anim = active.blueprint.animations[animationName] ?: return@forEach
+                    active.stopAllAnimations()
+                    active.playAnimation(animationName, lerpIn = lerpIn, lerpOut = lerpOut, speed = speed)
+                    played++
+                    val durationTicks = (((anim.length / speed) + lerpOut) * 20f).toInt().coerceAtLeast(1)
+                    delay(durationTicks) {
+                        if (owner.isRemoved) return@delay
+                        active.stopAllAnimations()
+                        active.blueprint.animations.keys
+                            .firstOrNull { "idle" in it.lowercase() }
+                            ?.let { active.playAnimation(it) }
+                    }
+                }
+            }
+            if (played == 0) {
+                player.sendMessage(player.translate("orbit.command.me.animate.not_found", "name" to animationName))
+            } else {
+                player.sendMessage(player.translate("orbit.command.me.animate.success",
+                    "name" to animationName, "count" to played.toString()))
+            }
         }
     }
 
@@ -266,3 +326,4 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
         }
     }
 }
+

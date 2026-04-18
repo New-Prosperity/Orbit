@@ -9,6 +9,7 @@ import javax.imageio.ImageIO
 import me.nebula.orbit.utils.customcontent.armor.ArmorShaderPack
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
 import me.nebula.orbit.utils.customcontent.effects.EffectsShaderPack
+import me.nebula.orbit.utils.statue.PlayerSkinPack
 import me.nebula.orbit.utils.tooltip.TooltipStylePack
 import me.nebula.orbit.utils.hud.font.HudFontProvider
 import me.nebula.orbit.utils.hud.font.HudSpriteRegistry
@@ -208,7 +209,9 @@ object CustomContentRegistry {
         val spriteItemEntries = SpriteItemPack.generate(resources, SPRITES_DIR)
         logger.info { "Generated sprite item pack: ${spriteItemEntries.size} entries" }
 
-        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries + tabListOverrides + spriteItemEntries
+        val playerSkinEntries = PlayerSkinPack.generate()
+
+        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries + tabListOverrides + spriteItemEntries + playerSkinEntries
         val result = PackMerger.merge(resources, MODELS_DIR, allRaw, allShaderEntries)
         mergeResult = result
 

@@ -251,7 +251,7 @@ object PackMerger {
                 }
             })
             add("display", buildDisplayJson(model.display))
-            add("elements", com.google.gson.JsonArray().apply {
+            add("elements", JsonArray().apply {
                 model.elements.forEach { element ->
                     add(JsonObject().apply {
                         add("from", element.from.toJsonArray())
@@ -273,7 +273,7 @@ object PackMerger {
                         add("faces", JsonObject().apply {
                             element.faces.forEach { (face, faceData) ->
                                 add(face, JsonObject().apply {
-                                    add("uv", com.google.gson.JsonArray().also { arr ->
+                                    add("uv", JsonArray().also { arr ->
                                         faceData.uv.forEach { arr.add(it) }
                                     })
                                     addProperty("rotation", faceData.rotation)

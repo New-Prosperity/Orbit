@@ -29,6 +29,7 @@ class ModelBone(val blueprint: BlueprintBone) {
 
     var visible: Boolean = blueprint.visible
     var modelItem: ItemStack? = blueprint.modelItem
+    var skinPartId: Int? = null
 
     var globalTransform: BoneTransform = BoneTransform.IDENTITY
         private set

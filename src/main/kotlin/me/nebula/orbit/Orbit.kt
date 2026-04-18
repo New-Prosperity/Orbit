@@ -3,6 +3,7 @@ package me.nebula.orbit
 import me.nebula.ether.utils.app.App
 import me.nebula.ether.utils.app.appDelegate
 import me.nebula.ether.utils.environment.environment
+import me.nebula.ether.utils.hazelcast.HazelcastHealth
 import me.nebula.ether.utils.hazelcast.Store
 import me.nebula.ether.utils.hazelcast.hazelcastModule
 import me.nebula.ether.utils.module.moduleRegistry
@@ -33,10 +34,11 @@ import me.nebula.gravity.host.HostRequestLookupStore
 import me.nebula.gravity.host.HostRequestStore
 import me.nebula.gravity.host.HostTicketStore
 import me.nebula.gravity.map.GameMapStore
-import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.orbit.subscriber.installNetworkSubscribers
 import me.nebula.gravity.server.LiveServer
+import me.nebula.gravity.server.LiveServerPresence
 import me.nebula.gravity.server.LiveServerRegistry
+import me.nebula.orbit.server.OrbitHeartbeat
 import me.nebula.gravity.server.ServerType
 import me.nebula.gravity.mission.ActiveMission
 import me.nebula.gravity.mission.MissionData
@@ -264,6 +266,7 @@ object Orbit {
         val serverUuid = env.optional("P_SERVER_UUID", "")
         val serverHost = env.optional("SERVER_HOST", "").ifEmpty { null } ?: detectContainerAddress()
         val hazelcastAddresses = env.all["HAZELCAST_ADDRESSES"]?.ifEmpty { null }
+        val liveServerName = env.optional("P_SERVER_NAME", "orbit-${serverUuid.take(8)}")
 
         app = appDelegate("Orbit") {
             configureResources {
@@ -273,6 +276,7 @@ object Orbit {
                 +hazelcastModule {
                     client {
                         instanceName = env.all["P_SERVER_NAME"]?.ifEmpty { null } ?: "orbit-local"
+                        addLabel(LiveServerPresence.label(liveServerName))
                         if (hazelcastAddresses != null) {
                             networkConfig.addAddress(*hazelcastAddresses.split(",").toTypedArray())
                         }
@@ -532,6 +536,10 @@ object Orbit {
         runCatching { PendingReplayFlushes.sweepStale() } // noqa: dangling runCatching
 
         handler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
+            if (!HazelcastHealth.connected) {
+                event.player.kick(net.kyori.adventure.text.Component.text("Backend is temporarily unavailable. Please try again shortly."))
+                return@addListener
+            }
             event.spawningInstance = mode.activeInstance
             event.player.respawnPoint = mode.activeSpawnPoint
             if (event.isFirstConfig) {
@@ -627,9 +635,9 @@ object Orbit {
 
         server.start("0.0.0.0", port)
 
-        val serverName = env.optional("P_SERVER_NAME", "orbit-${serverUuid.take(8)}")
+        val serverName = liveServerName
         val serverTypeValue = if (gameMode == "limbo") ServerType.LIMBO else ServerType.GAME
-        LiveServerRegistry.register(LiveServer(
+        OrbitHeartbeat.register(LiveServer(
             name = serverName,
             address = serverHost ?: "127.0.0.1",
             port = port,
@@ -638,9 +646,8 @@ object Orbit {
             maxPlayers = mode.maxPlayers,
         ))
         globalTasks += repeat(Duration.ofSeconds(LiveServerRegistry.heartbeatSeconds)) {
-            runCatching {
-                LiveServerRegistry.heartbeat(serverName) { it.copy(playerCount = MinecraftServer.getConnectionManager().onlinePlayers.size) }
-            }.onFailure { logger.warn(it) { "LiveServer heartbeat failed" } }
+            runCatching { OrbitHeartbeat.heartbeat() }
+                .onFailure { logger.warn(it) { "LiveServer heartbeat failed" } }
         }
 
         installNetworkSubscribers(gameMode)
