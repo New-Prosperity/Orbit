@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.anticheat.checks
 
-import me.nebula.gravity.property.NetworkProperties
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
 import me.nebula.orbit.utils.anticheat.AntiCheat
 import me.nebula.orbit.utils.anticheat.AntiCheatCheck
 import net.minestom.server.entity.GameMode
@@ -29,7 +29,7 @@ object GroundSpoofCheck : AntiCheatCheck {
             if (player.gameMode == GameMode.CREATIVE || player.gameMode == GameMode.SPECTATOR) return@addListener
             if (player.vehicle != null) return@addListener
             if (player.isFlying) return@addListener
-            if (!PropertyStore[NetworkProperties.AC_CHECK_GROUNDSPOOF_ENABLED]) return@addListener
+            if (!ConfigStore.get(NetworkConfig.AC_CHECK_GROUNDSPOOF_ENABLED)) return@addListener
 
             val pos = event.newPosition
             val instance = player.instance ?: return@addListener

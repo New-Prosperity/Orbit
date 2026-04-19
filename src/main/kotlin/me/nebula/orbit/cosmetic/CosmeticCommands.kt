@@ -18,6 +18,7 @@ import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerEntityInteractEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
 
 private val logger = logger("CosmeticCommands")
 
@@ -92,13 +93,13 @@ fun previewCommand(): Command = command("preview") {
 
         spawnPreview(player, category, cosmeticId)
 
-        player.sendMessage(player.translate("orbit.cosmetic.preview_start",
+        player.sendMessage(player.translate(Keys.Orbit.Cosmetic.PreviewStart,
             "cosmetic" to player.translateRaw(definition.nameKey)))
 
         delay(600) {
             if (activePreviews.containsKey(player.uuid)) {
                 endPreview(player)
-                player.sendMessage(player.translate("orbit.cosmetic.preview_end"))
+                player.sendMessage(player.translate(Keys.Orbit.Cosmetic.PreviewEnd))
             }
         }
     }

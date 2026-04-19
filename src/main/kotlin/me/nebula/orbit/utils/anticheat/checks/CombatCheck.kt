@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.anticheat.checks
 
-import me.nebula.gravity.property.NetworkProperties
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
 import me.nebula.orbit.utils.anticheat.AntiCheat
 import me.nebula.orbit.utils.anticheat.AntiCheatCheck
 import net.minestom.server.entity.GameMode
@@ -35,7 +35,7 @@ object CombatCheck : AntiCheatCheck {
             val uuid = player.uuid
 
             val distance = player.position.distance(target.position)
-            if (distance > REACH_THRESHOLD && PropertyStore[NetworkProperties.AC_CHECK_REACH_ENABLED]) {
+            if (distance > REACH_THRESHOLD && ConfigStore.get(NetworkConfig.AC_CHECK_REACH_ENABLED)) {
                 AntiCheat.flag(uuid, "reach", WEIGHT, AntiCheat.combatFlagThreshold, AntiCheat.combatKickThreshold)
             }
 
@@ -49,7 +49,7 @@ object CombatCheck : AntiCheatCheck {
                 if (head.time < cutoff) history.pollFirst() else break
             }
 
-            if (history.size > MAX_CPS && PropertyStore[NetworkProperties.AC_CHECK_ATTACKRATE_ENABLED]) {
+            if (history.size > MAX_CPS && ConfigStore.get(NetworkConfig.AC_CHECK_ATTACKRATE_ENABLED)) {
                 AntiCheat.flag(uuid, "attackrate", WEIGHT, AntiCheat.combatFlagThreshold, AntiCheat.combatKickThreshold)
             }
         }

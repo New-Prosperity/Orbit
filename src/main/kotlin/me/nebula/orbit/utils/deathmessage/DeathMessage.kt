@@ -1,6 +1,8 @@
 package me.nebula.orbit.utils.deathmessage
 
 import me.nebula.ether.utils.parse.toUUIDOrNull
+import me.nebula.orbit.user.broadcast
+import me.nebula.orbit.user.onlineUsers
 import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
@@ -66,10 +68,8 @@ class DeathMessageHandler(private val config: DeathMessageConfig) {
             event.deathText = component
 
             when (config.broadcastScope) {
-                BroadcastScope.ALL ->
-                    MinecraftServer.getConnectionManager().onlinePlayers.forEach { it.sendMessage(component) }
-                BroadcastScope.INSTANCE ->
-                    player.instance?.players?.forEach { it.sendMessage(component) }
+                BroadcastScope.ALL -> onlineUsers().broadcast(component)
+                BroadcastScope.INSTANCE -> player.instance?.onlineUsers()?.broadcast(component)
             }
         }
 

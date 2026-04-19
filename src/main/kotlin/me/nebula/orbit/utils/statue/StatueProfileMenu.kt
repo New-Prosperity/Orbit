@@ -20,6 +20,8 @@ import net.minestom.server.entity.Player
 import net.minestom.server.entity.PlayerSkin
 import net.minestom.server.item.Material
 import java.util.UUID
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 object StatueProfileMenu {
 
@@ -50,7 +52,7 @@ object StatueProfileMenu {
             val statsData = StatsStore.load(targetUuid)
             val ratingData = RatingStore.load(targetUuid)
 
-            val title = viewer.translateRaw("orbit.statue.profile_title", "player" to targetName)
+            val title = viewer.translateRaw(Keys.Orbit.Statue.ProfileTitle, "player" to targetName)
             val rankColor = rankData?.color ?: "white"
             val rankName = rankData?.name ?: "Member"
             val level = levelData?.level ?: 1
@@ -59,19 +61,19 @@ object StatueProfileMenu {
                 slot(4, itemStack(Material.PLAYER_HEAD) {
                     name("<$rankColor><bold>$targetName")
                     lore("<gray>$rankName")
-                    lore("<aqua>${viewer.translateRaw("orbit.statue.level_label", "level" to level.toString())}")
+                    lore("<aqua>${viewer.translateRaw(Keys.Orbit.Statue.LevelLabel, "level" to level.toString())}")
                     emptyLoreLine()
 
                     val totalWins = statsData?.stats?.values?.sumOf { it.wins } ?: 0
                     val totalKills = statsData?.stats?.values?.sumOf { it.kills } ?: 0
                     val totalGames = statsData?.stats?.values?.sumOf { it.gamesPlayed } ?: 0
-                    lore("<gray>${viewer.translateRaw("orbit.statue.total_wins", "wins" to totalWins.toString())}")
-                    lore("<gray>${viewer.translateRaw("orbit.statue.total_kills", "kills" to totalKills.toString())}")
-                    lore("<gray>${viewer.translateRaw("orbit.statue.total_games", "games" to totalGames.toString())}")
+                    lore("<gray>${viewer.translateRaw(Keys.Orbit.Statue.TotalWins, "wins" to totalWins.toString())}")
+                    lore("<gray>${viewer.translateRaw(Keys.Orbit.Statue.TotalKills, "kills" to totalKills.toString())}")
+                    lore("<gray>${viewer.translateRaw(Keys.Orbit.Statue.TotalGames, "games" to totalGames.toString())}")
 
                     if (totalGames > 0) {
                         val winRate = "%.1f".format((totalWins.toDouble() / totalGames) * 100)
-                        lore("<gray>${viewer.translateRaw("orbit.statue.win_rate", "rate" to winRate)}")
+                        lore("<gray>${viewer.translateRaw(Keys.Orbit.Statue.WinRate, "rate" to winRate)}")
                     }
 
                     val skinTextures = playerData?.let {
@@ -90,14 +92,14 @@ object StatueProfileMenu {
                     val definition = CosmeticRegistry[cosmeticId] ?: return@forEachIndexed
                     val level = cosmeticData?.owned?.get(cosmeticId) ?: 1
                     val material = categoryMaterials[category] ?: Material.BARRIER
-                    val rarityName = viewer.translateRaw("orbit.cosmetic.rarity.${definition.rarity.name.lowercase()}")
+                    val rarityName = viewer.translateRaw("orbit.cosmetic.rarity.${definition.rarity.name.lowercase()}".asTranslationKey())
 
                     slot(cosmeticSlots[index], itemStack(material) {
                         name("${definition.rarity.colorTag}${viewer.translateRaw(definition.nameKey)}")
                         lore("<gray>${viewer.translateRaw(category.displayKey)}")
                         lore("${definition.rarity.colorTag}$rarityName")
                         if (definition.maxLevel > 1) {
-                            lore("<white>${viewer.translateRaw("orbit.cosmetic.level", "level" to "$level", "max" to "${definition.maxLevel}")}")
+                            lore("<white>${viewer.translateRaw(Keys.Orbit.Cosmetic.Level, "level" to "$level", "max" to "${definition.maxLevel}")}")
                         }
                         glowing()
                         clean()
@@ -111,13 +113,13 @@ object StatueProfileMenu {
                     val provisional = !rating.isPlaced()
                     slot(ratingSlots[index], itemStack(Material.IRON_SWORD) {
                         val suffix = if (provisional) "<gray>*" else ""
-                        name("${tier.color}<bold>${viewer.translateRaw("orbit.statue.rating_gamemode", "gamemode" to gameMode)}")
+                        name("${tier.color}<bold>${viewer.translateRaw(Keys.Orbit.Statue.RatingGamemode, "gamemode" to gameMode)}")
                         lore("${tier.color}${tier.displayName}$suffix <gray>(${rating.rating})")
                         if (provisional) {
-                            lore("<yellow>${viewer.translateRaw("orbit.statue.placement_progress", "games" to rating.gamesPlayed.toString(), "required" to PLACEMENT_MATCHES_REQUIRED.toString())}")
+                            lore("<yellow>${viewer.translateRaw(Keys.Orbit.Statue.PlacementProgress, "games" to rating.gamesPlayed.toString(), "required" to PLACEMENT_MATCHES_REQUIRED.toString())}")
                         } else {
-                            lore("<gray>${viewer.translateRaw("orbit.statue.peak_rating", "rating" to rating.peakRating.toString())}")
-                            lore("<gray>${viewer.translateRaw("orbit.statue.games_played", "games" to rating.gamesPlayed.toString())}")
+                            lore("<gray>${viewer.translateRaw(Keys.Orbit.Statue.PeakRating, "rating" to rating.peakRating.toString())}")
+                            lore("<gray>${viewer.translateRaw(Keys.Orbit.Statue.GamesPlayed, "games" to rating.gamesPlayed.toString())}")
                         }
                         clean()
                     })

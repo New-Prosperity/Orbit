@@ -15,6 +15,7 @@ import me.nebula.orbit.utils.kit.kit
 import net.minestom.server.entity.Player
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
+import me.nebula.gravity.translation.Keys
 
 object BattleRoyaleKitManager {
 
@@ -27,7 +28,7 @@ object BattleRoyaleKitManager {
         val data = BattleRoyaleKitStore.load(storeKey(player)) ?: BattleRoyaleKitData()
         val rows = ((kitDefinitions.size + 8) / 9).coerceIn(2, 6)
 
-        gui(player.translateRaw("orbit.game.br.kit.menu_title"), rows) {
+        gui(player.translateRaw(Keys.Orbit.Game.Br.Kit.MenuTitle), rows) {
             border(Material.BLACK_STAINED_GLASS_PANE)
 
             kitDefinitions.forEachIndexed { index, def ->
@@ -53,21 +54,21 @@ object BattleRoyaleKitManager {
             lore(player.translateRaw(def.descriptionKey))
             if (!isUnlocked) {
                 emptyLoreLine()
-                lore(player.translateRaw("orbit.game.br.kit.locked"))
+                lore(player.translateRaw(Keys.Orbit.Game.Br.Kit.Locked))
             } else {
                 emptyLoreLine()
                 if (maxLevel > 1) {
-                    lore(player.translateRaw("orbit.game.br.kit.level", "level" to level.toString(), "max" to maxLevel.toString()))
+                    lore(player.translateRaw(Keys.Orbit.Game.Br.Kit.Level, "level" to level.toString(), "max" to maxLevel.toString()))
                     if (level < maxLevel && xpNeeded > 0) {
-                        lore(player.translateRaw("orbit.game.br.kit.xp_progress", "xp" to xp.toString(), "needed" to xpNeeded.toString()))
+                        lore(player.translateRaw(Keys.Orbit.Game.Br.Kit.XpProgress, "xp" to xp.toString(), "needed" to xpNeeded.toString()))
                     }
                 }
                 emptyLoreLine()
                 if (isSelected) {
-                    lore(player.translateRaw("orbit.game.br.kit.selected"))
+                    lore(player.translateRaw(Keys.Orbit.Game.Br.Kit.Selected))
                     glowing()
                 } else {
-                    lore(player.translateRaw("orbit.game.br.kit.click_select"))
+                    lore(player.translateRaw(Keys.Orbit.Game.Br.Kit.ClickSelect))
                 }
             }
             clean()
@@ -79,15 +80,15 @@ object BattleRoyaleKitManager {
         val data = BattleRoyaleKitStore.load(key) ?: BattleRoyaleKitData()
         val isUnlocked = !def.locked || def.id in data.unlockedKits
         if (!isUnlocked) {
-            player.sendMessage(player.translate("orbit.game.br.kit.locked"))
+            player.sendMessage(player.translate(Keys.Orbit.Game.Br.Kit.Locked))
             return
         }
         if (data.selectedKit == def.id) {
             BattleRoyaleKitStore.executeOnKey(key, SelectKitProcessor(""))
-            player.sendMessage(player.translate("orbit.game.br.kit.deselected", "kit" to player.translateRaw(def.nameKey)))
+            player.sendMessage(player.translate(Keys.Orbit.Game.Br.Kit.Deselected, "kit" to player.translateRaw(def.nameKey)))
         } else {
             BattleRoyaleKitStore.executeOnKey(key, SelectKitProcessor(def.id))
-            player.sendMessage(player.translate("orbit.game.br.kit.selected_msg", "kit" to player.translateRaw(def.nameKey)))
+            player.sendMessage(player.translate(Keys.Orbit.Game.Br.Kit.SelectedMsg, "kit" to player.translateRaw(def.nameKey)))
         }
         openKitMenu(player)
     }
@@ -149,7 +150,7 @@ object BattleRoyaleKitManager {
 
         if (result.leveledUp) {
             player.sendMessage(player.translate(
-                "orbit.game.br.kit.level_up",
+                Keys.Orbit.Game.Br.Kit.LevelUp,
                 "kit" to player.translateRaw(def.nameKey),
                 "level" to result.newLevel.toString(),
             ))
@@ -158,7 +159,7 @@ object BattleRoyaleKitManager {
 
     fun buildKitSelectorItem(player: Player): ItemStack =
         itemStack(Material.NETHER_STAR) {
-            name(player.translateRaw("orbit.game.br.kit.selector"))
+            name(player.translateRaw(Keys.Orbit.Game.Br.Kit.Selector))
             glowing()
             clean()
         }

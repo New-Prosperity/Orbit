@@ -1,5 +1,7 @@
 package me.nebula.orbit.mode.game
 
+import me.nebula.ether.utils.translation.asTranslationKey
+import me.nebula.gravity.notification.notify
 import me.nebula.gravity.rating.ApplyRatingChangeProcessor
 import me.nebula.gravity.rating.EloCalculator
 import me.nebula.gravity.rating.GameModeRating
@@ -8,18 +10,20 @@ import me.nebula.gravity.rating.RatingStore
 import me.nebula.gravity.rating.RatingTier
 import me.nebula.gravity.rating.isPlaced
 import me.nebula.gravity.rating.placementsRemaining
+import me.nebula.gravity.translation.Keys
 import me.nebula.orbit.Orbit
+import me.nebula.orbit.notification.ToastFrame
+import me.nebula.orbit.notification.actionBar
+import me.nebula.orbit.notification.title
+import me.nebula.orbit.notification.toast
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
-import me.nebula.orbit.utils.toast.ToastFrame
-import me.nebula.orbit.utils.toast.showToast
-import net.kyori.adventure.sound.Sound
-import net.kyori.adventure.title.Title
+import me.nebula.orbit.user.asNebulaUser
+import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
+import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
-import net.minestom.server.sound.SoundEvent
-import java.time.Duration
 import java.util.UUID
 
 class RatingManager(private val gameMode: GameMode) {
@@ -82,7 +86,7 @@ class RatingManager(private val gameMode: GameMode) {
             if (!isNowPlaced) {
                 val provisional = "${tier.color}${tier.displayName}<gray>*"
                 player.sendMessage(player.translate(
-                    "orbit.rating.placement_progress",
+                    Keys.Orbit.Rating.PlacementProgress,
                     "tier" to provisional,
                     "old" to oldRating.toString(),
                     "new" to newRating.toString(),
@@ -102,7 +106,7 @@ class RatingManager(private val gameMode: GameMode) {
             }
 
             player.sendMessage(player.translate(
-                "orbit.rating.change",
+                Keys.Orbit.Rating.Change,
                 "old" to oldRating.toString(),
                 "new" to newRating.toString(),
                 "change" to changeStr,
@@ -120,46 +124,53 @@ class RatingManager(private val gameMode: GameMode) {
     }
 
     internal fun revealPlacement(player: Player, tier: RatingTier, rating: Int) {
+        val user = player.asNebulaUser()
         val tierName = "${tier.color}${tier.displayName}"
-        player.sendMessage(player.translate(
-            "orbit.rating.placement_complete",
-            "tier" to tierName,
-            "rating" to rating.toString(),
-        ))
-        player.showTitle(Title.title(
-            player.translate("orbit.rating.placement_reveal_title"),
-            player.translate("orbit.rating.placement_reveal_subtitle", "tier" to tierName, "rating" to rating.toString()),
-            Title.Times.times(Duration.ofMillis(400), Duration.ofMillis(3500), Duration.ofMillis(800)),
-        ))
-        player.showToast {
-            title(player.translateRaw("orbit.rating.placement_complete", "tier" to tierName, "rating" to rating.toString()))
-            icon(Material.NETHER_STAR)
-            frame(ToastFrame.GOAL)
-            sound(SoundEvent.UI_TOAST_CHALLENGE_COMPLETE, volume = 1.0f, pitch = 1.2f)
+        notify(user) {
+            chat(user.translate(Keys.Orbit.Rating.PlacementComplete, "tier" to tierName, "rating" to rating.toString()))
+            title(
+                user.translate(Keys.Orbit.Rating.PlacementRevealTitle),
+                user.translate(Keys.Orbit.Rating.PlacementRevealSubtitle, "tier" to tierName, "rating" to rating.toString()),
+                fadeInTicks = 8,
+                stayTicks = 70,
+                fadeOutTicks = 16,
+            )
+            toast(
+                title = Component.text(
+                    user.translateRaw(Keys.Orbit.Rating.PlacementComplete, "tier" to tierName, "rating" to rating.toString())
+                ),
+                icon = ItemStack.of(Material.NETHER_STAR),
+                frame = ToastFrame.GOAL,
+            )
+            sound("minecraft:ui.toast.challenge_complete", pitch = 1.2f)
+            sound("minecraft:entity.player.levelup")
+            sound("minecraft:ui.toast.challenge_complete")
         }
-        player.playSound(Sound.sound(SoundEvent.ENTITY_PLAYER_LEVELUP.key(), Sound.Source.PLAYER, 1.0f, 1.0f))
-        player.playSound(Sound.sound(SoundEvent.UI_TOAST_CHALLENGE_COMPLETE.key(), Sound.Source.MASTER, 1.0f, 1.0f))
     }
 
     internal fun notifyTierChange(player: Player, newTier: RatingTier, promoted: Boolean) {
+        val user = player.asNebulaUser()
         val key = if (promoted) "orbit.rating.tier_up" else "orbit.rating.tier_down"
         val tierName = "${newTier.color}${newTier.displayName}"
-        player.sendMessage(player.translate(key, "tier" to tierName))
-        player.showToast {
-            title(player.translateRaw(key, "tier" to tierName))
-            icon(if (promoted) Material.DIAMOND else Material.REDSTONE)
-            frame(if (promoted) ToastFrame.GOAL else ToastFrame.TASK)
+        notify(user) {
+            chat(user.translate(key.asTranslationKey(), "tier" to tierName))
+            toast(
+                title = Component.text(
+                    user.translateRaw(key.asTranslationKey(), "tier" to tierName)
+                ),
+                icon = ItemStack.of(if (promoted) Material.DIAMOND else Material.REDSTONE),
+                frame = if (promoted) ToastFrame.GOAL else ToastFrame.TASK,
+            )
             sound(
-                if (promoted) SoundEvent.UI_TOAST_CHALLENGE_COMPLETE else SoundEvent.BLOCK_ANVIL_LAND,
+                soundId = if (promoted) "minecraft:ui.toast.challenge_complete" else "minecraft:block.anvil.land",
                 volume = 0.8f,
                 pitch = if (promoted) 1.3f else 0.8f,
             )
+            sound(
+                soundId = if (promoted) "minecraft:entity.player.levelup" else "minecraft:entity.villager.no",
+                volume = if (promoted) 1.0f else 0.6f,
+                pitch = if (promoted) 1.0f else 0.9f,
+            )
         }
-        val ambient = if (promoted) {
-            Sound.sound(SoundEvent.ENTITY_PLAYER_LEVELUP.key(), Sound.Source.PLAYER, 1.0f, 1.0f)
-        } else {
-            Sound.sound(SoundEvent.ENTITY_VILLAGER_NO.key(), Sound.Source.PLAYER, 0.6f, 0.9f)
-        }
-        player.playSound(ambient)
     }
 }

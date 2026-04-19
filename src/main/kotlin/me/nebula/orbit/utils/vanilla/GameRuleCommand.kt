@@ -5,6 +5,7 @@ import me.nebula.orbit.utils.commandbuilder.command
 import net.minestom.server.command.CommandManager
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.command.builder.suggestion.SuggestionEntry
+import me.nebula.gravity.translation.Keys
 
 private fun moduleArg(name: String = "module") = ArgumentType.Word(name).apply {
     setSuggestionCallback { _, _, suggestion ->
@@ -36,10 +37,10 @@ fun installGameRuleCommand(commandManager: CommandManager) {
                 val enabled = VanillaModules.enabledFor(instance)
                 val all = VanillaModules.all()
 
-                player.sendMessage(player.translate("orbit.gamerule.header"))
+                player.sendMessage(player.translate(Keys.Orbit.Gamerule.Header))
                 for (module in all) {
                     val status = if (enabled.containsKey(module.id)) "ON" else "OFF"
-                    player.sendMessage(player.translate("orbit.gamerule.list_entry", "status" to status, "module" to module.id, "description" to module.description))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.ListEntry, "status" to status, "module" to module.id, "description" to module.description))
                 }
             }
         }
@@ -50,11 +51,11 @@ fun installGameRuleCommand(commandManager: CommandManager) {
                 val id = requireArg("module") ?: return@onPlayerExecute
                 val instance = player.instance ?: return@onPlayerExecute
                 if (VanillaModules.get(id) == null) {
-                    player.sendMessage(player.translate("orbit.gamerule.unknown_module", "module" to id))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.UnknownModule, "module" to id))
                     return@onPlayerExecute
                 }
                 VanillaModules.enable(instance, id)
-                player.sendMessage(player.translate("orbit.gamerule.enabled", "module" to id))
+                player.sendMessage(player.translate(Keys.Orbit.Gamerule.Enabled, "module" to id))
             }
         }
 
@@ -64,11 +65,11 @@ fun installGameRuleCommand(commandManager: CommandManager) {
                 val id = requireArg("module") ?: return@onPlayerExecute
                 val instance = player.instance ?: return@onPlayerExecute
                 if (!VanillaModules.isEnabled(instance, id)) {
-                    player.sendMessage(player.translate("orbit.gamerule.not_enabled", "module" to id))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.NotEnabled, "module" to id))
                     return@onPlayerExecute
                 }
                 VanillaModules.disable(instance, id)
-                player.sendMessage(player.translate("orbit.gamerule.disabled", "module" to id))
+                player.sendMessage(player.translate(Keys.Orbit.Gamerule.Disabled, "module" to id))
             }
         }
 
@@ -78,21 +79,21 @@ fun installGameRuleCommand(commandManager: CommandManager) {
                 val id = requireArg("module") ?: return@onPlayerExecute
                 val instance = player.instance ?: return@onPlayerExecute
                 val module = VanillaModules.get(id) ?: run {
-                    player.sendMessage(player.translate("orbit.gamerule.unknown_module", "module" to id))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.UnknownModule, "module" to id))
                     return@onPlayerExecute
                 }
                 val active = VanillaModules.getActive(instance, id)
                 val status = if (active != null) "<green>ON" else "<red>OFF"
 
-                player.sendMessage(player.translate("orbit.gamerule.info_header", "module" to module.id))
-                player.sendMessage(player.translate("orbit.gamerule.info_desc", "description" to module.description))
-                player.sendMessage(player.translate("orbit.gamerule.status", "status" to status))
+                player.sendMessage(player.translate(Keys.Orbit.Gamerule.InfoHeader, "module" to module.id))
+                player.sendMessage(player.translate(Keys.Orbit.Gamerule.InfoDesc, "description" to module.description))
+                player.sendMessage(player.translate(Keys.Orbit.Gamerule.Status, "status" to status))
 
                 if (module.configParams.isNotEmpty()) {
-                    player.sendMessage(player.translate("orbit.gamerule.config_header"))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.ConfigHeader))
                     for (param in module.configParams) {
                         val currentValue = active?.config?.get(param.key, param.default) ?: param.default
-                        player.sendMessage(player.translate("orbit.gamerule.config_entry", "key" to param.key, "value" to currentValue.toString(), "description" to param.description))
+                        player.sendMessage(player.translate(Keys.Orbit.Gamerule.ConfigEntry, "key" to param.key, "value" to currentValue.toString(), "description" to param.description))
                     }
                 }
             }
@@ -109,17 +110,17 @@ fun installGameRuleCommand(commandManager: CommandManager) {
                 val instance = player.instance ?: return@onPlayerExecute
 
                 val module = VanillaModules.get(id) ?: run {
-                    player.sendMessage(player.translate("orbit.gamerule.unknown_module", "module" to id))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.UnknownModule, "module" to id))
                     return@onPlayerExecute
                 }
 
                 val param = module.configParams.find { it.key == key } ?: run {
-                    player.sendMessage(player.translate("orbit.gamerule.unknown_key", "key" to key, "module" to id))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.UnknownKey, "key" to key, "module" to id))
                     return@onPlayerExecute
                 }
 
                 val parsed = parseConfigValue(param, rawValue) ?: run {
-                    player.sendMessage(player.translate("orbit.gamerule.invalid_value", "value" to rawValue, "key" to key))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.InvalidValue, "value" to rawValue, "key" to key))
                     return@onPlayerExecute
                 }
 
@@ -127,10 +128,10 @@ fun installGameRuleCommand(commandManager: CommandManager) {
                     val config = ModuleConfig.fromDefaults(module)
                     config.set(key, parsed)
                     VanillaModules.enable(instance, id, config)
-                    player.sendMessage(player.translate("orbit.gamerule.enabled_with", "module" to id, "key" to key, "value" to parsed.toString()))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.EnabledWith, "module" to id, "key" to key, "value" to parsed.toString()))
                 } else {
                     VanillaModules.reconfigure(instance, id, key, parsed)
-                    player.sendMessage(player.translate("orbit.gamerule.updated", "module" to id, "key" to key, "value" to parsed.toString()))
+                    player.sendMessage(player.translate(Keys.Orbit.Gamerule.Updated, "module" to id, "key" to key, "value" to parsed.toString()))
                 }
             }
         }

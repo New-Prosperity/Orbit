@@ -16,6 +16,7 @@ import me.nebula.orbit.mode.game.GameMode
 import me.nebula.orbit.progression.BattlePassManager
 import me.nebula.orbit.translation.translate
 import net.minestom.server.entity.Player
+import me.nebula.gravity.translation.Keys
 
 object MissionTracker {
 
@@ -91,7 +92,7 @@ object MissionTracker {
             }
             AchievementStore.executeOnKey(player.uuid, IncrementAchievementProcessor("mission_master", 1, 100))
             player.sendMessage(player.translate(
-                "orbit.mission.completed",
+                Keys.Orbit.Mission.Completed,
                 "mission" to mission.templateId,
                 "xp" to mission.xpReward.toString(),
                 "coins" to mission.coinReward.toString(),
@@ -116,7 +117,7 @@ object MissionTracker {
         BattlePassManager.addXpToAll(player, bonusXp.toLong(), activeSeasonSnapshot())
 
         player.sendMessage(player.translate(
-            "orbit.mission.streak_bonus",
+            Keys.Orbit.Mission.StreakBonus,
             "streak" to streak.toString(),
             "xp" to bonusXp.toString(),
             "coins" to bonusCoins.toString(),

@@ -8,6 +8,7 @@ import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
 
 object StatTracker {
 
@@ -120,7 +121,7 @@ object StatTracker {
         top(stat, limit).forEachIndexed { index, (uuid, score) ->
             add(
                 translateDefault(
-                    "orbit.util.leaderboard.entry",
+                    Keys.Orbit.Util.Leaderboard.Entry,
                     "rank" to "${index + 1}",
                     "name" to nameResolver(uuid),
                     "score" to "$score",
@@ -234,7 +235,7 @@ class Leaderboard(
         top(limit).forEachIndexed { index, entry ->
             add(
                 translateDefault(
-                    "orbit.util.leaderboard.entry",
+                    Keys.Orbit.Util.Leaderboard.Entry,
                     "rank" to "${index + 1}",
                     "name" to entry.name,
                     "score" to "%.1f".format(entry.score),

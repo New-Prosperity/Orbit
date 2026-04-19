@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.anticheat.checks
 
-import me.nebula.gravity.property.NetworkProperties
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
 import me.nebula.orbit.utils.anticheat.AntiCheat
 import me.nebula.orbit.utils.anticheat.AntiCheatCheck
 import net.minestom.server.entity.GameMode
@@ -34,7 +34,7 @@ object InteractReachCheck : AntiCheatCheck {
 
     private fun check(player: net.minestom.server.entity.Player, bx: Int, by: Int, bz: Int, threshold: Double, checkType: String) {
         if (player.gameMode == GameMode.CREATIVE) return
-        if (!PropertyStore[NetworkProperties.AC_CHECK_INTERACT_REACH_ENABLED]) return
+        if (!ConfigStore.get(NetworkConfig.AC_CHECK_INTERACT_REACH_ENABLED)) return
 
         val eye = player.position.add(0.0, player.eyeHeight, 0.0)
         val dx = (bx + 0.5) - eye.x()

@@ -3,8 +3,13 @@ package me.nebula.orbit.utils.autorestart
 import me.nebula.ether.utils.duration.DurationFormatter
 import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.ether.utils.translation.asTranslationKey
+import me.nebula.gravity.notification.Priority
+import me.nebula.gravity.notification.notify
+import me.nebula.orbit.notification.title
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.user.onlineUsers
 import me.nebula.orbit.utils.scheduler.delay
+import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
 import net.minestom.server.timer.Task
 import java.time.Duration
@@ -78,8 +83,25 @@ object AutoRestartManager {
     private fun broadcastWarning(remaining: Duration) {
         val cfg = config ?: return
         val timeStr = DurationFormatter.format(remaining.toMillis())
-        MinecraftServer.getConnectionManager().onlinePlayers.forEach { player ->
-            player.sendMessage(player.translate(cfg.warningKey, "time" to timeStr))
+        val critical = remaining.toSeconds() <= 30
+        for (user in onlineUsers()) {
+            notify(user) {
+                chat(
+                    message = user.translate(cfg.warningKey, "time" to timeStr),
+                    priority = if (critical) Priority.CRITICAL else Priority.INFO,
+                )
+                if (critical) {
+                    title(
+                        title = Component.text("Restart in $timeStr"),
+                        fadeInTicks = 4,
+                        stayTicks = 30,
+                        fadeOutTicks = 10,
+                    )
+                    sound("minecraft:block.note_block.pling", pitch = 1.5f)
+                } else {
+                    sound("minecraft:block.note_block.bell", pitch = 0.8f)
+                }
+            }
         }
     }
 

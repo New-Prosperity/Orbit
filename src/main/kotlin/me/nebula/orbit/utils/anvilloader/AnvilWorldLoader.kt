@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.fileSize
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
+import me.nebula.gravity.translation.Keys
 
 object AnvilWorldLoader {
 
@@ -177,7 +178,7 @@ object AnvilWorldLoader {
     fun unload(name: String) {
         val instance = loaded.remove(name) ?: return
         instance.players.forEach {
-            it.kick(translateDefault("orbit.util.world.unloading"))
+            it.kick(translateDefault(Keys.Orbit.Util.World.Unloading))
         }
         MinecraftServer.getInstanceManager().unregisterInstance(instance)
     }

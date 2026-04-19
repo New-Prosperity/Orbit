@@ -41,6 +41,18 @@ class GameRules {
         }
     }
 
+    fun hydrateDefaultsFor(gameModeId: String) {
+        for (key in RuleRegistry.all()) {
+            if (key.scope == RuleScope.INSTANCE) continue
+            val qualifier = if (key.scope == RuleScope.GAMEMODE) gameModeId else null
+            val resolved = RuleConfigBridge.resolveDefault(key, qualifier)
+            if (resolved != key.default) {
+                @Suppress("UNCHECKED_CAST")
+                this[key as RuleKey<Any>] = resolved
+            }
+        }
+    }
+
     fun <T : Any> onChange(key: RuleKey<T>, listener: (old: T, new: T) -> Unit) {
         val bucket = listeners.computeIfAbsent(key.id) { CopyOnWriteArrayList() }
         @Suppress("UNCHECKED_CAST")

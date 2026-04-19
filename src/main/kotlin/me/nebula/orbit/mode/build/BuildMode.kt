@@ -30,6 +30,7 @@ import net.minestom.server.timer.Task
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import me.nebula.gravity.translation.Keys
 
 class BuildMode(private val worldPathOverride: String? = null) : ServerMode {
 
@@ -90,11 +91,11 @@ class BuildMode(private val worldPathOverride: String? = null) : ServerMode {
                 val name = argOrNull("name") ?: "build"
                 val outputPath = Path.of("maps", "$name.nebula")
                 Thread.startVirtualThread {
-                    player.sendMessage(player.translate("orbit.build.save_start", "name" to name))
+                    player.sendMessage(player.translate(Keys.Orbit.Build.SaveStart, "name" to name))
                     val world = ReplayWorldCapture.capture(defaultInstance)
                     Files.createDirectories(outputPath.parent)
                     NebulaWorldWriter.write(world, outputPath)
-                    player.sendMessage(player.translate("orbit.build.save_complete", "chunks" to world.chunks.size.toString(), "path" to outputPath.toString(), "size" to (Files.size(outputPath) / 1024).toString()))
+                    player.sendMessage(player.translate(Keys.Orbit.Build.SaveComplete, "chunks" to world.chunks.size.toString(), "path" to outputPath.toString(), "size" to (Files.size(outputPath) / 1024).toString()))
                 }
             }
         })

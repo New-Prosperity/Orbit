@@ -12,6 +12,7 @@ import net.minestom.server.event.player.PlayerDisconnectEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import me.nebula.gravity.translation.Keys
 
 private val commandCounter = AtomicInteger(0)
 
@@ -150,7 +151,7 @@ object DialogManager {
             }
             commandHandlers[commandId] = handler
 
-            val optionComponent = translateDefault("orbit.dialog.option_label", "text" to option.label)
+            val optionComponent = translateDefault(Keys.Orbit.Dialog.OptionLabel, "text" to option.label)
                 .clickEvent(ClickEvent.runCommand("/dialogresponse $commandId"))
                 .hoverEvent(HoverEvent.showText(mm("<gray>Click to select")))
             player.sendMessage(optionComponent)

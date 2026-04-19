@@ -15,9 +15,11 @@ import me.nebula.gravity.economy.EconomyStore
 import me.nebula.gravity.economy.PurchaseCosmeticProcessor
 import me.nebula.gravity.messaging.BattlePassTierUpMessage
 import me.nebula.gravity.messaging.NetworkMessenger
+import me.nebula.orbit.Orbit
 import me.nebula.orbit.translation.translate
 import net.minestom.server.entity.Player
 import kotlin.math.roundToLong
+import me.nebula.gravity.translation.Keys
 
 object BattlePassManager {
 
@@ -38,11 +40,20 @@ object BattlePassManager {
         )
         if (result.tiersGained > 0) {
             player.sendMessage(player.translate(
-                "orbit.battlepass.tier_up",
+                Keys.Orbit.Battlepass.TierUp,
                 "tier" to result.newTier.toString(),
                 "gained" to result.tiersGained.toString(),
             ))
-            NetworkMessenger.publish(BattlePassTierUpMessage(player.uuid, passId, result.newTier, result.tiersGained))
+            NetworkMessenger.publish(BattlePassTierUpMessage(
+                playerId = player.uuid,
+                passId = passId,
+                newTier = result.newTier,
+                tiersGained = result.tiersGained,
+                playerName = player.username,
+                isPremium = BattlePassStore.load(player.uuid)?.passes?.get(passId)?.premium == true,
+                serverName = Orbit.serverName,
+                reachedAt = System.currentTimeMillis(),
+            ))
         }
     }
 
@@ -66,11 +77,20 @@ object BattlePassManager {
         for ((passId, result) in results) {
             if (result.tiersGained > 0) {
                 player.sendMessage(player.translate(
-                    "orbit.battlepass.tier_up",
+                    Keys.Orbit.Battlepass.TierUp,
                     "tier" to result.newTier.toString(),
                     "gained" to result.tiersGained.toString(),
                 ))
-                NetworkMessenger.publish(BattlePassTierUpMessage(player.uuid, passId, result.newTier, result.tiersGained))
+                NetworkMessenger.publish(BattlePassTierUpMessage(
+                playerId = player.uuid,
+                passId = passId,
+                newTier = result.newTier,
+                tiersGained = result.tiersGained,
+                playerName = player.username,
+                isPremium = BattlePassStore.load(player.uuid)?.passes?.get(passId)?.premium == true,
+                serverName = Orbit.serverName,
+                reachedAt = System.currentTimeMillis(),
+            ))
             }
         }
     }
@@ -80,7 +100,7 @@ object BattlePassManager {
         if (definition.premiumPrice <= 0) return false
         val purchased = EconomyStore.executeOnKey(player.uuid, PurchaseCosmeticProcessor("coins", definition.premiumPrice.toDouble()))
         if (!purchased) {
-            player.sendMessage(player.translate("orbit.battlepass.premium_insufficient"))
+            player.sendMessage(player.translate(Keys.Orbit.Battlepass.PremiumInsufficient))
             return false
         }
         val set = BattlePassStore.executeOnKey(player.uuid, SetBattlePassPremiumProcessor(passId))
@@ -88,7 +108,7 @@ object BattlePassManager {
             EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", definition.premiumPrice.toDouble()))
             return false
         }
-        player.sendMessage(player.translate("orbit.battlepass.premium_purchased"))
+        player.sendMessage(player.translate(Keys.Orbit.Battlepass.PremiumPurchased))
         return true
     }
 
@@ -99,7 +119,7 @@ object BattlePassManager {
             PurchaseCosmeticProcessor("coins", definition.tierPurchasePrice.toDouble()),
         )
         if (!purchased) {
-            player.sendMessage(player.translate("orbit.battlepass.tier_purchase_insufficient"))
+            player.sendMessage(player.translate(Keys.Orbit.Battlepass.TierPurchaseInsufficient))
             return false
         }
         val advanced = BattlePassStore.executeOnKey(
@@ -108,16 +128,25 @@ object BattlePassManager {
         )
         if (!advanced) {
             EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", definition.tierPurchasePrice.toDouble()))
-            player.sendMessage(player.translate("orbit.battlepass.tier_purchase_max"))
+            player.sendMessage(player.translate(Keys.Orbit.Battlepass.TierPurchaseMax))
             return false
         }
         val data = BattlePassStore.load(player.uuid) ?: BattlePassData()
         val newTier = data.passes[passId]?.tier ?: 0
         player.sendMessage(player.translate(
-            "orbit.battlepass.tier_purchased",
+            Keys.Orbit.Battlepass.TierPurchased,
             "tier" to newTier.toString(),
         ))
-        NetworkMessenger.publish(BattlePassTierUpMessage(player.uuid, passId, newTier, 1))
+        NetworkMessenger.publish(BattlePassTierUpMessage(
+            playerId = player.uuid,
+            passId = passId,
+            newTier = newTier,
+            tiersGained = 1,
+            playerName = player.username,
+            isPremium = data.passes[passId]?.premium == true,
+            serverName = Orbit.serverName,
+            reachedAt = System.currentTimeMillis(),
+        ))
         return true
     }
 
@@ -138,7 +167,7 @@ object BattlePassManager {
         }
 
         player.sendMessage(player.translate(
-            "orbit.battlepass.reward_claimed",
+            Keys.Orbit.Battlepass.RewardClaimed,
             "tier" to tier.toString(),
             "reward" to reward.value,
         ))

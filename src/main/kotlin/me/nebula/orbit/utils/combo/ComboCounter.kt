@@ -16,6 +16,7 @@ import net.minestom.server.timer.Task
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
 
 enum class ComboDisplay {
     ACTION_BAR,
@@ -133,18 +134,18 @@ object ComboManager {
     private fun updateDisplay(player: Player, state: ComboState, cfg: ComboConfig) {
         when (cfg.display) {
             ComboDisplay.ACTION_BAR -> {
-                ActionBarManager.set(player, "combo", 10, translateDefault("orbit.combo.counter", "count" to state.count.toString()), 2000L)
+                ActionBarManager.set(player, "combo", 10, translateDefault(Keys.Orbit.Combo.Counter, "count" to state.count.toString()), 2000L)
             }
             ComboDisplay.TITLE -> {
                 val title = Title.title(
-                    translateDefault("orbit.combo.title_top", "count" to state.count.toString()),
-                    translateDefault("orbit.combo.title_bottom"),
+                    translateDefault(Keys.Orbit.Combo.TitleTop, "count" to state.count.toString()),
+                    translateDefault(Keys.Orbit.Combo.TitleBottom),
                     Title.Times.times(Duration.ZERO, Duration.ofMillis(500), Duration.ofMillis(200)),
                 )
                 player.showTitle(title)
             }
             ComboDisplay.BOSS_BAR -> {
-                val comboText = translateDefault("orbit.combo.counter", "count" to state.count.toString())
+                val comboText = translateDefault(Keys.Orbit.Combo.Counter, "count" to state.count.toString())
                 val bar = state.bossBar ?: BossBar.bossBar(
                     comboText,
                     1f,

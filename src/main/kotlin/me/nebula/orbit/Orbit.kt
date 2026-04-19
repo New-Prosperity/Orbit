@@ -47,7 +47,11 @@ import me.nebula.gravity.party.PartyLookupStore
 import me.nebula.gravity.party.PartyStore
 import me.nebula.gravity.player.PlayerStore
 import me.nebula.gravity.player.PreferenceStore
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.config.ConfigPropagationInstaller
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
+import me.nebula.gravity.config.PlayerConfig
+import me.nebula.gravity.config.PoolSettings
 import me.nebula.gravity.queue.PoolConfigStore
 import me.nebula.gravity.queue.QueueStore
 import me.nebula.gravity.rank.PlayerRankStore
@@ -67,6 +71,10 @@ import me.nebula.orbit.commands.orbitCommand
 import me.nebula.orbit.commands.cleanupReplayViewer
 import me.nebula.orbit.commands.replayCommand
 import me.nebula.orbit.commands.settingsCommand
+import me.nebula.orbit.config.configCommand
+import me.nebula.orbit.config.preferencesCommand
+import me.nebula.orbit.utils.gui.AnvilInput
+import me.nebula.orbit.utils.gui.GuiRegistry
 import me.nebula.orbit.commands.reportCommand
 import me.nebula.orbit.commands.ticketCommand
 import me.nebula.orbit.commands.vanishCommand
@@ -88,9 +96,11 @@ import me.nebula.orbit.mode.hub.HubMode
 import me.nebula.orbit.progression.BattlePassMenu
 import me.nebula.orbit.progression.achievement.AchievementMenu
 import me.nebula.orbit.progression.achievement.registerAchievementContent
+import me.nebula.orbit.progression.challenge.registerChallengeContent
 import me.nebula.orbit.progression.mission.MissionMenu
 import me.nebula.orbit.progression.mission.MissionRegistry
 import me.nebula.orbit.utils.achievement.AchievementRegistry
+import me.nebula.orbit.utils.challenge.ChallengeRegistry
 import me.nebula.orbit.utils.cinematic.cinematicTestCommand
 import me.nebula.orbit.utils.commandbuilder.OnlinePlayerCache
 import me.nebula.orbit.utils.commandbuilder.command
@@ -154,6 +164,7 @@ import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
 import net.minestom.server.tag.Tag
 import java.util.UUID
+import me.nebula.orbit.notification.OrbitNotifications
 
 object Orbit {
 
@@ -324,12 +335,17 @@ object Orbit {
                 }
             }
             onEnable {
-                PropertyStore.initialize()
+                ConfigStore.initialize()
+                NetworkConfig.registerAll()
+                PlayerConfig.registerAll()
+                PoolSettings.registerAll()
+                ConfigPropagationInstaller.install()
                 translations = translationRegistry {
                     prefix("orbit")
                     defaultLocale("en")
                     fallback(true)
                 }
+                OrbitNotifications.install()
             }
         }
 
@@ -412,6 +428,9 @@ object Orbit {
             TaskScheduler.async {
                 bootStep("registerAchievementContent") { registerAchievementContent() }
             },
+            TaskScheduler.async {
+                bootStep("registerChallengeContent") { registerChallengeContent() }
+            },
         )
 
         bootStep("CustomContentRegistry.init") { CustomContentRegistry.init(app.resources, handler) }
@@ -468,6 +487,8 @@ object Orbit {
         nickCommands().forEach(commandManager::register)
         commandManager.register(vanishCommand())
         commandManager.register(settingsCommand())
+        commandManager.register(configCommand())
+        commandManager.register(preferencesCommand())
         commandManager.register(spectateCommand())
         commandManager.register(inspectCommand())
         commandManager.register(punishCommand())
@@ -531,6 +552,7 @@ object Orbit {
             }
         }
         PlayerCache.installListeners()
+        GuiRegistry.install()
 
         moduleRegistry.enableAll()
         runCatching { PendingReplayFlushes.sweepStale() } // noqa: dangling runCatching
@@ -563,6 +585,7 @@ object Orbit {
             player.setTag(TRACE_TAG, traceId)
 
             AchievementRegistry.loadPlayer(player.uuid)
+            ChallengeRegistry.loadPlayer(player.uuid)
 
             val nickData = cached[CacheSlots.NICK]
             val preferences = cached[CacheSlots.PREFERENCES] ?: PreferenceData()
@@ -624,8 +647,10 @@ object Orbit {
         handler.addListener(PlayerDisconnectEvent::class.java) { event ->
             TradeManager.onDisconnect(event.player)
             AchievementRegistry.unloadPlayer(event.player.uuid)
+            ChallengeRegistry.unloadPlayer(event.player.uuid)
             PlayerCache.evict(event.player.uuid)
             cleanupReplayViewer(event.player.uuid)
+            AnvilInput.onPlayerDisconnect(event.player.uuid)
         }
 
         globalTasks += repeat(Duration.ofSeconds(5)) { OnlinePlayerCache.refresh() }
@@ -671,6 +696,7 @@ object Orbit {
             }
             globalTasks.forEach { it.cancel() }
             globalTasks.clear()
+            GuiRegistry.uninstall()
             moduleRegistry.disableAll()
             mode.shutdown()
             PlayerCache.clear()

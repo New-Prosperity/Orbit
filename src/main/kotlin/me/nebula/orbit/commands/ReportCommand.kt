@@ -2,8 +2,8 @@ package me.nebula.orbit.commands
 
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.PlayerReportMessage
-import me.nebula.gravity.property.NetworkProperties
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
 import me.nebula.gravity.report.ReportStatus
 import me.nebula.gravity.report.ReportStore
 import me.nebula.gravity.report.reportByReporterSincePredicate
@@ -44,7 +44,7 @@ fun reportCommand(): Command = command("report") {
             return@onPlayerExecute
         }
 
-        val maxReports = PropertyStore[NetworkProperties.MAX_REPORTS_PER_DAY]
+        val maxReports = ConfigStore.get(NetworkConfig.MAX_REPORTS_PER_DAY)
         val todayStart = Instant.now().atOffset(ZoneOffset.UTC).toLocalDate().atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
         val todayReports = ReportStore.query(reportByReporterSincePredicate(player.uuid, todayStart))
         if (todayReports.size >= maxReports) {

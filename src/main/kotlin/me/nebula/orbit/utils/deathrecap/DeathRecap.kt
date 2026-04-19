@@ -11,6 +11,7 @@ import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.item.Material
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
 
 data class DamageEntry(
     val attackerUuid: UUID?,
@@ -92,21 +93,21 @@ class DeathRecapTracker {
         val lines = mutableListOf<Component>()
 
         lines += Component.empty()
-        lines += victim.translate("orbit.deathrecap.header")
+        lines += victim.translate(Keys.Orbit.Deathrecap.Header)
 
         if (recap.killerName != null) {
             val killerVisible = recap.killerUuid?.let { !VanishManager.isVanished(it) } ?: true
             val weaponStr = recap.killerWeapon?.let { formatMaterialName(it) }
             val distStr = recap.killerDistance?.let { "%.1f".format(it) }
             if (weaponStr != null || distStr != null) {
-                lines += victim.translate("orbit.deathrecap.killer_with_weapon",
+                lines += victim.translate(Keys.Orbit.Deathrecap.KillerWithWeapon,
                     "killer" to if (killerVisible) recap.killerName else "?",
                     "weapon" to (weaponStr ?: "?"),
                     "distance" to (distStr ?: "?"),
                     "health" to if (killerVisible) formatHealth(recap.killerHealth) else "?",
                 )
             } else {
-                lines += victim.translate("orbit.deathrecap.killer",
+                lines += victim.translate(Keys.Orbit.Deathrecap.Killer,
                     "killer" to if (killerVisible) recap.killerName else "?",
                     "health" to if (killerVisible) formatHealth(recap.killerHealth) else "?",
                 )
@@ -114,12 +115,12 @@ class DeathRecapTracker {
         }
 
         if (recap.survivalTimeMs != null) {
-            lines += victim.translate("orbit.deathrecap.survived",
+            lines += victim.translate(Keys.Orbit.Deathrecap.Survived,
                 "time" to formatDuration(recap.survivalTimeMs),
             )
         }
 
-        lines += victim.translate("orbit.deathrecap.total_damage",
+        lines += victim.translate(Keys.Orbit.Deathrecap.TotalDamage,
             "damage" to "%.1f".format(recap.totalDamage),
         )
 
@@ -128,14 +129,14 @@ class DeathRecapTracker {
             val weaponStr = entry.weapon?.let { formatMaterialName(it) }
             val distStr = entry.distance?.let { "%.1f".format(it) }
             if (entry.attackerUuid != null && (weaponStr != null || distStr != null)) {
-                lines += victim.translate("orbit.deathrecap.entry_detailed",
+                lines += victim.translate(Keys.Orbit.Deathrecap.EntryDetailed,
                     "attacker" to if (attackerVisible) entry.attackerName else "?",
                     "damage" to "%.1f".format(entry.amount),
                     "weapon" to (weaponStr ?: "?"),
                     "distance" to (distStr ?: "?"),
                 )
             } else {
-                lines += victim.translate("orbit.deathrecap.entry_environment",
+                lines += victim.translate(Keys.Orbit.Deathrecap.EntryEnvironment,
                     "source" to if (attackerVisible) entry.attackerName else "?",
                     "damage" to "%.1f".format(entry.amount),
                 )
@@ -146,7 +147,7 @@ class DeathRecapTracker {
             val visibleAssists = recap.assists.filter { !VanishManager.isVanished(it.uuid) }
             if (visibleAssists.isNotEmpty()) {
                 val assistNames = visibleAssists.joinToString(", ") { "${it.name} (${" %.1f".format(it.damage).trim()})" }
-                lines += victim.translate("orbit.deathrecap.assists",
+                lines += victim.translate(Keys.Orbit.Deathrecap.Assists,
                     "assists" to assistNames,
                 )
             }

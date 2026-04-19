@@ -5,6 +5,7 @@ import net.minestom.server.MinecraftServer
 import net.minestom.server.instance.InstanceContainer
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
+import me.nebula.gravity.translation.Keys
 
 class InstancePool(
     val name: String,
@@ -31,7 +32,7 @@ class InstancePool(
 
     fun release(instance: InstanceContainer) {
         inUse.remove(instance)
-        instance.players.forEach { it.kick(translateDefault("orbit.util.instance_pool.released")) }
+        instance.players.forEach { it.kick(translateDefault(Keys.Orbit.Util.InstancePool.Released)) }
         if (available.size < poolSize) {
             available.offer(instance)
         } else {

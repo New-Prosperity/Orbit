@@ -11,6 +11,7 @@ import net.kyori.adventure.text.format.NamedTextColor
 import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.entity.Player
 import net.minestom.server.sound.SoundEvent
+import me.nebula.gravity.translation.Keys
 
 data class SummaryLine(
     val icon: String,
@@ -65,10 +66,10 @@ fun Player.showRewardSummary(block: RewardSummaryBuilder.() -> Unit) {
 
     val chatParts = builder.lines.map { entry ->
         val display = if (entry.animate) "+${entry.amount}" else "${entry.amount}"
-        translateDefault("orbit.reward.entry", "color" to entry.color.toString().lowercase(), "icon" to entry.icon, "amount" to display, "label" to entry.label)
+        translateDefault(Keys.Orbit.Reward.Entry, "color" to entry.color.toString().lowercase(), "icon" to entry.icon, "amount" to display, "label" to entry.label)
     }
 
-    val headerLine = translateDefault("orbit.reward.header")
+    val headerLine = translateDefault(Keys.Orbit.Reward.Header)
     val rewardLine = Component.join(
         JoinConfiguration.separator(miniMessage.deserialize(" <dark_gray>\u2502 ")),
         chatParts,

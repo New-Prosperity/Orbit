@@ -5,6 +5,7 @@ import me.nebula.orbit.utils.commandbuilder.command
 import net.kyori.adventure.text.Component
 import net.minestom.server.command.builder.Command
 import net.minestom.server.coordinate.Pos
+import me.nebula.gravity.translation.Keys
 
 fun cinematicTestCommand(): Command = command("cinematic") {
 
@@ -20,7 +21,7 @@ fun cinematicTestCommand(): Command = command("cinematic") {
                 node(12f, Pos(o.x(), o.y() + 10, o.z(), o.yaw() + 360f, -30f))
                 fade(20, 20)
                 hideHud()
-                onComplete { player.sendMessage(player.translate("orbit.command.cinematic.play.complete")) }
+                onComplete { player.sendMessage(player.translate(Keys.Orbit.Command.Cinematic.Play.Complete)) }
             }
         }
     }
@@ -58,7 +59,7 @@ fun cinematicTestCommand(): Command = command("cinematic") {
                 onTick { p, progress ->
                     p.sendActionBar(Component.text("%.0f%%".format(progress * 100)))
                 }
-                onComplete { player.sendMessage(player.translate("orbit.command.cinematic.slow.complete")) }
+                onComplete { player.sendMessage(player.translate(Keys.Orbit.Command.Cinematic.Slow.Complete)) }
             }
         }
     }
@@ -76,7 +77,7 @@ fun cinematicTestCommand(): Command = command("cinematic") {
                 speed(2f)
                 fade(10, 10)
                 hideHud()
-                onComplete { player.sendMessage(player.translate("orbit.command.cinematic.fast.complete")) }
+                onComplete { player.sendMessage(player.translate(Keys.Orbit.Command.Cinematic.Fast.Complete)) }
             }
         }
     }
@@ -85,9 +86,9 @@ fun cinematicTestCommand(): Command = command("cinematic") {
         onPlayerExecute {
             if (player.isInCinematic) {
                 player.stopCinematic()
-                player.sendMessage(player.translate("orbit.command.cinematic.stop.success"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Cinematic.Stop.Success))
             } else {
-                player.sendMessage(player.translate("orbit.command.cinematic.stop.none"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Cinematic.Stop.None))
             }
         }
     }

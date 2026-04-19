@@ -18,6 +18,8 @@ import me.nebula.orbit.utils.gui.openGui
 import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 object MissionMenu {
 
@@ -27,11 +29,11 @@ object MissionMenu {
     fun open(player: Player) {
         val data = MissionStore.load(player.uuid) ?: MissionData()
 
-        val missionGui = gui(player.translateRaw("orbit.mission.title"), rows = 4) {
+        val missionGui = gui(player.translateRaw(Keys.Orbit.Mission.Title), rows = 4) {
             slot(4, itemStack(Material.CLOCK) {
-                name(player.translateRaw("orbit.mission.daily_header"))
+                name(player.translateRaw(Keys.Orbit.Mission.DailyHeader))
                 val resetIn = DurationFormatter.formatCompact(data.dailyResetAt - System.currentTimeMillis())
-                lore(player.translateRaw("orbit.mission.reset_timer", "time" to resetIn))
+                lore(player.translateRaw(Keys.Orbit.Mission.ResetTimer, "time" to resetIn))
                 clean()
             })
 
@@ -39,9 +41,9 @@ object MissionMenu {
             buildRerollSlots(player, data, intArrayOf(11, 13, 15))
 
             slot(22, itemStack(Material.COMPASS) {
-                name(player.translateRaw("orbit.mission.weekly_header"))
+                name(player.translateRaw(Keys.Orbit.Mission.WeeklyHeader))
                 val resetIn = DurationFormatter.formatCompact(data.weeklyResetAt - System.currentTimeMillis())
-                lore(player.translateRaw("orbit.mission.reset_timer", "time" to resetIn))
+                lore(player.translateRaw(Keys.Orbit.Mission.ResetTimer, "time" to resetIn))
                 clean()
             })
 
@@ -52,14 +54,14 @@ object MissionMenu {
             val bonusCoins = (25 * streak).coerceAtMost(175)
             val streakMaterial = if (data.dailyAllCompleted) Material.BLAZE_POWDER else Material.FIRE_CHARGE
             slot(16, itemStack(streakMaterial) {
-                name(player.translateRaw("orbit.mission.streak_display", "streak" to streak.toString()))
+                name(player.translateRaw(Keys.Orbit.Mission.StreakDisplay, "streak" to streak.toString()))
                 if (data.dailyAllCompleted) {
-                    lore(player.translateRaw("orbit.mission.streak_maintained"))
+                    lore(player.translateRaw(Keys.Orbit.Mission.StreakMaintained))
                 } else {
-                    lore(player.translateRaw("orbit.mission.streak_prompt"))
+                    lore(player.translateRaw(Keys.Orbit.Mission.StreakPrompt))
                 }
                 if (streak > 0) {
-                    lore(player.translateRaw("orbit.mission.rewards",
+                    lore(player.translateRaw(Keys.Orbit.Mission.Rewards,
                         "xp" to bonusXp.toString(),
                         "coins" to bonusCoins.toString(),
                     ))
@@ -86,12 +88,12 @@ object MissionMenu {
                 else -> Material.GRAY_DYE
             }
             slot(slots[index], itemStack(material) {
-                name(player.translateRaw("orbit.mission.type.${mission.type.name.lowercase()}"))
-                lore(player.translateRaw("orbit.mission.progress",
+                name(player.translateRaw("orbit.mission.type.${mission.type.name.lowercase()}".asTranslationKey()))
+                lore(player.translateRaw(Keys.Orbit.Mission.Progress,
                     "current" to mission.progress.toString(),
                     "target" to mission.target.toString(),
                 ))
-                lore(player.translateRaw("orbit.mission.rewards",
+                lore(player.translateRaw(Keys.Orbit.Mission.Rewards,
                     "xp" to mission.xpReward.toString(),
                     "coins" to mission.coinReward.toString(),
                 ))
@@ -113,14 +115,14 @@ object MissionMenu {
             val material = if (canReroll) Material.BARRIER else Material.LIGHT_GRAY_STAINED_GLASS_PANE
             slot(slots[index], itemStack(material) {
                 if (canReroll) {
-                    name(player.translateRaw("orbit.mission.reroll"))
+                    name(player.translateRaw(Keys.Orbit.Mission.Reroll))
                 } else {
-                    name(player.translateRaw("orbit.mission.reroll_limit"))
+                    name(player.translateRaw(Keys.Orbit.Mission.RerollLimit))
                 }
                 clean()
             }) { clicker ->
                 if (!canReroll) {
-                    clicker.sendMessage(clicker.translate("orbit.mission.reroll_limit"))
+                    clicker.sendMessage(clicker.translate(Keys.Orbit.Mission.RerollLimit))
                     return@slot
                 }
                 handleReroll(clicker, index)
@@ -131,7 +133,7 @@ object MissionMenu {
     private fun handleReroll(player: Player, missionIndex: Int) {
         val purchased = EconomyStore.executeOnKey(player.uuid, PurchaseCosmeticProcessor("coins", REROLL_COST))
         if (purchased != true) {
-            player.sendMessage(player.translate("orbit.mission.reroll_no_coins"))
+            player.sendMessage(player.translate(Keys.Orbit.Mission.RerollNoCoins))
             return
         }
 
@@ -153,18 +155,18 @@ object MissionMenu {
         when (result) {
             RerollResult.SUCCESS -> {
                 player.sendMessage(player.translate(
-                    "orbit.mission.reroll_confirm",
+                    Keys.Orbit.Mission.RerollConfirm,
                     "mission" to replacement.id,
                 ))
                 open(player)
             }
             RerollResult.LIMIT_REACHED -> {
                 EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", REROLL_COST))
-                player.sendMessage(player.translate("orbit.mission.reroll_limit"))
+                player.sendMessage(player.translate(Keys.Orbit.Mission.RerollLimit))
             }
             RerollResult.NO_COINS -> {
                 EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", REROLL_COST))
-                player.sendMessage(player.translate("orbit.mission.reroll_no_coins"))
+                player.sendMessage(player.translate(Keys.Orbit.Mission.RerollNoCoins))
             }
             RerollResult.NO_DATA -> {
                 EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", REROLL_COST))

@@ -9,6 +9,8 @@ import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
 import java.util.UUID
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 object CosmeticShowcaseMenu {
 
@@ -32,7 +34,7 @@ object CosmeticShowcaseMenu {
 
     fun open(viewer: Player, targetUuid: UUID, targetName: String) {
         val data = CosmeticStore.load(targetUuid)
-        val title = viewer.translateRaw("orbit.cosmetic.showcase_title", "player" to targetName)
+        val title = viewer.translateRaw(Keys.Orbit.Cosmetic.ShowcaseTitle, "player" to targetName)
 
         val gui = gui(title, rows = 5) {
             categorySlots.forEach { (category, slot, defaultMaterial) ->
@@ -42,13 +44,13 @@ object CosmeticShowcaseMenu {
                 if (definition != null) {
                     val level = data.owned[equippedId] ?: 1
                     val material = Material.fromKey(definition.material) ?: defaultMaterial
-                    val rarityName = viewer.translateRaw("orbit.cosmetic.rarity.${definition.rarity.name.lowercase()}")
+                    val rarityName = viewer.translateRaw("orbit.cosmetic.rarity.${definition.rarity.name.lowercase()}".asTranslationKey())
                     slot(slot, itemStack(material) {
                         name("${definition.rarity.colorTag}${viewer.translateRaw(definition.nameKey)}")
                         lore("<gray>${viewer.translateRaw(category.displayKey)}")
                         lore("${definition.rarity.colorTag}$rarityName")
                         if (definition.maxLevel > 1) {
-                            lore("<white>${viewer.translateRaw("orbit.cosmetic.level", "level" to "$level", "max" to "${definition.maxLevel}")}")
+                            lore("<white>${viewer.translateRaw(Keys.Orbit.Cosmetic.Level, "level" to "$level", "max" to "${definition.maxLevel}")}")
                         }
                         glowing()
                         clean()
@@ -56,7 +58,7 @@ object CosmeticShowcaseMenu {
                 } else {
                     slot(slot, itemStack(Material.GRAY_STAINED_GLASS_PANE) {
                         name("<gray>${viewer.translateRaw(category.displayKey)}")
-                        lore("<dark_gray>${viewer.translateRaw("orbit.cosmetic.none_equipped")}")
+                        lore("<dark_gray>${viewer.translateRaw(Keys.Orbit.Cosmetic.NoneEquipped)}")
                         clean()
                     })
                 }

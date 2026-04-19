@@ -13,6 +13,7 @@ import net.minestom.server.entity.Player
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import me.nebula.gravity.translation.Keys
 
 data class KillEvent(
     val killer: Player?,
@@ -143,7 +144,7 @@ class KillFeed @PublishedApi internal constructor(
 
         val messageKey = multiKillMessages[state.count] ?: return
         for (viewer in viewers) {
-            viewer.sendMessage(viewer.translate(messageKey, "killer" to killer.username, "count" to state.count.toString()))
+            viewer.sendMessage(viewer.translate(messageKey.asTranslationKey(), "killer" to killer.username, "count" to state.count.toString()))
         }
     }
 
@@ -152,7 +153,7 @@ class KillFeed @PublishedApi internal constructor(
         val streak = tracker.streakOf(killer.uuid)
         val messageKey = streakMessages[streak] ?: return
         for (viewer in viewers) {
-            viewer.sendMessage(viewer.translate(messageKey, "killer" to killer.username, "streak" to streak.toString()))
+            viewer.sendMessage(viewer.translate(messageKey.asTranslationKey(), "killer" to killer.username, "streak" to streak.toString()))
         }
         killer.playSound(Sound.sound(Key.key("entity.player.levelup"), Sound.Source.PLAYER, 1f, 1.2f))
     }
@@ -169,7 +170,7 @@ class KillFeedBuilder @PublishedApi internal constructor() {
         val type = WeaponIcons.classify(event.weaponKey, event.killer)
         val distanceSuffix = event.distance
             ?.takeIf { it >= LONG_RANGE_THRESHOLD_BLOCKS }
-            ?.let { viewer.translateRaw("orbit.killfeed.distance_suffix", "distance" to it.toInt().toString()) }
+            ?.let { viewer.translateRaw(Keys.Orbit.Killfeed.DistanceSuffix, "distance" to it.toInt().toString()) }
             ?: ""
         val key = when (type) {
             KillType.MELEE -> "orbit.killfeed.melee"
@@ -177,7 +178,7 @@ class KillFeedBuilder @PublishedApi internal constructor() {
             KillType.ENVIRONMENTAL -> "orbit.killfeed.environmental"
             KillType.OTHER -> "orbit.killfeed.default"
         }
-        viewer.translate(key,
+        viewer.translate(key.asTranslationKey(),
             "killer" to killerName,
             "victim" to event.victim.username,
             "weapon" to icon,

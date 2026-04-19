@@ -22,6 +22,7 @@ import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
 
 object HostMenu {
 
@@ -36,30 +37,30 @@ object HostMenu {
     fun openGameModeMenu(player: Player) {
         val ticketData = HostTicketStore.load(player.uuid) ?: HostTicketData()
         if (ticketData.tickets <= 0 && !RankManager.hasPermission(player.uuid, "*")) {
-            player.sendMessage(player.translate("orbit.host.error.no_tickets"))
+            player.sendMessage(player.translate(Keys.Orbit.Host.Error.NoTickets))
             return
         }
 
         val hostableModes = PoolConfigStore.all().filter { it.hostable }
         if (hostableModes.isEmpty()) {
-            player.sendMessage(player.translate("orbit.host.error.no_modes"))
+            player.sendMessage(player.translate(Keys.Orbit.Host.Error.NoModes))
             return
         }
 
-        val gui = gui(player.translateRaw("orbit.host.menu.title"), rows = 3) {
+        val gui = gui(player.translateRaw(Keys.Orbit.Host.Menu.Title), rows = 3) {
             var slotIndex = 10
             for (config in hostableModes) {
                 if (slotIndex > 16) break
                 slot(slotIndex, itemStack(Material.DIAMOND_SWORD) {
-                    name(player.translateRaw("orbit.host.gamemode.name", "gamemode" to config.gameMode))
-                    lore(player.translateRaw("orbit.host.gamemode.players", "max" to config.maxPlayersPerServer.toString()))
+                    name(player.translateRaw(Keys.Orbit.Host.Gamemode.Name, "gamemode" to config.gameMode))
+                    lore(player.translateRaw(Keys.Orbit.Host.Gamemode.Players, "max" to config.maxPlayersPerServer.toString()))
                     lore("")
-                    lore(player.translateRaw("orbit.host.tickets.count", "count" to ticketData.tickets.toString()))
+                    lore(player.translateRaw(Keys.Orbit.Host.Tickets.Count, "count" to ticketData.tickets.toString()))
                     clean()
                 }) { p ->
                     val freshTickets = HostTicketStore.load(p.uuid) ?: HostTicketData()
                     if (freshTickets.tickets <= 0 && !RankManager.hasPermission(p.uuid, "*")) {
-                        p.sendMessage(p.translate("orbit.host.error.no_tickets"))
+                        p.sendMessage(p.translate(Keys.Orbit.Host.Error.NoTickets))
                         return@slot
                     }
                     if (config.maps.size > 1) {
@@ -76,18 +77,18 @@ object HostMenu {
     }
 
     private fun openMapMenu(player: Player, config: PoolConfig) {
-        val gui = gui(player.translateRaw("orbit.host.map.title"), rows = 3) {
+        val gui = gui(player.translateRaw(Keys.Orbit.Host.Map.Title), rows = 3) {
             var slotIndex = 10
             for (map in config.maps) {
                 if (slotIndex > 16) break
                 slot(slotIndex, itemStack(Material.FILLED_MAP) {
-                    name(player.translateRaw("orbit.host.map.name", "map" to map))
+                    name(player.translateRaw(Keys.Orbit.Host.Map.Name, "map" to map))
                     clean()
                 }) { p -> openMutatorMenu(p, config, map) }
                 slotIndex++
             }
             slot(18, itemStack(Material.ARROW) {
-                name(player.translateRaw("orbit.host.back"))
+                name(player.translateRaw(Keys.Orbit.Host.Back))
                 clean()
             }) { p -> openGameModeMenu(p) }
             fillDefault()
@@ -98,7 +99,7 @@ object HostMenu {
     private fun openMutatorMenu(player: Player, config: PoolConfig, map: String?, selected: MutableSet<String> = mutableSetOf()) {
         val mutators = MutatorRegistry.all().filter { !it.random }
 
-        val gui = gui(player.translateRaw("orbit.host.mutators.title"), rows = 5) {
+        val gui = gui(player.translateRaw(Keys.Orbit.Host.Mutators.Title), rows = 5) {
             fillDefault()
             var slotIndex = 10
             for (mutator in mutators) {
@@ -113,7 +114,7 @@ object HostMenu {
                     lore(player.translateRaw(mutator.descriptionKey))
                     if (active) {
                         lore("")
-                        lore("<green>${player.translateRaw("orbit.host.mutators.active")}")
+                        lore("<green>${player.translateRaw(Keys.Orbit.Host.Mutators.Active)}")
                         glowing()
                     }
                     clean()
@@ -134,15 +135,15 @@ object HostMenu {
             }
 
             slot(40, itemStack(Material.EMERALD_BLOCK) {
-                name("<green>${player.translateRaw("orbit.host.mutators.confirm")}")
+                name("<green>${player.translateRaw(Keys.Orbit.Host.Mutators.Confirm)}")
                 if (selected.isNotEmpty()) {
-                    lore(player.translateRaw("orbit.host.mutators.selected", "count" to selected.size.toString()))
+                    lore(player.translateRaw(Keys.Orbit.Host.Mutators.Selected, "count" to selected.size.toString()))
                 }
                 clean()
             }) { p -> openConfirmMenu(p, config, map, selected.toList()) }
 
             slot(36, itemStack(Material.ARROW) {
-                name(player.translateRaw("orbit.host.back"))
+                name(player.translateRaw(Keys.Orbit.Host.Back))
                 clean()
             }) { p ->
                 if (config.maps.size > 1) openMapMenu(p, config) else openGameModeMenu(p)
@@ -153,19 +154,19 @@ object HostMenu {
 
     private fun openConfirmMenu(player: Player, config: PoolConfig, map: String?, mutators: List<String>) {
         val confirm = confirmGui(
-            title = player.translateRaw("orbit.host.confirm.title"),
+            title = player.translateRaw(Keys.Orbit.Host.Confirm.Title),
             confirmItem = itemStack(Material.EMERALD_BLOCK) {
-                name(player.translateRaw("orbit.host.confirm.accept"))
-                lore(player.translateRaw("orbit.host.confirm.gamemode", "gamemode" to config.gameMode))
-                map?.let { lore(player.translateRaw("orbit.host.confirm.map", "map" to it)) }
+                name(player.translateRaw(Keys.Orbit.Host.Confirm.Accept))
+                lore(player.translateRaw(Keys.Orbit.Host.Confirm.Gamemode, "gamemode" to config.gameMode))
+                map?.let { lore(player.translateRaw(Keys.Orbit.Host.Confirm.Map, "map" to it)) }
                 if (mutators.isNotEmpty()) {
-                    lore(player.translateRaw("orbit.host.confirm.mutators", "count" to mutators.size.toString()))
+                    lore(player.translateRaw(Keys.Orbit.Host.Confirm.Mutators, "count" to mutators.size.toString()))
                 }
-                lore(player.translateRaw("orbit.host.confirm.cost"))
+                lore(player.translateRaw(Keys.Orbit.Host.Confirm.Cost))
                 clean()
             },
             cancelItem = itemStack(Material.REDSTONE_BLOCK) {
-                name(player.translateRaw("orbit.host.confirm.cancel"))
+                name(player.translateRaw(Keys.Orbit.Host.Confirm.Cancel))
                 clean()
             },
             onConfirm = { p -> confirm(p, config, map, mutators) },
@@ -178,20 +179,20 @@ object HostMenu {
         player.closeInventory()
 
         if (!pendingPlayers.add(player.uuid)) {
-            player.sendMessage(player.translate("orbit.host.error.already_pending"))
+            player.sendMessage(player.translate(Keys.Orbit.Host.Error.AlreadyPending))
             return
         }
 
         val ticketData = HostTicketStore.load(player.uuid) ?: HostTicketData()
         if (ticketData.tickets <= 0 && !RankManager.hasPermission(player.uuid, "*")) {
             pendingPlayers.remove(player.uuid)
-            player.sendMessage(player.translate("orbit.host.error.no_tickets"))
+            player.sendMessage(player.translate(Keys.Orbit.Host.Error.NoTickets))
             return
         }
 
         if (HostRequestLookupStore.exists(player.uuid)) {
             pendingPlayers.remove(player.uuid)
-            player.sendMessage(player.translate("orbit.host.error.duplicate"))
+            player.sendMessage(player.translate(Keys.Orbit.Host.Error.Duplicate))
             return
         }
 
@@ -207,7 +208,7 @@ object HostMenu {
             mutators = mutators,
         ))
 
-        player.sendMessage(player.translate("orbit.host.status.requested"))
+        player.sendMessage(player.translate(Keys.Orbit.Host.Status.Requested))
         logger.info { "Host request published: id=$requestId, host=${player.uuid}, gameMode=${config.gameMode}, map=$map, mutators=$mutators, members=${members.size}" }
     }
 

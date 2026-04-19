@@ -3,7 +3,7 @@ package me.nebula.orbit.mode.hub
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.PartyQueueNotificationMessage
 import me.nebula.gravity.party.PartyManager
-import me.nebula.gravity.property.isGameModeInMaintenance
+import me.nebula.gravity.config.isGameModeInMaintenance
 import me.nebula.gravity.queue.PoolConfig
 import me.nebula.gravity.queue.PoolConfigStore
 import me.nebula.gravity.queue.QueueStore
@@ -17,6 +17,8 @@ import net.minestom.server.item.Material
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.min
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 object SelectorMenu {
 
@@ -39,7 +41,7 @@ object SelectorMenu {
         syncPlayerQueues(player.uuid, poolConfigs.keys)
         val playerQueues = queuedGameModes[player.uuid] ?: emptySet<String>()
 
-        val gui = gui(player.translateRaw("orbit.selector.title"), config.rows) {
+        val gui = gui(player.translateRaw(Keys.Orbit.Selector.Title), config.rows) {
             border(Material.fromKey(config.border) ?: Material.GRAY_STAINED_GLASS_PANE)
             for (itemConfig in config.items) {
                 val poolConfig = poolConfigs[itemConfig.gameMode] ?: continue
@@ -48,20 +50,20 @@ object SelectorMenu {
                 val queued = poolConfig.gameMode in playerQueues
 
                 slot(itemConfig.slot, itemStack(material) {
-                    name(player.translateRaw("orbit.gamemode.${poolConfig.gameMode}"))
+                    name(player.translateRaw("orbit.gamemode.${poolConfig.gameMode}".asTranslationKey()))
                     lore("")
                     when {
-                        maintenance -> lore(player.translateRaw("orbit.selector.maintenance"))
+                        maintenance -> lore(player.translateRaw(Keys.Orbit.Selector.Maintenance))
                         queued -> {
                             glowing()
-                            lore(player.translateRaw("orbit.selector.queued"))
+                            lore(player.translateRaw(Keys.Orbit.Selector.Queued))
                         }
-                        else -> lore(player.translateRaw("orbit.selector.click"))
+                        else -> lore(player.translateRaw(Keys.Orbit.Selector.Click))
                     }
                     clean()
                 }) { p ->
                     if (maintenance) {
-                        p.sendMessage(p.translate("orbit.queue.error.maintenance"))
+                        p.sendMessage(p.translate(Keys.Orbit.Queue.Error.Maintenance))
                         return@slot
                     }
                     if (queued) {
@@ -81,7 +83,7 @@ object SelectorMenu {
         val members = PartyManager.collectMembers(player.uuid)
 
         if (members.size > config.maxPartySize) {
-            player.sendMessage(player.translate("orbit.queue.error.party_too_large",
+            player.sendMessage(player.translate(Keys.Orbit.Queue.Error.PartyTooLarge,
                 "max" to config.maxPartySize.toString()))
             return
         }
@@ -90,12 +92,12 @@ object SelectorMenu {
 
         QueueStore.enqueue(config.gameMode, player.uuid, members)
 
-        val displayName = player.translateRaw("orbit.gamemode.${config.gameMode}")
-        player.sendMessage(player.translate("orbit.queue.joined", "gamemode" to displayName))
+        val displayName = player.translateRaw("orbit.gamemode.${config.gameMode}".asTranslationKey())
+        player.sendMessage(player.translate(Keys.Orbit.Queue.Joined, "gamemode" to displayName))
 
         if (members.size > 1) {
             val bonusPercent = min((members.size - 1) * 5, 20)
-            player.sendMessage(player.translate("orbit.party.queue_bonus",
+            player.sendMessage(player.translate(Keys.Orbit.Party.QueueBonus,
                 "bonus" to bonusPercent.toString()))
 
             val nonLeader = members.filter { it != player.uuid }
@@ -115,8 +117,8 @@ object SelectorMenu {
         queuedGameModes[player.uuid]?.remove(config.gameMode)
         QueueStore.dequeuePlayer(player.uuid)
 
-        val displayName = player.translateRaw("orbit.gamemode.${config.gameMode}")
-        player.sendMessage(player.translate("orbit.queue.left", "gamemode" to displayName))
+        val displayName = player.translateRaw("orbit.gamemode.${config.gameMode}".asTranslationKey())
+        player.sendMessage(player.translate(Keys.Orbit.Queue.Left, "gamemode" to displayName))
     }
 
     private fun syncPlayerQueues(playerId: UUID, gameModes: Set<String>) {

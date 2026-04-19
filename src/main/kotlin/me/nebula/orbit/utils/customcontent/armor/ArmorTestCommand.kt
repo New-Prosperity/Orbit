@@ -4,6 +4,8 @@ import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.commandbuilder.command
 import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.arguments.ArgumentType
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 private val ARMOR_ID_ARG = ArgumentType.String("armor_id")
 private val SLOT_ARG = ArgumentType.String("slot")
@@ -14,12 +16,12 @@ fun armorTestCommand(): Command = command("armor") {
         onPlayerExecute {
             val armors = CustomArmorRegistry.all()
             if (armors.isEmpty()) {
-                player.sendMessage(player.translate("orbit.command.armor.list.empty"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Armor.List.Empty))
                 return@onPlayerExecute
             }
             for (armor in armors) {
                 val parts = armor.parsed.pieces.joinToString(", ") { it.part.id }
-                player.sendMessage(player.translate("orbit.command.armor.list.entry",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Armor.List.Entry,
                     "id" to armor.id,
                     "colorId" to armor.colorId.toString(),
                     "parts" to parts,
@@ -36,12 +38,12 @@ fun armorTestCommand(): Command = command("armor") {
             val enchanted = args.get(ENCHANTED_ARG)
             val armor = CustomArmorRegistry[armorId]
             if (armor == null) {
-                player.sendMessage(player.translate("orbit.command.armor.unknown", "id" to armorId))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Armor.Unknown, "id" to armorId))
                 return@onPlayerExecute
             }
             armor.equipFullSet(player, enchanted)
             val key = if (enchanted) "orbit.command.armor.equip.success_enchanted" else "orbit.command.armor.equip.success"
-            player.sendMessage(player.translate(key, "id" to armor.id))
+            player.sendMessage(player.translate(key.asTranslationKey(), "id" to armor.id))
         }
     }
 
@@ -55,20 +57,20 @@ fun armorTestCommand(): Command = command("armor") {
             val enchanted = args.get(ENCHANTED_ARG)
             val armor = CustomArmorRegistry[armorId]
             if (armor == null) {
-                player.sendMessage(player.translate("orbit.command.armor.unknown", "id" to armorId))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Armor.Unknown, "id" to armorId))
                 return@onPlayerExecute
             }
             val part = ArmorPart.all.firstOrNull { it.id == slotName }
             if (part == null) {
                 val validParts = ArmorPart.all.joinToString(", ") { it.id }
-                player.sendMessage(player.translate("orbit.command.armor.unknown_slot",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Armor.UnknownSlot,
                     "slot" to slotName, "valid" to validParts))
                 return@onPlayerExecute
             }
             val item = armor.createItem(part, enchanted)
             player.inventory.addItemStack(item)
             val key = if (enchanted) "orbit.command.armor.give.success_enchanted" else "orbit.command.armor.give.success"
-            player.sendMessage(player.translate(key, "id" to armor.id, "part" to part.id))
+            player.sendMessage(player.translate(key.asTranslationKey(), "id" to armor.id, "part" to part.id))
         }
     }
 }

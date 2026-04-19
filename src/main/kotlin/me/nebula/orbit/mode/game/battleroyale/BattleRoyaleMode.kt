@@ -14,6 +14,7 @@ import me.nebula.orbit.progression.BattlePassManager
 import me.nebula.orbit.progression.mission.MissionTracker
 import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.orbit.utils.achievement.AchievementTriggerManager
+import me.nebula.orbit.utils.challenge.ChallengeRegistry
 import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.gravity.party.PartyLookupStore
 import me.nebula.orbit.mode.game.GameMode
@@ -70,6 +71,7 @@ import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import net.minestom.server.timer.Task
+import me.nebula.gravity.translation.Keys
 
 class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderController, DeathmatchController {
 
@@ -156,7 +158,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
 
         broadcastAll { p ->
             for (cat in SeasonConfig.current.voteCategories) {
-                p.sendMessage(p.translate("orbit.game.br.vote.result",
+                p.sendMessage(p.translate(Keys.Orbit.Game.Br.Vote.Result,
                     "category" to p.translateRaw(cat.nameKey),
                     "option" to BattleRoyaleVoteManager.resolveOptionName(p, cat.id),
                 ))
@@ -264,7 +266,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
 
         broadcastAll { p ->
             p.sendMessage(p.translate(
-                "orbit.game.br.elimination",
+                Keys.Orbit.Game.Br.Elimination,
                 "victim" to player.displayUsername,
                 "killer" to killerName,
             ))
@@ -432,6 +434,9 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
                         AchievementTriggerManager.evaluate(player, "br_games_played", brStats.gamesPlayed.toLong())
                         AchievementTriggerManager.evaluate(player, "br_kills", brStats.kills.toLong())
                         AchievementTriggerManager.evaluate(player, "br_wins", brStats.wins.toLong())
+                        ChallengeRegistry.onStatUpdate(player, "br_games_played", brStats.gamesPlayed.toLong())
+                        ChallengeRegistry.onStatUpdate(player, "br_kills", brStats.kills.toLong())
+                        ChallengeRegistry.onStatUpdate(player, "br_wins", brStats.wins.toLong())
                     }
                 }
 
@@ -544,7 +549,7 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
         deathmatchActive = true
 
         broadcastAll { p ->
-            p.sendMessage(p.translate("orbit.game.br.deathmatch_start"))
+            p.sendMessage(p.translate(Keys.Orbit.Game.Br.DeathmatchStart))
         }
 
         if (season.deathmatch.teleportToCenter) {

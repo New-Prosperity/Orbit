@@ -4,14 +4,17 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.gravity.anticheat.FlagPlayerProcessor
 import me.nebula.gravity.anticheat.FlaggedPlayerStore
 import me.nebula.gravity.anticheat.PlayerFlag
-import me.nebula.gravity.messaging.NetworkMessenger
-import me.nebula.gravity.messaging.PlayerFlaggedMessage
 import me.nebula.gravity.cache.CacheSlots
 import me.nebula.gravity.cache.PlayerCache
-import me.nebula.gravity.property.NetworkProperties
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.messaging.NetworkMessenger
+import me.nebula.gravity.messaging.PlayerFlaggedMessage
+import me.nebula.gravity.notification.Priority
+import me.nebula.gravity.notification.notify
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.user.asNebulaUser
 import me.nebula.orbit.utils.anticheat.checks.CombatCheck
 import me.nebula.orbit.utils.anticheat.checks.GroundSpoofCheck
 import me.nebula.orbit.utils.anticheat.checks.HeadshotCheck
@@ -26,6 +29,7 @@ import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
 
 object AntiCheat {
 
@@ -34,12 +38,12 @@ object AntiCheat {
     private val flaggedLocally = ConcurrentHashMap.newKeySet<UUID>()
     private var eventNode: EventNode<Event>? = null
 
-    val movementFlagThreshold: Int get() = PropertyStore[NetworkProperties.AC_MOVEMENT_FLAG_THRESHOLD]
-    val movementKickThreshold: Int get() = PropertyStore[NetworkProperties.AC_MOVEMENT_KICK_THRESHOLD]
-    val combatFlagThreshold: Int get() = PropertyStore[NetworkProperties.AC_COMBAT_FLAG_THRESHOLD]
-    val combatKickThreshold: Int get() = PropertyStore[NetworkProperties.AC_COMBAT_KICK_THRESHOLD]
-    val lagCompensationMs: Int get() = PropertyStore[NetworkProperties.AC_LAG_COMPENSATION_MS]
-    val repeatOffenderMultiplier: Double get() = PropertyStore[NetworkProperties.AC_REPEAT_OFFENDER_MULTIPLIER]
+    val movementFlagThreshold: Int get() = ConfigStore.get(NetworkConfig.AC_MOVEMENT_FLAG_THRESHOLD)
+    val movementKickThreshold: Int get() = ConfigStore.get(NetworkConfig.AC_MOVEMENT_KICK_THRESHOLD)
+    val combatFlagThreshold: Int get() = ConfigStore.get(NetworkConfig.AC_COMBAT_FLAG_THRESHOLD)
+    val combatKickThreshold: Int get() = ConfigStore.get(NetworkConfig.AC_COMBAT_KICK_THRESHOLD)
+    val lagCompensationMs: Int get() = ConfigStore.get(NetworkConfig.AC_LAG_COMPENSATION_MS)
+    val repeatOffenderMultiplier: Double get() = ConfigStore.get(NetworkConfig.AC_REPEAT_OFFENDER_MULTIPLIER)
 
     const val BYPASS_PERMISSION = "orbit.anticheat.bypass"
     private const val STAFF_ALERT_PERMISSION = "staff.inspect"
@@ -92,12 +96,16 @@ object AntiCheat {
 
     private fun alertStaff(playerName: String, checkType: String, violations: Int) {
         for (player in MinecraftServer.getConnectionManager().onlinePlayers) {
-            if (hasCachedPerm(player.uuid, STAFF_ALERT_PERMISSION)) {
-                player.sendMessage(player.translate("orbit.anticheat.staff_alert",
+            if (!hasCachedPerm(player.uuid, STAFF_ALERT_PERMISSION)) continue
+            val user = player.asNebulaUser()
+            notify(user) {
+                chat(user.translate(
+                    Keys.Orbit.Anticheat.StaffAlert,
                     "player" to playerName,
                     "check" to checkType,
-                    "violations" to violations.toString()
-                ))
+                    "violations" to violations.toString(),
+                ), priority = Priority.CRITICAL)
+                sound("minecraft:block.note_block.pling", pitch = 1.8f)
             }
         }
     }

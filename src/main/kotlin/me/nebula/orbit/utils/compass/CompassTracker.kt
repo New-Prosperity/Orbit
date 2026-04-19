@@ -13,6 +13,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.atan2
 import kotlin.math.sqrt
+import me.nebula.gravity.translation.Keys
 
 sealed interface CompassTarget {
     data class PlayerTarget(val uuid: UUID) : CompassTarget
@@ -108,7 +109,7 @@ object CompassTracker {
             }
 
             tracker.sendActionBar(
-                tracker.translate("orbit.util.compass.display", "direction" to direction, "distance" to "%.0f".format(distance)),
+                tracker.translate(Keys.Orbit.Util.Compass.Display, "direction" to direction, "distance" to "%.0f".format(distance)),
             )
         }
     }

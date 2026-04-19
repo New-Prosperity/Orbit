@@ -578,9 +578,10 @@ object StatueManager {
 
     private fun resolveTopPlayers(count: Int): List<TopPlayerEntry> {
         val periodicity = runCatching { Periodicity.valueOf(currentLeaderboardPeriod) }.getOrElse { Periodicity.ALL_TIME }
-        val ranking = RankingStore.load(rankingKey(currentLeaderboardSource, periodicity))
-        if (ranking != null && ranking.isNotEmpty()) {
-            return ranking.take(count).map { TopPlayerEntry(it.uuid, it.name, it.score) }
+        val snapshot = RankingStore.load(rankingKey(currentLeaderboardSource, periodicity))
+        val top = snapshot?.top
+        if (top != null && top.isNotEmpty()) {
+            return top.take(count).map { TopPlayerEntry(it.uuid, it.name, it.score) }
         }
 
         val allRatings = RatingStore.entries()

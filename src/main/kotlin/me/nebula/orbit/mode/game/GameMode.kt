@@ -70,6 +70,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import me.nebula.gravity.translation.Keys
 
 abstract class GameMode : ServerMode {
 
@@ -733,6 +734,7 @@ abstract class GameMode : ServerMode {
     private fun transferAlivePlayersToGameInstance(alivePlayers: List<Player>) = gameInitializer.transferAlivePlayersToGameInstance(alivePlayers)
 
     private fun installGameSubsystems() {
+        Orbit.gameMode?.let { rules.hydrateDefaultsFor(it) }
         ruleUiWatcher.install()
         comboCounter = buildComboCounter()
         comboCounter?.install()
@@ -819,7 +821,7 @@ abstract class GameMode : ServerMode {
             val bonus = partyBonuses[uuid] ?: continue
             if (bonus.bonusPercent <= 0) continue
             val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
-            player.sendMessage(player.translate("orbit.party.bonus_applied",
+            player.sendMessage(player.translate(Keys.Orbit.Party.BonusApplied,
                 "percent" to bonus.bonusPercent.toString(),
                 "members" to bonus.partyMembersInGame.toString(),
             ))

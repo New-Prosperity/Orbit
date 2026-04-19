@@ -20,6 +20,7 @@ import net.minestom.server.timer.Task
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
+import me.nebula.gravity.translation.Keys
 
 class SpectatorToolkit @PublishedApi internal constructor(
     private val nextTarget: (Player) -> Player?,
@@ -148,7 +149,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
             val target = nextTarget(player)
             if (target != null) {
                 notifyTargetChanged(player, target)
-                player.sendActionBar(player.translate("orbit.spectator.watching", "name" to target.username))
+                player.sendActionBar(player.translate(Keys.Orbit.Spectator.Watching, "name" to target.username))
             }
         }
 
@@ -160,7 +161,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
             val target = previousTarget(player)
             if (target != null) {
                 notifyTargetChanged(player, target)
-                player.sendActionBar(player.translate("orbit.spectator.watching", "name" to target.username))
+                player.sendActionBar(player.translate(Keys.Orbit.Spectator.Watching, "name" to target.username))
             }
         }
 
@@ -185,7 +186,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
                 if (spec.getTag(SpectatorTags.FREECAM) == true) exitFreeCamera(spec)
                 spec.spectate(target)
                 notifyTargetChanged(spec, target)
-                spec.sendActionBar(spec.translate("orbit.spectator.watching", "name" to target.username))
+                spec.sendActionBar(spec.translate(Keys.Orbit.Spectator.Watching, "name" to target.username))
             }
         }
 
@@ -212,7 +213,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
         player.setTag(SpectatorTags.SPEED_INDEX, index)
         val speed = speedSteps[index]
         player.flyingSpeed = DEFAULT_FLY_SPEED * speed
-        player.sendActionBar(player.translate("orbit.spectator.speed", "speed" to "${speed}x"))
+        player.sendActionBar(player.translate(Keys.Orbit.Spectator.Speed, "speed" to "${speed}x"))
     }
 
     private fun toggleFreeCamera(player: Player) {
@@ -235,7 +236,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
         player.stopSpectating()
         player.teleport(targetPos)
         player.setTag(SpectatorTags.FREECAM, true)
-        player.sendActionBar(player.translate("orbit.spectator.freecam.enabled"))
+        player.sendActionBar(player.translate(Keys.Orbit.Spectator.Freecam.Enabled))
     }
 
     private fun exitFreeCamera(player: Player) {
@@ -246,7 +247,7 @@ class SpectatorToolkit @PublishedApi internal constructor(
             player.spectate(target)
             player.setTag(SpectatorTags.CURRENT_TARGET, target.uuid)
         }
-        player.sendActionBar(player.translate("orbit.spectator.freecam.disabled"))
+        player.sendActionBar(player.translate(Keys.Orbit.Spectator.Freecam.Disabled))
     }
 
     private fun tickHud() {

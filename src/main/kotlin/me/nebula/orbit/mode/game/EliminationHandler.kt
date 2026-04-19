@@ -12,6 +12,7 @@ import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.GameMode as MinestomGameMode
 import java.util.UUID
+import me.nebula.gravity.translation.Keys
 
 class EliminationHandler(private val gameMode: GameMode) {
 
@@ -28,7 +29,7 @@ class EliminationHandler(private val gameMode: GameMode) {
         val placement = gameMode.initialPlayerCount - gameMode.eliminationOrderInternal + 1
         gameMode.placementsInternal[player.uuid] = placement
         if (placement in 1..3) ProgressionEventBus.publish(ProgressionEvent.TopPlacement(player))
-        player.sendMessage(player.translate("orbit.game.placement",
+        player.sendMessage(player.translate(Keys.Orbit.Game.Placement,
             "place" to placement.toString(),
             "total" to gameMode.initialPlayerCount.toString()))
 
@@ -64,7 +65,7 @@ class EliminationHandler(private val gameMode: GameMode) {
             gameMode.totalKillCountInternal++
             if (gameMode.totalKillCountInternal == 1) {
                 gameMode.broadcastAll { p ->
-                    p.sendMessage(p.translate("orbit.game.first_blood", "player" to killer.displayUsername))
+                    p.sendMessage(p.translate(Keys.Orbit.Game.FirstBlood, "player" to killer.displayUsername))
                 }
             }
             val streak = gameMode.tracker.streakOf(killer.uuid)

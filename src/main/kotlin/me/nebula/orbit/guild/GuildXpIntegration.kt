@@ -10,6 +10,7 @@ import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.orbit.translation.translate
 import net.minestom.server.MinecraftServer
 import java.util.UUID
+import me.nebula.gravity.translation.Keys
 
 object GuildXpIntegration {
 
@@ -59,7 +60,7 @@ object GuildXpIntegration {
 
         for (memberId in guild.members.keys) {
             val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(memberId) ?: continue
-            player.sendMessage(player.translate("orbit.guild.level_up",
+            player.sendMessage(player.translate(Keys.Orbit.Guild.LevelUp,
                 "guild" to guild.name,
                 "level" to result.newLevel.toString(),
             ))

@@ -11,6 +11,7 @@ import java.time.Duration
 import java.util.ArrayDeque
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
 
 data class PlayerStat(val uuid: UUID, val name: String, val value: Double)
 
@@ -100,27 +101,27 @@ object MatchResultDisplay {
         add(Component.empty())
 
         if (result.isDraw) {
-            add(translateDefault("orbit.util.match_result.draw").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD))
+            add(translateDefault(Keys.Orbit.Util.MatchResult.Draw).color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD))
         } else {
             result.winner?.let { (_, name) ->
-                add(translateDefault("orbit.util.match_result.winner", "name" to name).color(NamedTextColor.GRAY))
+                add(translateDefault(Keys.Orbit.Util.MatchResult.Winner, "name" to name).color(NamedTextColor.GRAY))
             }
         }
 
         result.winnerTeam?.let { team ->
             add(Component.empty())
-            add(translateDefault("orbit.util.match_result.team_winner", "team" to team).color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD))
+            add(translateDefault(Keys.Orbit.Util.MatchResult.TeamWinner, "team" to team).color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD))
         }
 
         add(Component.empty())
 
         result.mvp?.let { (_, name) ->
-            add(translateDefault("orbit.util.match_result.mvp", "name" to name).color(NamedTextColor.GRAY))
+            add(translateDefault(Keys.Orbit.Util.MatchResult.Mvp, "name" to name).color(NamedTextColor.GRAY))
             add(Component.empty())
         }
 
         if (result.stats.isNotEmpty()) {
-            add(translateDefault("orbit.util.match_result.stats").color(NamedTextColor.WHITE).decorate(TextDecoration.BOLD))
+            add(translateDefault(Keys.Orbit.Util.MatchResult.Stats).color(NamedTextColor.WHITE).decorate(TextDecoration.BOLD))
 
             result.stats.forEach { (statName, entries) ->
                 add(Component.empty())
@@ -150,7 +151,7 @@ object MatchResultDisplay {
 
         if (result.teamStats.isNotEmpty()) {
             add(Component.empty())
-            add(translateDefault("orbit.util.match_result.team_stats").color(NamedTextColor.WHITE).decorate(TextDecoration.BOLD))
+            add(translateDefault(Keys.Orbit.Util.MatchResult.TeamStats).color(NamedTextColor.WHITE).decorate(TextDecoration.BOLD))
             result.teamStats.forEach { (team, stats) ->
                 add(Component.empty())
                 add(Component.text("  $team:", NamedTextColor.AQUA))
@@ -167,7 +168,7 @@ object MatchResultDisplay {
             add(Component.empty())
             val minutes = result.duration.toMinutes()
             val seconds = result.duration.seconds % 60
-            add(translateDefault("orbit.util.match_result.duration", "time" to "${minutes}m ${seconds}s").color(NamedTextColor.GRAY))
+            add(translateDefault(Keys.Orbit.Util.MatchResult.Duration, "time" to "${minutes}m ${seconds}s").color(NamedTextColor.GRAY))
         }
 
         add(Component.empty())
@@ -179,7 +180,7 @@ object MatchResultDisplay {
 
         if (result.isDraw) {
             player.showTitle(Title.title(
-                player.translate("orbit.util.match_result.draw_title").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD),
+                player.translate(Keys.Orbit.Util.MatchResult.DrawTitle).color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD),
                 Component.empty(),
                 Title.Times.times(Duration.ofMillis(200), Duration.ofSeconds(3), Duration.ofMillis(500)),
             ))
@@ -188,7 +189,7 @@ object MatchResultDisplay {
             val titleText = if (isWinner) "VICTORY" else "DEFEAT"
             val color = if (isWinner) NamedTextColor.GOLD else NamedTextColor.RED
             val subtitle = result.winner?.second?.let {
-                player.translate("orbit.util.match_result.winner_subtitle", "name" to it).color(NamedTextColor.GRAY)
+                player.translate(Keys.Orbit.Util.MatchResult.WinnerSubtitle, "name" to it).color(NamedTextColor.GRAY)
             } ?: Component.empty()
 
             player.showTitle(Title.title(

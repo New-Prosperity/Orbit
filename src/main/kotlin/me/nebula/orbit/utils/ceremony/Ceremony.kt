@@ -2,16 +2,18 @@ package me.nebula.orbit.utils.ceremony
 
 import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.ether.utils.translation.asTranslationKey
+import me.nebula.gravity.notification.notify
+import me.nebula.gravity.translation.Keys
+import me.nebula.orbit.notification.title
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.user.asNebulaUser
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.utils.podium.PodiumDisplay
 import me.nebula.orbit.utils.podium.podium
-import me.nebula.orbit.utils.stattracker.StatTracker
-import net.kyori.adventure.sound.Sound
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.title.Title
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
+import me.nebula.orbit.utils.stattracker.StatTracker
+import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
@@ -21,7 +23,6 @@ import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 import net.minestom.server.sound.SoundEvent
 import net.minestom.server.timer.Task
-import java.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class Ceremony @PublishedApi internal constructor(
@@ -50,8 +51,7 @@ class Ceremony @PublishedApi internal constructor(
     private var fireworkCount = 0
 
     fun start(players: Collection<Player>) {
-        showTitles(players)
-        playSounds(players)
+        showCeremonyNotifications(players)
         buildPodium(players)
 
         if (spectateWinner && !result.isDraw) {
@@ -78,42 +78,30 @@ class Ceremony @PublishedApi internal constructor(
         fireworkEntities.clear()
     }
 
-    private fun showTitles(players: Collection<Player>) {
-        val times = Title.Times.times(Duration.ofMillis(200), Duration.ofSeconds(3), Duration.ofMillis(800))
-
+    private fun showCeremonyNotifications(players: Collection<Player>) {
+        val winnerName = result.winner?.second ?: ""
         for (player in players) {
-            val (titleKey, subtitleKey) = when {
-                result.isDraw -> drawTitleKey to null
-                result.winner?.first == player.uuid -> winnerTitleKey to winnerSubtitleKey
-                else -> loserTitleKey to loserSubtitleKey
+            val user = player.asNebulaUser()
+            val titleKey: TranslationKey?
+            val subtitleKey: TranslationKey?
+            val soundEvent: SoundEvent
+            when {
+                result.isDraw -> { titleKey = drawTitleKey; subtitleKey = null; soundEvent = loserSoundEvent }
+                result.winner?.first == player.uuid -> { titleKey = winnerTitleKey; subtitleKey = winnerSubtitleKey; soundEvent = winnerSoundEvent }
+                else -> { titleKey = loserTitleKey; subtitleKey = loserSubtitleKey; soundEvent = loserSoundEvent }
             }
-
-            val titleComponent = if (titleKey != null) {
-                val winnerName = result.winner?.second ?: ""
-                player.translate(titleKey, "name" to winnerName)
-            } else {
-                Component.empty()
+            notify(user) {
+                if (titleKey != null) {
+                    title(
+                        title = user.translate(titleKey, "name" to winnerName),
+                        subtitle = subtitleKey?.let { user.translate(it, "name" to winnerName) },
+                        fadeInTicks = 4,
+                        stayTicks = 60,
+                        fadeOutTicks = 16,
+                    )
+                }
+                sound(soundEvent.key().asString())
             }
-
-            val subtitleComponent = if (subtitleKey != null) {
-                val winnerName = result.winner?.second ?: ""
-                player.translate(subtitleKey, "name" to winnerName)
-            } else {
-                Component.empty()
-            }
-
-            player.showTitle(Title.title(titleComponent, subtitleComponent, times))
-        }
-    }
-
-    private fun playSounds(players: Collection<Player>) {
-        for (player in players) {
-            val event = when {
-                result.isDraw -> loserSoundEvent
-                result.winner?.first == player.uuid -> winnerSoundEvent
-                else -> loserSoundEvent
-            }
-            player.playSound(Sound.sound(event.key(), Sound.Source.PLAYER, 1f, 1f))
         }
     }
 
@@ -195,11 +183,11 @@ class Ceremony @PublishedApi internal constructor(
 
     private fun sendPersonalStats(player: Player) {
         player.sendMessage(Component.empty())
-        player.sendMessage(player.translate("orbit.ceremony.stats_header"))
+        player.sendMessage(player.translate(Keys.Orbit.Ceremony.StatsHeader))
 
         for (key in personalStatsKeys) {
             val value = StatTracker.get(player.uuid, key)
-            player.sendMessage(player.translate("orbit.ceremony.stat_entry",
+            player.sendMessage(player.translate(Keys.Orbit.Ceremony.StatEntry,
                 "stat" to key,
                 "value" to value.toString(),
             ))
@@ -212,7 +200,7 @@ class Ceremony @PublishedApi internal constructor(
             else -> 0
         }
         if (place > 0) {
-            player.sendMessage(player.translate("orbit.ceremony.placement",
+            player.sendMessage(player.translate(Keys.Orbit.Ceremony.Placement,
                 "place" to "#$place",
             ))
         }

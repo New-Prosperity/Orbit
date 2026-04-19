@@ -21,6 +21,8 @@ import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
 import java.util.UUID
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 object CosmeticMenu {
 
@@ -43,7 +45,7 @@ object CosmeticMenu {
     )
 
     fun openCategoryMenu(player: Player) {
-        val gui = gui(player.translateRaw("orbit.cosmetic.menu.title"), rows = 5) {
+        val gui = gui(player.translateRaw(Keys.Orbit.Cosmetic.Menu.Title), rows = 5) {
             categorySlots.forEach { (category, config) ->
                 val (slot, material) = config
                 slot(slot, itemStack(material) {
@@ -77,6 +79,7 @@ object CosmeticMenu {
                         } else {
                             despawnCategory(p.uuid, category, p)
                             CosmeticStore.executeOnKey(p.uuid, EquipCosmeticProcessor(category.name, definition.id))
+                            CosmeticEvents.publishEquip(p, definition)
                             MissionTracker.onUseCategory(p, category.name)
                         }
                         CosmeticDataCache.invalidate(p.uuid)
@@ -97,25 +100,25 @@ object CosmeticMenu {
         val material = Material.fromKey(definition.material) ?: Material.BARRIER
 
         val confirm = confirmGui(
-            title = player.translateRaw("orbit.cosmetic.confirm.title"),
+            title = player.translateRaw(Keys.Orbit.Cosmetic.Confirm.Title),
             confirmItem = itemStack(Material.GREEN_WOOL) {
-                name("<green>${player.translateRaw("orbit.cosmetic.confirm.accept")}")
-                lore(player.translateRaw("orbit.cosmetic.confirm.cost", "price" to cost.toString()))
+                name("<green>${player.translateRaw(Keys.Orbit.Cosmetic.Confirm.Accept)}")
+                lore(player.translateRaw(Keys.Orbit.Cosmetic.Confirm.Cost, "price" to cost.toString()))
                 clean()
             },
             cancelItem = itemStack(Material.RED_WOOL) {
-                name("<red>${player.translateRaw("orbit.cosmetic.confirm.cancel")}")
+                name("<red>${player.translateRaw(Keys.Orbit.Cosmetic.Confirm.Cancel)}")
                 clean()
             },
             previewItem = itemStack(material) {
                 name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
-                lore(player.translateRaw("orbit.cosmetic.confirm.cost", "price" to cost.toString()))
+                lore(player.translateRaw(Keys.Orbit.Cosmetic.Confirm.Cost, "price" to cost.toString()))
                 clean()
             },
             onConfirm = confirm@{ p ->
                 val purchased = EconomyStore.executeOnKey(p.uuid, PurchaseCosmeticProcessor("coins", cost.toDouble()))
                 if (!purchased) {
-                    p.sendMessage(p.translate("orbit.cosmetic.insufficient_funds"))
+                    p.sendMessage(p.translate(Keys.Orbit.Cosmetic.InsufficientFunds))
                     openCosmeticList(p, category)
                     return@confirm
                 }
@@ -126,7 +129,8 @@ object CosmeticMenu {
                     return@confirm
                 }
                 CosmeticDataCache.invalidate(p.uuid)
-                p.sendMessage(p.translate("orbit.cosmetic.purchased", "cosmetic" to p.translateRaw(definition.nameKey)))
+                CosmeticEvents.publishUnlock(p, definition)
+                p.sendMessage(p.translate(Keys.Orbit.Cosmetic.Purchased, "cosmetic" to p.translateRaw(definition.nameKey)))
                 openCosmeticList(p, category)
             },
             onCancel = { p -> openCosmeticList(p, category) },
@@ -156,7 +160,7 @@ object CosmeticMenu {
         equipped: Boolean,
         level: Int,
     ) = itemStack(material) {
-        val rarityName = player.translateRaw("orbit.cosmetic.rarity.${definition.rarity.name.lowercase()}")
+        val rarityName = player.translateRaw("orbit.cosmetic.rarity.${definition.rarity.name.lowercase()}".asTranslationKey())
         val rarityColor = definition.rarity.colorTag
         val isLegendary = definition.rarity == CosmeticRarity.LEGENDARY
         name("$rarityColor${player.translateRaw(definition.nameKey)}")
@@ -164,27 +168,27 @@ object CosmeticMenu {
         lore(player.translateRaw(definition.descriptionKey))
         if (definition.maxLevel > 1) {
             lore("")
-            lore("<white>${player.translateRaw("orbit.cosmetic.level", "level" to "$level", "max" to "${definition.maxLevel}")}")
+            lore("<white>${player.translateRaw(Keys.Orbit.Cosmetic.Level, "level" to "$level", "max" to "${definition.maxLevel}")}")
         }
         lore("")
         when {
             equipped -> {
-                lore("<green>${player.translateRaw("orbit.cosmetic.status.equipped")}")
-                lore("<red>${player.translateRaw("orbit.cosmetic.action.unequip")}")
+                lore("<green>${player.translateRaw(Keys.Orbit.Cosmetic.Status.Equipped)}")
+                lore("<red>${player.translateRaw(Keys.Orbit.Cosmetic.Action.Unequip)}")
                 glowing()
             }
             owned -> {
-                lore("<green>${player.translateRaw("orbit.cosmetic.status.owned")}")
-                lore("<yellow>${player.translateRaw("orbit.cosmetic.action.equip")}")
+                lore("<green>${player.translateRaw(Keys.Orbit.Cosmetic.Status.Owned)}")
+                lore("<yellow>${player.translateRaw(Keys.Orbit.Cosmetic.Action.Equip)}")
                 if (isLegendary) glowing()
             }
             else -> {
                 if (definition.price > 0) {
                     val cost = purchaseCost(definition, level)
-                    lore("<gold>${player.translateRaw("orbit.cosmetic.price", "price" to cost.toString())}")
-                    lore("<yellow>${player.translateRaw("orbit.cosmetic.action.purchase")}")
+                    lore("<gold>${player.translateRaw(Keys.Orbit.Cosmetic.Price, "price" to cost.toString())}")
+                    lore("<yellow>${player.translateRaw(Keys.Orbit.Cosmetic.Action.Purchase)}")
                 } else {
-                    lore("<red>${player.translateRaw("orbit.cosmetic.status.locked")}")
+                    lore("<red>${player.translateRaw(Keys.Orbit.Cosmetic.Status.Locked)}")
                 }
                 if (isLegendary) glowing()
             }

@@ -20,6 +20,8 @@ import net.minestom.server.timer.Task
 import java.time.Duration as JDuration
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 class GameVariantController(private val owner: GameMode) {
 
@@ -44,7 +46,7 @@ class GameVariantController(private val owner: GameMode) {
             val inst = owner.gameInstanceOrNull() ?: return
             val soundEvent = sound?.let { SoundEvent.fromKey(it) }
             for (p in inst.players) {
-                p.sendMessage(p.translate(translationKey))
+                p.sendMessage(p.translate(translationKey.asTranslationKey()))
                 soundEvent?.let { ev ->
                     p.playSound(Sound.sound(ev.key(), Sound.Source.MASTER, 1.0f, 1.0f))
                 }
@@ -95,7 +97,7 @@ class GameVariantController(private val owner: GameMode) {
                 ),
             ))
             p.sendMessage(p.translate(
-                "orbit.variant.banner",
+                Keys.Orbit.Variant.Banner,
                 "name" to p.translateRaw(variant.nameKey),
                 "description" to p.translateRaw(variant.descriptionKey),
             ))

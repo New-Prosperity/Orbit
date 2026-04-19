@@ -2,23 +2,39 @@ package me.nebula.orbit.utils.achievement
 
 import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.ether.utils.translation.asTranslationKey
+import me.nebula.gravity.achievement.AchievementCatalog
+import me.nebula.gravity.achievement.AchievementDefinition
 import me.nebula.gravity.achievement.AchievementStore
 import me.nebula.gravity.achievement.ClaimMilestoneProcessor
 import me.nebula.gravity.achievement.IncrementAchievementProcessor
 import me.nebula.gravity.achievement.SetAchievementCompletedProcessor
+import me.nebula.gravity.messaging.AchievementUnlockedMessage
+import me.nebula.gravity.messaging.NetworkMessenger
+import me.nebula.gravity.achievement.AchievementCategory as GravityCategory
+import me.nebula.gravity.achievement.AchievementRarity as GravityRarity
+import me.nebula.gravity.achievement.AchievementReward as GravityReward
 import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.gravity.cosmetic.UnlockCosmeticProcessor
 import me.nebula.gravity.economy.AddBalanceProcessor
 import me.nebula.gravity.economy.EconomyStore
+import me.nebula.gravity.notification.notify
+import me.nebula.gravity.translation.Keys
 import me.nebula.orbit.Orbit
+import me.nebula.orbit.notification.ToastFrame as NotifyToastFrame
+import me.nebula.orbit.notification.actionBar
+import me.nebula.orbit.notification.title
+import me.nebula.orbit.notification.toast
 import me.nebula.orbit.progression.BattlePassManager
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
+import me.nebula.orbit.user.asNebulaUser
 import me.nebula.orbit.utils.sound.playSound
 import me.nebula.orbit.utils.toast.ToastFrame
-import me.nebula.orbit.utils.toast.showToast
+import net.kyori.adventure.key.Key
+import net.kyori.adventure.sound.Sound
 import net.kyori.adventure.text.Component
 import net.minestom.server.entity.Player
+import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
 import java.util.UUID
@@ -82,7 +98,30 @@ data class Achievement(
     val rarity: AchievementRarity = AchievementRarity.COMMON,
     val tierGroup: String? = null,
     val tierLevel: Int = 0,
-)
+) {
+
+    fun toDefinition(): AchievementDefinition = AchievementDefinition(
+        id = id,
+        nameKey = "orbit.achievement.$id.name".asTranslationKey(),
+        descriptionKey = "orbit.achievement.$id.description".asTranslationKey(),
+        category = GravityCategory(category.id, category.displayKey),
+        iconMaterialKey = icon.key().asString(),
+        hidden = hidden,
+        maxProgress = maxProgress,
+        rewards = rewards.map { GravityReward(it.type, it.amount, it.value) },
+        prerequisites = prerequisites,
+        points = points,
+        rarity = when (rarity) {
+            AchievementRarity.COMMON -> GravityRarity.COMMON
+            AchievementRarity.UNCOMMON -> GravityRarity.UNCOMMON
+            AchievementRarity.RARE -> GravityRarity.RARE
+            AchievementRarity.EPIC -> GravityRarity.EPIC
+            AchievementRarity.LEGENDARY -> GravityRarity.LEGENDARY
+        },
+        tierGroup = tierGroup,
+        tierLevel = tierLevel,
+    )
+}
 
 object AchievementRegistry {
 
@@ -95,6 +134,9 @@ object AchievementRegistry {
 
     fun register(achievement: Achievement) {
         achievements[achievement.id] = achievement
+        val definition = achievement.toDefinition()
+        AchievementCatalog.register(definition)
+        AchievementCatalog.registerCategory(definition.category)
     }
 
     fun unregister(id: String) = achievements.remove(id)
@@ -254,7 +296,7 @@ object AchievementRegistry {
                 val locale = Orbit.localeOf(player.uuid)
                 val milestoneName = Orbit.translations.get(milestone.nameKey.value, locale) ?: milestone.nameKey.value
                 player.sendMessage(player.translate(
-                    "orbit.achievement.milestone_reached",
+                    Keys.Orbit.Achievement.MilestoneReached,
                     "name" to milestoneName,
                     "points" to milestone.threshold.toString(),
                 ))
@@ -264,6 +306,7 @@ object AchievementRegistry {
     }
 
     private fun notifyUnlock(player: Player, achievement: Achievement) {
+        publishUnlock(player, achievement)
         val handler = onUnlock
         if (handler != null) {
             handler(player, achievement)
@@ -273,24 +316,79 @@ object AchievementRegistry {
         defaultUnlockNotification(player, achievement)
     }
 
-    fun defaultUnlockNotification(player: Player, achievement: Achievement) {
-        val locale = Orbit.localeOf(player.uuid)
-        player.showToast {
-            title(Orbit.deserialize("orbit.achievement.${achievement.id}.name", locale))
-            icon(achievement.icon)
-            frame(achievement.toastFrame)
+    private fun publishUnlock(player: Player, achievement: Achievement) {
+        try {
+            NetworkMessenger.publish(AchievementUnlockedMessage(
+                playerId = player.uuid,
+                playerName = player.username,
+                achievementId = achievement.id,
+                rarity = achievement.rarity.name,
+                points = achievement.points,
+                totalPoints = localPoints[player.uuid] ?: achievement.points,
+                serverName = Orbit.serverName,
+                unlockedAt = System.currentTimeMillis(),
+                category = achievement.category.id,
+            ))
+        } catch (_: Throwable) {
         }
+    }
 
-        player.playSound(SoundEvent.ENTITY_PLAYER_LEVELUP, 1f, 1.2f)
-
-        val achName = player.translateRaw("orbit.achievement.${achievement.id}.name")
-        val achDesc = player.translateRaw("orbit.achievement.${achievement.id}.description")
-        player.sendMessage(player.translate(
-            "orbit.achievement.unlocked_chat",
-            "name" to achName,
-            "description" to achDesc,
-            "points" to achievement.points.toString(),
-        ))
+    fun defaultUnlockNotification(player: Player, achievement: Achievement) {
+        val user = player.asNebulaUser()
+        val achName = user.translateRaw("orbit.achievement.${achievement.id}.name".asTranslationKey())
+        val achDesc = user.translateRaw("orbit.achievement.${achievement.id}.description".asTranslationKey())
+        val notifyFrame = when (achievement.toastFrame) {
+            ToastFrame.TASK -> NotifyToastFrame.TASK
+            ToastFrame.CHALLENGE -> NotifyToastFrame.CHALLENGE
+            ToastFrame.GOAL -> NotifyToastFrame.GOAL
+        }
+        val rarityColor = achievement.rarity.colorTag
+        notify(user) {
+            chat(user.translate(
+                Keys.Orbit.Achievement.UnlockedChat,
+                "name" to achName,
+                "description" to achDesc,
+                "points" to achievement.points.toString(),
+            ))
+            toast(Component.text(achName), ItemStack.of(achievement.icon), notifyFrame)
+            when (achievement.rarity) {
+                AchievementRarity.COMMON -> {
+                    sound("minecraft:block.note_block.pling", volume = 0.6f, pitch = 1.2f)
+                }
+                AchievementRarity.UNCOMMON -> {
+                    sound("minecraft:entity.player.levelup", pitch = 1.2f)
+                }
+                AchievementRarity.RARE -> {
+                    sound("minecraft:entity.player.levelup", pitch = 1.3f)
+                    sound("minecraft:block.note_block.chime", pitch = 1.4f)
+                }
+                AchievementRarity.EPIC -> {
+                    title(
+                        title = Component.text("Achievement Unlocked!"),
+                        subtitle = Component.text("$rarityColor$achName"),
+                        fadeInTicks = 8,
+                        stayTicks = 50,
+                        fadeOutTicks = 12,
+                    )
+                    sound("minecraft:entity.player.levelup", pitch = 1.4f)
+                    sound("minecraft:ui.toast.challenge_complete", volume = 0.8f, pitch = 1.1f)
+                }
+                AchievementRarity.LEGENDARY -> {
+                    title(
+                        title = Component.text("$rarityColor$achName"),
+                        subtitle = Component.text("<gold><bold>LEGENDARY UNLOCK"),
+                        fadeInTicks = 10,
+                        stayTicks = 80,
+                        fadeOutTicks = 20,
+                    )
+                    actionBar(Component.text("$rarityColor$achName <gray>· <white>${achievement.points} pts"))
+                    sound("minecraft:entity.ender_dragon.growl", volume = 0.5f, pitch = 1.2f)
+                    sound("minecraft:entity.player.levelup", pitch = 0.8f)
+                    sound("minecraft:ui.toast.challenge_complete", volume = 1.0f, pitch = 0.9f)
+                    sound("minecraft:block.end_portal.spawn", volume = 0.4f, pitch = 1.5f)
+                }
+            }
+        }
 
         if (achievement.rewards.isNotEmpty()) {
             for (reward in achievement.rewards) {
@@ -301,19 +399,27 @@ object AchievementRegistry {
                     else -> "${reward.amount} ${reward.type}"
                 }
                 player.sendMessage(player.translate(
-                    "orbit.achievement.reward_line",
+                    Keys.Orbit.Achievement.RewardLine,
                     "reward" to rewardText,
                 ))
             }
         }
 
-        for (p in player.instance?.players ?: emptyList()) {
-            if (p.uuid == player.uuid) continue
-            p.sendMessage(p.translate(
-                "orbit.achievement.broadcast",
-                "player" to player.username,
-                "achievement" to (Orbit.translations.get("orbit.achievement.${achievement.id}.name", Orbit.localeOf(p.uuid)) ?: achievement.id),
-            ))
+        if (achievement.rarity.ordinal >= AchievementRarity.EPIC.ordinal) {
+            for (p in player.instance?.players ?: emptyList()) {
+                if (p.uuid == player.uuid) continue
+                p.sendMessage(p.translate(
+                    Keys.Orbit.Achievement.Broadcast,
+                    "player" to player.username,
+                    "achievement" to (Orbit.translations.get("orbit.achievement.${achievement.id}.name", Orbit.localeOf(p.uuid)) ?: achievement.id),
+                ))
+                if (achievement.rarity == AchievementRarity.LEGENDARY) {
+                    p.playSound(Sound.sound(
+                        Key.key("minecraft:entity.ender_dragon.growl"),
+                        Sound.Source.AMBIENT, 0.3f, 1.2f,
+                    ))
+                }
+            }
         }
     }
 

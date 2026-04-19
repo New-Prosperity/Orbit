@@ -18,6 +18,7 @@ import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import java.util.UUID
+import me.nebula.gravity.translation.Keys
 
 object StaffSpectateManager {
 
@@ -73,7 +74,7 @@ object StaffSpectateManager {
 
         val targetSession = SessionStore.load(resolvedTarget)
         if (targetSession == null) {
-            staff.sendMessage(staff.translate("orbit.spectate.target_offline"))
+            staff.sendMessage(staff.translate(Keys.Orbit.Spectate.TargetOffline))
             logger.info { "SwitchTarget: ${staff.username} -> $resolvedTarget (offline, waiting)" }
             return true
         }
@@ -144,7 +145,7 @@ object StaffSpectateManager {
             for (staffUuid in staffWatching) {
                 val staff = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(staffUuid) ?: continue
                 staff.stopSpectating()
-                staff.sendMessage(staff.translate("orbit.spectate.target_offline"))
+                staff.sendMessage(staff.translate(Keys.Orbit.Spectate.TargetOffline))
             }
         }
 

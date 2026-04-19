@@ -1,5 +1,6 @@
 package me.nebula.orbit.rules
 
+import me.nebula.gravity.config.ConfigCatalog
 import java.util.concurrent.ConcurrentHashMap
 
 object RuleRegistry {
@@ -14,6 +15,8 @@ object RuleRegistry {
         }
         val key = RuleKey(id, default, scope)
         keys[id] = key
+        val entry = RuleConfigBridge.asConfigEntry(key)
+        if (entry != null) ConfigCatalog.register(entry)
         return key
     }
 

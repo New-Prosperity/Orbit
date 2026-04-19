@@ -1,20 +1,23 @@
 package me.nebula.orbit.utils.commandbuilder
 
+import me.nebula.ether.utils.ratelimit.Cooldown
 import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.gravity.rank.RankManager
+import me.nebula.gravity.translation.Keys
 import me.nebula.orbit.localeCode
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.user.OrbitOnlineUser
+import me.nebula.orbit.user.asNebulaUser
+import me.nebula.orbit.utils.chat.miniMessage
 import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
-import me.nebula.orbit.utils.chat.miniMessage
 import net.minestom.server.command.CommandSender
 import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.CommandContext
 import net.minestom.server.command.builder.arguments.Argument
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.command.builder.suggestion.SuggestionEntry
-import me.nebula.ether.utils.ratelimit.Cooldown
 import net.minestom.server.entity.Player
 import java.time.Duration
 import java.util.UUID
@@ -24,6 +27,8 @@ data class CommandExecutionContext(
     val args: CommandContext,
     val locale: String,
 ) {
+    val user: OrbitOnlineUser = player.asNebulaUser()
+
     fun arg(name: String): String = args.get(ArgumentType.String(name))
     fun argOrNull(name: String): String? =
         if (args.has(name)) args.get(ArgumentType.String(name)) else null
@@ -34,16 +39,20 @@ data class CommandExecutionContext(
     fun floatArg(name: String): Float = args.get(ArgumentType.Float(name))
     fun boolArg(name: String): Boolean = args.get(ArgumentType.Boolean(name))
 
+    fun reply(key: TranslationKey, vararg placeholders: Pair<String, String>) {
+        user.sendMessage(user.translate(key, *placeholders))
+    }
+
     fun reply(key: String, vararg placeholders: Pair<String, String>) {
-        player.sendMessage(player.translate(key, *placeholders))
+        reply(key.asTranslationKey(), *placeholders)
     }
 
     fun replyRaw(text: String) {
-        player.sendMessage(Component.text(text))
+        user.sendMessage(Component.text(text))
     }
 
     fun replyMM(text: String) {
-        player.sendMessage(miniMessage.deserialize(text))
+        user.sendMessage(miniMessage.deserialize(text))
     }
 
     fun targetPlayer(argName: String = "player"): Player? {
@@ -55,12 +64,18 @@ data class CommandExecutionContext(
         val name = argOrNull(argName)
         if (name != null) {
             return MinecraftServer.getConnectionManager().findOnlinePlayer(name) ?: run {
-                reply("orbit.command.player_not_found", "name" to name)
+                reply(Keys.Orbit.Command.PlayerNotFound, "name" to name)
                 return player
             }
         }
         return player
     }
+
+    fun targetUser(argName: String = "player"): OrbitOnlineUser? =
+        targetPlayer(argName)?.asNebulaUser()
+
+    fun targetUserOrSelf(argName: String = "player"): OrbitOnlineUser =
+        targetPlayerOrSelf(argName).asNebulaUser()
 
     fun requireArg(name: String, errorKey: String = "orbit.command.missing_arg"): String? {
         val value = argOrNull(name)
@@ -195,7 +210,7 @@ class CommandBuilderDsl @PublishedApi internal constructor(
                 val cd = cooldown
                 if (cd != null && !cd.tryUse(player.uuid)) {
                     val remaining = cd.remainingMs(player.uuid) / 1000.0
-                    player.sendMessage(player.translate("orbit.command.cooldown", "seconds" to "%.1f".format(remaining)))
+                    player.sendMessage(player.translate(Keys.Orbit.Command.Cooldown, "seconds" to "%.1f".format(remaining)))
                     return@handler
                 }
                 Thread.startVirtualThread {

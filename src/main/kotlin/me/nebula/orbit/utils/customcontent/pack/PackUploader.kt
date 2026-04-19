@@ -69,7 +69,7 @@ object PackUploader {
         )
         log.info { "Pack uploaded to R2: $r2Bucket/$r2PackKey" }
 
-        val publicUrl = "${r2PublicUrl!!.trimEnd('/')}/$r2PackKey"
+        val publicUrl = "${checkNotNull(r2PublicUrl).trimEnd('/')}/$r2PackKey"
 
         val existing = ResourcePackStore.load(packId)
         val updated = existing?.copy(url = publicUrl, hash = sha1)

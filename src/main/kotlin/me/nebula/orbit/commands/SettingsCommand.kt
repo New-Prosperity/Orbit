@@ -16,6 +16,8 @@ import net.minestom.server.entity.Player
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 private val PROFILE_VISIBILITY_OPTIONS = listOf("PUBLIC", "FRIENDS", "PRIVATE")
 private val COSMETIC_DISPLAY_OPTIONS = listOf("FULL", "REDUCED", "NONE")
@@ -28,7 +30,7 @@ fun settingsCommand(): Command = command("settings") {
 private fun openSettingsGui(player: Player) {
     val prefs = PlayerCache.get(player.uuid)?.get(CacheSlots.PREFERENCES) ?: PreferenceStore.load(player.uuid) ?: PreferenceData()
 
-    gui(player.translateRaw("orbit.settings.title"), rows = 6) {
+    gui(player.translateRaw(Keys.Orbit.Settings.Title), rows = 6) {
         fillDefault()
         clickSound(SoundEvent.UI_BUTTON_CLICK)
         closeButton(49)
@@ -86,7 +88,7 @@ private fun cycle(player: Player, field: String, options: List<String>) {
 
 private fun categoryHeader(player: Player, key: String, material: Material): ItemStack =
     itemStack(material) {
-        name("<gold>${player.translateRaw(key)}")
+        name("<gold>${player.translateRaw(key.asTranslationKey())}")
         clean()
     }
 
@@ -94,11 +96,11 @@ private fun toggleSlot(player: Player, nameKey: String, descKey: String, icon: M
     val statusColor = if (enabled) "<green>" else "<red>"
     val statusKey = if (enabled) "orbit.settings.enabled" else "orbit.settings.disabled"
     return itemStack(icon) {
-        name("$statusColor${player.translateRaw(nameKey)}")
-        lore("<gray>${player.translateRaw(descKey)}")
+        name("$statusColor${player.translateRaw(nameKey.asTranslationKey())}")
+        lore("<gray>${player.translateRaw(descKey.asTranslationKey())}")
         emptyLoreLine()
-        lore("$statusColor${player.translateRaw(statusKey)}")
-        lore("<yellow>${player.translateRaw("orbit.settings.click_toggle")}")
+        lore("$statusColor${player.translateRaw(statusKey.asTranslationKey())}")
+        lore("<yellow>${player.translateRaw(Keys.Orbit.Settings.ClickToggle)}")
         if (enabled) glowing()
         clean()
     }
@@ -108,15 +110,15 @@ private fun cycleSlot(player: Player, nameKey: String, descKey: String, icon: Ma
     val index = options.indexOf(current)
     val next = options[(index + 1) % options.size]
     return itemStack(icon) {
-        name("<white>${player.translateRaw(nameKey)}")
-        lore("<gray>${player.translateRaw(descKey)}")
+        name("<white>${player.translateRaw(nameKey.asTranslationKey())}")
+        lore("<gray>${player.translateRaw(descKey.asTranslationKey())}")
         emptyLoreLine()
         options.forEach { option ->
             val prefix = if (option == current) "<green>\u25b6 " else "<dark_gray>  "
-            lore("$prefix${player.translateRaw("orbit.settings.option.$option")}")
+            lore("$prefix${player.translateRaw("orbit.settings.option.$option".asTranslationKey())}")
         }
         emptyLoreLine()
-        lore("<yellow>${player.translateRaw("orbit.settings.click_cycle", "next" to player.translateRaw("orbit.settings.option.$next"))}")
+        lore("<yellow>${player.translateRaw(Keys.Orbit.Settings.ClickCycle, "next" to player.translateRaw("orbit.settings.option.$next".asTranslationKey()))}")
         clean()
     }
 }

@@ -17,8 +17,9 @@ import me.nebula.gravity.guild.RemoveGuildMemberProcessor
 import me.nebula.gravity.guild.TransferGuildOwnerProcessor
 import me.nebula.gravity.guild.guildByNamePredicate
 import me.nebula.gravity.guild.guildByTagPredicate
-import me.nebula.gravity.property.PropertyStore
-import me.nebula.gravity.property.intProperty
+import me.nebula.gravity.config.ConfigScope
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.intEntry
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.guildId
 import me.nebula.orbit.level
@@ -32,9 +33,18 @@ import me.nebula.orbit.utils.gui.confirmGui
 import me.nebula.orbit.utils.gui.openGui
 import net.minestom.server.MinecraftServer
 import net.minestom.server.command.builder.Command
+import me.nebula.gravity.translation.Keys
 
-private val GUILD_CREATE_COST = intProperty("GUILD_CREATE_COST", default = 1000)
-private val GUILD_MIN_LEVEL = intProperty("GUILD_MIN_LEVEL", default = 10)
+private val GUILD_CREATE_COST = intEntry("GUILD_CREATE_COST") {
+    scope = ConfigScope.NETWORK
+    default = 1000
+    category = "guild"
+}
+private val GUILD_MIN_LEVEL = intEntry("GUILD_MIN_LEVEL") {
+    scope = ConfigScope.NETWORK
+    default = 10
+    category = "guild"
+}
 
 private val NAME_REGEX = Regex("^[a-zA-Z0-9 ]{3,16}$")
 private val TAG_REGEX = Regex("^[A-Z]{3,5}$")
@@ -94,7 +104,7 @@ private fun CommandExecutionContext.handleCreate(args: Array<String>) {
     if (!NAME_REGEX.matches(name)) { reply("orbit.guild.create.invalid_name"); return }
     if (!TAG_REGEX.matches(tag)) { reply("orbit.guild.create.invalid_tag"); return }
 
-    val minLevel = PropertyStore[GUILD_MIN_LEVEL]
+    val minLevel = ConfigStore.get(GUILD_MIN_LEVEL)
     if (player.level < minLevel) {
         reply("orbit.guild.create.level_required", "level" to minLevel.toString())
         return
@@ -110,7 +120,7 @@ private fun CommandExecutionContext.handleCreate(args: Array<String>) {
         return
     }
 
-    val cost = PropertyStore[GUILD_CREATE_COST].toDouble()
+    val cost = ConfigStore.get(GUILD_CREATE_COST).toDouble()
     if (cost > 0) {
         val paid = EconomyStore.executeOnKey(player.uuid, PurchaseCosmeticProcessor("coins", cost))
         if (!paid) { reply("orbit.guild.create.insufficient_funds", "cost" to cost.toInt().toString()); return }
@@ -160,7 +170,7 @@ private fun CommandExecutionContext.handleInvite(args: Array<String>) {
     )
 
     reply("orbit.guild.invite.sent", "player" to targetName)
-    target.sendMessage(target.translate("orbit.guild.invite.received", "guild" to guild.name, "player" to player.username))
+    target.sendMessage(target.translate(Keys.Orbit.Guild.Invite.Received, "guild" to guild.name, "player" to player.username))
 }
 
 private fun CommandExecutionContext.handleKick(args: Array<String>) {
@@ -185,7 +195,7 @@ private fun CommandExecutionContext.handleKick(args: Array<String>) {
     PlayerCache.refresh(targetId, CacheSlots.GUILD)
 
     val targetPlayer = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(targetId)
-    targetPlayer?.sendMessage(targetPlayer.translate("orbit.guild.kick.notification", "guild" to guild.name))
+    targetPlayer?.sendMessage(targetPlayer.translate(Keys.Orbit.Guild.Kick.Notification, "guild" to guild.name))
 
     AuditStore.log(
         actorId = player.uuid, actorName = player.username,
@@ -288,8 +298,8 @@ private fun CommandExecutionContext.handleDisband() {
     if (guild.ownerId != player.uuid) { reply("orbit.guild.no_permission"); return }
 
     val confirm = confirmGui(
-        title = player.translateRaw("orbit.guild.disband.confirm_title"),
-        message = player.translateRaw("orbit.guild.disband.confirm_message", "guild" to guild.name),
+        title = player.translateRaw(Keys.Orbit.Guild.Disband.ConfirmTitle),
+        message = player.translateRaw(Keys.Orbit.Guild.Disband.ConfirmMessage, "guild" to guild.name),
         onConfirm = { p ->
             val freshGuild = GuildStore.load(guildId)
             if (freshGuild == null) { p.closeInventory(); return@confirmGui }
@@ -308,7 +318,7 @@ private fun CommandExecutionContext.handleDisband() {
             )
 
             p.closeInventory()
-            p.sendMessage(p.translate("orbit.guild.disband.success", "guild" to freshGuild.name))
+            p.sendMessage(p.translate(Keys.Orbit.Guild.Disband.Success, "guild" to freshGuild.name))
         },
         onCancel = { it.closeInventory() },
     )

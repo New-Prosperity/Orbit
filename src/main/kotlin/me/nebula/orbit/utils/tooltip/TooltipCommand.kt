@@ -5,6 +5,7 @@ import me.nebula.orbit.utils.commandbuilder.command
 import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.arguments.ArgumentType
 import net.minestom.server.component.DataComponents
+import me.nebula.gravity.translation.Keys
 
 private val STYLE_ARG = ArgumentType.Word("style").from(*TooltipStyleRegistry.ids().toTypedArray())
 
@@ -15,10 +16,10 @@ fun tooltipCommand(): Command = command("tooltip") {
         onPlayerExecute {
             val styles = TooltipStyleRegistry.ids()
             if (styles.isEmpty()) {
-                player.sendMessage(player.translate("orbit.command.tooltip.list.empty"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Tooltip.List.Empty))
                 return@onPlayerExecute
             }
-            player.sendMessage(player.translate("orbit.command.tooltip.list.styles", "styles" to styles.joinToString(", ")))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Tooltip.List.Styles, "styles" to styles.joinToString(", ")))
         }
     }
 
@@ -28,16 +29,16 @@ fun tooltipCommand(): Command = command("tooltip") {
             val styleId = args.get(STYLE_ARG)
             val style = TooltipStyleRegistry[styleId]
             if (style == null) {
-                player.sendMessage(player.translate("orbit.command.tooltip.unknown_style", "id" to styleId))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Tooltip.UnknownStyle, "id" to styleId))
                 return@onPlayerExecute
             }
             val held = player.getItemInMainHand()
             if (held.isAir) {
-                player.sendMessage(player.translate("orbit.command.tooltip.hold_item"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Tooltip.HoldItem))
                 return@onPlayerExecute
             }
             player.setItemInMainHand(held.withTooltipStyle(styleId))
-            player.sendMessage(player.translate("orbit.command.tooltip.set.applied", "id" to styleId))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Tooltip.Set.Applied, "id" to styleId))
         }
     }
 
@@ -45,11 +46,11 @@ fun tooltipCommand(): Command = command("tooltip") {
         onPlayerExecute {
             val held = player.getItemInMainHand()
             if (held.isAir) {
-                player.sendMessage(player.translate("orbit.command.tooltip.hold_item"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Tooltip.HoldItem))
                 return@onPlayerExecute
             }
             player.setItemInMainHand(held.without(DataComponents.TOOLTIP_STYLE))
-            player.sendMessage(player.translate("orbit.command.tooltip.cleared"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Tooltip.Cleared))
         }
     }
 }

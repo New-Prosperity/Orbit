@@ -10,6 +10,7 @@ import net.minestom.server.instance.Weather
 import net.minestom.server.instance.block.Block
 import net.minestom.server.instance.generator.GenerationUnit
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
 
 enum class GameRule(val defaultValue: Any) {
     DO_DAYLIGHT_CYCLE(true),
@@ -86,7 +87,7 @@ object WorldManager {
     fun delete(name: String) {
         val instance = worlds.remove(name) ?: return
         gameRuleCache.remove(instance.uuid)
-        instance.players.forEach { it.kick(translateDefault("orbit.util.world.deleted")) }
+        instance.players.forEach { it.kick(translateDefault(Keys.Orbit.Util.World.Deleted)) }
         instanceManager.unregisterInstance(instance)
     }
 

@@ -19,6 +19,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
+import me.nebula.gravity.translation.Keys
 
 private val bubbleEntityIds = AtomicInteger(-6_000_000)
 
@@ -127,7 +128,7 @@ class NpcSpeechManager(
 
     fun showBubbleTo(player: Player, bubble: ActiveBubble, line: SpeechLine) {
         val text = resolveText(player, line)
-        val bubbleText = translateDefault("orbit.npc.speech_bubble", "text" to text)
+        val bubbleText = translateDefault(Keys.Orbit.Npc.SpeechBubble, "text" to text)
         val pos = npc.position.add(0.0, config.bubbleYOffset.toDouble(), 0.0)
 
         player.sendPacket(SpawnEntityPacket(

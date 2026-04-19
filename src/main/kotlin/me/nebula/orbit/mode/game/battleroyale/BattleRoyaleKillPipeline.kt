@@ -14,6 +14,7 @@ import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.tag.Tag
 import java.util.UUID
+import me.nebula.ether.utils.translation.asTranslationKey
 
 class BattleRoyaleKillPipeline(
     private val mode: BattleRoyaleMode,
@@ -69,7 +70,7 @@ class BattleRoyaleKillPipeline(
         }
 
         if (mode.goldenHeadEnabled()) {
-            killer.inventory.addItemStack(GoldenHeadManager.createStack { key -> killer.translateRaw(key) })
+            killer.inventory.addItemStack(GoldenHeadManager.createStack { key -> killer.translateRaw(key.asTranslationKey()) })
         }
     }
 

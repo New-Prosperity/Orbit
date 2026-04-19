@@ -14,6 +14,7 @@ import net.kyori.adventure.text.format.NamedTextColor
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
 import java.util.UUID
+import me.nebula.gravity.translation.Keys
 
 data class LeaderboardColumn(
     val statKey: String,
@@ -29,18 +30,18 @@ class LeaderboardDisplay @PublishedApi internal constructor(
 ) {
 
     fun query(statKey: String, periodicity: Periodicity = defaultPeriodicity): List<RankedPlayer> =
-        RankingStore.load(rankingKey(statKey, periodicity)) ?: emptyList()
+        RankingStore.load(rankingKey(statKey, periodicity))?.top.orEmpty()
 
     fun sendChat(player: Player, statKey: String, periodicity: Periodicity = defaultPeriodicity, limit: Int = 10) {
         val entries = query(statKey, periodicity)
 
         player.sendMessage(Component.empty())
         player.sendMessage(
-            player.translate("orbit.leaderboard.header", "stat" to statKey, "period" to periodicity.name)
+            player.translate(Keys.Orbit.Leaderboard.Header, "stat" to statKey, "period" to periodicity.name)
         )
 
         if (entries.isEmpty()) {
-            player.sendMessage(player.translate("orbit.leaderboard.empty"))
+            player.sendMessage(player.translate(Keys.Orbit.Leaderboard.Empty))
         } else {
             for (entry in entries.take(limit)) {
                 val rank = entry.position + 1

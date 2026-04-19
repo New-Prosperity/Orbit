@@ -12,6 +12,7 @@ import net.minestom.server.item.Material
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
+import me.nebula.gravity.translation.Keys
 
 data class VoteCategory(
     val id: String,
@@ -102,10 +103,10 @@ class MapVoteManager(
                     if (current != null) {
                         val opt = cat.options.getOrNull(current)
                         opt?.let {
-                            lore(player.translateRaw("orbit.vote.current", "option" to player.translateRaw(it.nameKey)))
+                            lore(player.translateRaw(Keys.Orbit.Vote.Current, "option" to player.translateRaw(it.nameKey)))
                         }
                     }
-                    lore(player.translateRaw("orbit.vote.click_to_vote"))
+                    lore(player.translateRaw(Keys.Orbit.Vote.ClickToVote))
                     clean()
                 }) { p ->
                     openOptionMenu(p, cat.id)
@@ -130,15 +131,15 @@ class MapVoteManager(
                     option.mapIcon?.let { itemModel("sprites/$it") }
                     option.descriptionKey?.let { lore(player.translateRaw(it)) }
                     if (isSelected) {
-                        lore(player.translateRaw("orbit.vote.selected"))
+                        lore(player.translateRaw(Keys.Orbit.Vote.Selected))
                         glowing()
                     } else {
-                        lore(player.translateRaw("orbit.vote.click_to_select"))
+                        lore(player.translateRaw(Keys.Orbit.Vote.ClickToSelect))
                     }
                     clean()
                 }) { p ->
                     vote(p.uuid, cat.id, i)
-                    p.sendMessage(p.translate("orbit.vote.voted",
+                    p.sendMessage(p.translate(Keys.Orbit.Vote.Voted,
                         "category" to p.translateRaw(cat.nameKey),
                         "option" to p.translateRaw(option.nameKey),
                     ))
@@ -146,7 +147,7 @@ class MapVoteManager(
                 }
             }
             slot(22, itemStack(Material.ARROW) {
-                name(player.translateRaw("orbit.host.back"))
+                name(player.translateRaw(Keys.Orbit.Host.Back))
                 clean()
             }) { p ->
                 openCategoryMenu(p)

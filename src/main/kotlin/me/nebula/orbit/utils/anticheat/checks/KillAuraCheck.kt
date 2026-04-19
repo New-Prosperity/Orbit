@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.anticheat.checks
 
-import me.nebula.gravity.property.NetworkProperties
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
 import me.nebula.orbit.utils.anticheat.AntiCheat
 import me.nebula.orbit.utils.anticheat.AntiCheatCheck
 import net.minestom.server.entity.GameMode
@@ -26,7 +26,7 @@ object KillAuraCheck : AntiCheatCheck {
         node.addListener(EntityAttackEvent::class.java) { event ->
             val player = event.entity as? Player ?: return@addListener
             if (player.gameMode == GameMode.CREATIVE) return@addListener
-            if (!PropertyStore[NetworkProperties.AC_CHECK_KILLAURA_ENABLED]) return@addListener
+            if (!ConfigStore.get(NetworkConfig.AC_CHECK_KILLAURA_ENABLED)) return@addListener
 
             val target = event.target
             val eye = player.position.add(0.0, player.eyeHeight, 0.0)

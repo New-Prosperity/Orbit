@@ -10,6 +10,7 @@ import net.minestom.server.entity.GameMode as MinestomGameMode
 import net.minestom.server.entity.Player
 import net.minestom.server.timer.Task
 import java.util.concurrent.CompletableFuture
+import me.nebula.gravity.translation.Keys
 
 class LobbyLifecycleManager(private val mode: GameMode) {
 
@@ -68,7 +69,7 @@ class LobbyLifecycleManager(private val mode: GameMode) {
             val current = mode.tracker.aliveCount
             val needed = mode.settings.timing.minPlayers
             for (player in mode.lobbyInstance.players) {
-                player.sendActionBar(player.translate("orbit.game.waiting",
+                player.sendActionBar(player.translate(Keys.Orbit.Game.Waiting,
                     "current" to current.toString(),
                     "needed" to needed.toString()))
             }

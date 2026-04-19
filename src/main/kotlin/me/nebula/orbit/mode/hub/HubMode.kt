@@ -9,8 +9,8 @@ import me.nebula.gravity.messaging.QueueAssignmentMessage
 import me.nebula.gravity.messaging.QueuePositionMessage
 import me.nebula.gravity.messaging.QueueProvisioningMessage
 import me.nebula.gravity.messaging.QueueRemovedMessage
-import me.nebula.gravity.property.NetworkProperties
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
 import me.nebula.orbit.rankName
 import me.nebula.orbit.rankColor
 import me.nebula.orbit.rankPrefix
@@ -18,11 +18,13 @@ import me.nebula.orbit.level
 import me.nebula.orbit.levelData
 import me.nebula.orbit.rankWeight
 import me.nebula.gravity.session.SessionStore
+import me.nebula.gravity.notification.notify
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.translation.resolveTranslated
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
+import me.nebula.orbit.user.asNebulaUser
 import me.nebula.orbit.cosmetic.CosmeticDataCache
 import me.nebula.orbit.cosmetic.CosmeticMenu
 import me.nebula.orbit.mode.config.CosmeticConfig
@@ -70,6 +72,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 import net.kyori.adventure.text.Component
+import me.nebula.gravity.translation.Keys
 
 class HubMode : ServerMode {
 
@@ -82,7 +85,7 @@ class HubMode : ServerMode {
         perPlayer("rank") { player -> player.rankName }
     }
 
-    override val maxPlayers: Int get() = PropertyStore[NetworkProperties.HUB_SLOTS]
+    override val maxPlayers: Int get() = ConfigStore.get(NetworkConfig.HUB_SLOTS)
 
     override val cosmeticConfig: CosmeticConfig = config.cosmetics ?: CosmeticConfig()
 
@@ -241,14 +244,18 @@ class HubMode : ServerMode {
 
         hostStatusSubscription = subscribeSyncForPlayer<HostProvisionStatusMessage>({ it.hostOwner }) { msg, player ->
             when (msg.status) {
-                "PROVISIONING" -> player.sendMessage(player.translate("orbit.host.status.provisioning"))
+                "PROVISIONING" -> player.sendMessage(player.translate(Keys.Orbit.Host.Status.Provisioning))
                 "READY" -> {
                     HostMenu.removePending(msg.hostOwner)
-                    player.sendMessage(player.translate("orbit.host.status.ready"))
+                    val user = player.asNebulaUser()
+                    notify(user) {
+                        chat(user.translate(Keys.Orbit.Host.Status.Ready))
+                        sound("minecraft:ui.toast.challenge_complete", pitch = 1.3f)
+                    }
                 }
                 "FAILED" -> {
                     HostMenu.removePending(msg.hostOwner)
-                    player.sendMessage(player.translate("orbit.host.status.failed",
+                    player.sendMessage(player.translate(Keys.Orbit.Host.Status.Failed,
                         "reason" to (msg.failureReason ?: "unknown")))
                 }
             }
@@ -258,7 +265,7 @@ class HubMode : ServerMode {
             SelectorMenu.removeQueued(msg.playerId, msg.gameMode)
             scheduleSync {
                 val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(msg.playerId) ?: return@scheduleSync
-                player.sendMessage(player.translate("orbit.queue.removed", "gamemode" to msg.gameMode))
+                player.sendMessage(player.translate(Keys.Orbit.Queue.Removed, "gamemode" to msg.gameMode))
                 player.playSound(SoundEvent.BLOCK_NOTE_BLOCK_BASS, 1f, 1f)
             }
         }
@@ -275,7 +282,7 @@ class HubMode : ServerMode {
 
         queuePositionSubscription = subscribeSyncForPlayer<QueuePositionMessage>({ it.playerId }) { msg, player ->
             val estSeconds = if (msg.estimatedWaitMs > 0) (msg.estimatedWaitMs / 1000).toString() else "?"
-            player.sendActionBar(player.translate("orbit.queue.position",
+            player.sendActionBar(player.translate(Keys.Orbit.Queue.Position,
                 "position" to msg.position.toString(),
                 "total" to msg.totalInQueue.toString(),
                 "estimate" to estSeconds))
@@ -283,18 +290,18 @@ class HubMode : ServerMode {
         }
 
         queueProvisioningSubscription = subscribeSyncForPlayers<QueueProvisioningMessage>({ it.playerIds }) { _, player ->
-            player.sendActionBar(player.translate("orbit.queue.provisioning"))
+            player.sendActionBar(player.translate(Keys.Orbit.Queue.Provisioning))
         }
 
         partyQueueSubscription = subscribeSyncForPlayers<PartyQueueNotificationMessage>({ it.partyMemberIds }) { msg, player ->
-            player.sendActionBar(player.translate("orbit.queue.party_queued",
+            player.sendActionBar(player.translate(Keys.Orbit.Queue.PartyQueued,
                 "leader" to msg.leaderName,
                 "gamemode" to msg.gameMode))
             player.playSound(SoundEvent.UI_BUTTON_CLICK, 1f, 1f)
         }
 
         gameEndSubscription = subscribeSyncForPlayers<GameEndMessage>({ it.playerIds }) { msg, player ->
-            player.sendMessage(player.translate("orbit.queue.requeue_prompt", "gamemode" to msg.gameMode))
+            player.sendMessage(player.translate(Keys.Orbit.Queue.RequeuePrompt, "gamemode" to msg.gameMode))
         }
 
         StatueManager.install()
@@ -380,7 +387,7 @@ class HubMode : ServerMode {
         }
 
         val visibleCount = VanishManager.visiblePlayerCount(viewer)
-        val headerText = viewer.translateRaw("orbit.tab.players_header", "count" to visibleCount.toString())
+        val headerText = viewer.translateRaw(Keys.Orbit.Tab.PlayersHeader, "count" to visibleCount.toString())
         entries += fakeEntry(tabFakeUuids[HEADER_SLOT], HEADER_SLOT, miniMessage.deserialize(headerText))
 
         for (i in 0 until displayCount) {
@@ -392,7 +399,7 @@ class HubMode : ServerMode {
         var nextSlot = PLAYER_START + displayCount
 
         if (hasOverflow) {
-            val text = viewer.translateRaw("orbit.tab.overflow", "count" to overflowCount.toString())
+            val text = viewer.translateRaw(Keys.Orbit.Tab.Overflow, "count" to overflowCount.toString())
             entries += fakeEntry(tabFakeUuids[nextSlot], nextSlot, miniMessage.deserialize(text))
             nextSlot++
         }

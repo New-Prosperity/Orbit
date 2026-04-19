@@ -10,6 +10,7 @@ import me.nebula.gravity.reconnection.ReconnectionStore
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.GameMode as MinestomGameMode
 import net.minestom.server.item.Material
+import me.nebula.gravity.translation.Keys
 
 class PlayerLifecycleHandler(private val gameMode: GameMode) {
 
@@ -45,7 +46,7 @@ class PlayerLifecycleHandler(private val gameMode: GameMode) {
         if (gameMode.phase == GamePhase.WAITING) {
             if (Orbit.hostOwner == player.uuid && gameMode.tracker.aliveCount < gameMode.settings.timing.minPlayers) {
                 player.inventory.setItemStack(8, itemStack(Material.EMERALD) {
-                    name(player.translate("orbit.game.force_start"))
+                    name(player.translate(Keys.Orbit.Game.ForceStart))
                 })
             }
             gameMode.checkMinPlayersInternal()

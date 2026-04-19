@@ -13,6 +13,7 @@ import net.kyori.adventure.bossbar.BossBar
 import net.minestom.server.MinecraftServer
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
+import me.nebula.gravity.translation.Keys
 
 object ServerDrainManager {
 
@@ -120,7 +121,7 @@ object ServerDrainManager {
         val players = MinecraftServer.getConnectionManager().onlinePlayers
         if (players.isEmpty()) return
         for (player in players) {
-            player.sendMessage(player.translate("orbit.drain.notification", "remaining" to remainingText))
+            player.sendMessage(player.translate(Keys.Orbit.Drain.Notification, "remaining" to remainingText))
         }
 
         val bar = bossBar ?: BossBar.bossBar(

@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.anticheat.checks
 
-import me.nebula.gravity.property.NetworkProperties
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
 import me.nebula.orbit.utils.anticheat.AntiCheat
 import me.nebula.orbit.utils.anticheat.AntiCheatCheck
 import net.minestom.server.coordinate.Pos
@@ -91,18 +91,18 @@ object MovementCheck : AntiCheatCheck {
             val flyThreshold = FLY_Y_THRESHOLD * lagMultiplier
 
             if (dy > flyThreshold && !player.isOnGround && newAirTicks > 3
-                && PropertyStore[NetworkProperties.AC_CHECK_FLY_ENABLED]) {
+                && ConfigStore.get(NetworkConfig.AC_CHECK_FLY_ENABLED)) {
                 AntiCheat.flag(uuid, "fly", WEIGHT, AntiCheat.movementFlagThreshold, AntiCheat.movementKickThreshold)
             }
 
             if (horizontalDist > speedThreshold
-                && PropertyStore[NetworkProperties.AC_CHECK_SPEED_ENABLED]) {
+                && ConfigStore.get(NetworkConfig.AC_CHECK_SPEED_ENABLED)) {
                 AntiCheat.flag(uuid, "speed", WEIGHT, AntiCheat.movementFlagThreshold, AntiCheat.movementKickThreshold)
             }
 
             val fallDistance = state.lastGroundY - newPos.y()
             if (fallDistance > NOFALL_DISTANCE && player.isOnGround && !wasOnGround(state)
-                && PropertyStore[NetworkProperties.AC_CHECK_NOFALL_ENABLED]) {
+                && ConfigStore.get(NetworkConfig.AC_CHECK_NOFALL_ENABLED)) {
                 AntiCheat.flag(uuid, "nofall", WEIGHT, AntiCheat.movementFlagThreshold, AntiCheat.movementKickThreshold)
             }
 

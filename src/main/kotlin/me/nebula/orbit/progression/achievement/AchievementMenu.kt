@@ -11,6 +11,8 @@ import me.nebula.orbit.utils.gui.paginatedGui
 import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 object AchievementMenu {
 
@@ -35,11 +37,11 @@ object AchievementMenu {
         val totalCompleted = AchievementRegistry.completedCount(player)
         val totalAchievements = AchievementRegistry.totalCount()
 
-        val categoryGui = gui(player.translateRaw("orbit.achievement.title"), rows = 5) {
+        val categoryGui = gui(player.translateRaw(Keys.Orbit.Achievement.Title), rows = 5) {
             slot(4, itemStack(Material.DIAMOND) {
-                name(player.translateRaw("orbit.achievement.summary_title"))
-                lore(player.translateRaw("orbit.achievement.summary_points", "points" to totalPoints.toString()))
-                lore(player.translateRaw("orbit.achievement.progress",
+                name(player.translateRaw(Keys.Orbit.Achievement.SummaryTitle))
+                lore(player.translateRaw(Keys.Orbit.Achievement.SummaryPoints, "points" to totalPoints.toString()))
+                lore(player.translateRaw(Keys.Orbit.Achievement.Progress,
                     "completed" to totalCompleted.toString(),
                     "total" to totalAchievements.toString(),
                 ))
@@ -53,17 +55,17 @@ object AchievementMenu {
 
                 slot(slot + 9, itemStack(material) {
                     name(player.translateRaw(category.displayKey))
-                    lore(player.translateRaw("orbit.achievement.progress",
+                    lore(player.translateRaw(Keys.Orbit.Achievement.Progress,
                         "completed" to completed.toString(),
                         "total" to total.toString(),
                     ))
-                    lore(player.translateRaw("orbit.achievement.category_points", "points" to catPoints.toString()))
+                    lore(player.translateRaw(Keys.Orbit.Achievement.CategoryPoints, "points" to catPoints.toString()))
                     clean()
                 }) { p -> openCategory(p, category) }
             }
 
             slot(25, itemStack(Material.GOLD_INGOT) {
-                name(player.translateRaw("orbit.achievement.milestones_title"))
+                name(player.translateRaw(Keys.Orbit.Achievement.MilestonesTitle))
                 for (milestone in AchievementRegistry.MILESTONES) {
                     val claimed = milestone.threshold in AchievementRegistry.claimedMilestones(player.uuid)
                     val milestoneName = player.translateRaw(milestone.nameKey)
@@ -107,7 +109,7 @@ object AchievementMenu {
                     if (displayAch.hidden && highestCompleted == null) {
                         item(itemStack(Material.COAL_BLOCK) {
                             name("<dark_gray>???")
-                            lore(player.translateRaw("orbit.achievement.hidden"))
+                            lore(player.translateRaw(Keys.Orbit.Achievement.Hidden))
                             clean()
                         })
                         continue
@@ -117,13 +119,13 @@ object AchievementMenu {
                     val material = if (allCompleted) Material.LIME_DYE else displayAch.icon
 
                     item(itemStack(material) {
-                        val achName = player.translateRaw("orbit.achievement.${nextTier.id}.name")
+                        val achName = player.translateRaw("orbit.achievement.${nextTier.id}.name".asTranslationKey())
                         name(if (allCompleted) "<green>$achName" else "<white>$achName")
 
                         for (member in members) {
                             val completed = AchievementRegistry.isCompleted(player, member.id)
                             val tierColor = tierIcons[member.tierLevel] ?: "<white>"
-                            val memberName = player.translateRaw("orbit.achievement.${member.id}.name")
+                            val memberName = player.translateRaw("orbit.achievement.${member.id}.name".asTranslationKey())
                             val status = if (completed) "<green>✔" else "<red>✘"
                             lore("$tierColor $memberName $status")
                         }
@@ -131,7 +133,7 @@ object AchievementMenu {
                         val progress = AchievementRegistry.getProgress(player, nextTier.id)
                         if (!allCompleted && nextTier.maxProgress > 1) {
                             lore("")
-                            lore(player.translateRaw("orbit.achievement.progress",
+                            lore(player.translateRaw(Keys.Orbit.Achievement.Progress,
                                 "completed" to progress.toString(),
                                 "total" to nextTier.maxProgress.toString(),
                             ))
@@ -139,7 +141,7 @@ object AchievementMenu {
                         }
                         lore("")
                         lore("${nextTier.rarity.colorTag}${player.translateRaw(nextTier.rarity.labelKey)}")
-                        lore(player.translateRaw("orbit.achievement.points_value", "points" to nextTier.points.toString()))
+                        lore(player.translateRaw(Keys.Orbit.Achievement.PointsValue, "points" to nextTier.points.toString()))
                         if (allCompleted) glowing()
                         clean()
                     })
@@ -151,7 +153,7 @@ object AchievementMenu {
                     if (achievement.hidden && !completed) {
                         item(itemStack(Material.COAL_BLOCK) {
                             name("<dark_gray>???")
-                            lore(player.translateRaw("orbit.achievement.hidden"))
+                            lore(player.translateRaw(Keys.Orbit.Achievement.Hidden))
                             clean()
                         })
                         continue
@@ -160,12 +162,12 @@ object AchievementMenu {
                     val material = if (completed) Material.LIME_DYE else achievement.icon
 
                     item(itemStack(material) {
-                        val achName = player.translateRaw("orbit.achievement.${achievement.id}.name")
-                        val achDesc = player.translateRaw("orbit.achievement.${achievement.id}.description")
+                        val achName = player.translateRaw("orbit.achievement.${achievement.id}.name".asTranslationKey())
+                        val achDesc = player.translateRaw("orbit.achievement.${achievement.id}.description".asTranslationKey())
                         name(if (completed) "<green>$achName" else "<white>$achName")
                         lore("<gray>$achDesc")
                         if (achievement.maxProgress > 1) {
-                            lore(player.translateRaw("orbit.achievement.progress",
+                            lore(player.translateRaw(Keys.Orbit.Achievement.Progress,
                                 "completed" to progress.toString(),
                                 "total" to achievement.maxProgress.toString(),
                             ))
@@ -173,7 +175,7 @@ object AchievementMenu {
                         }
                         lore("")
                         lore("${achievement.rarity.colorTag}${player.translateRaw(achievement.rarity.labelKey)}")
-                        lore(player.translateRaw("orbit.achievement.points_value", "points" to achievement.points.toString()))
+                        lore(player.translateRaw(Keys.Orbit.Achievement.PointsValue, "points" to achievement.points.toString()))
                         if (completed) glowing()
                         clean()
                     })
@@ -181,7 +183,7 @@ object AchievementMenu {
             }
 
             staticSlot(49, itemStack(Material.ARROW) {
-                name("<gray>${player.translateRaw("orbit.achievement.back")}")
+                name("<gray>${player.translateRaw(Keys.Orbit.Achievement.Back)}")
                 clean()
             }) { p -> open(p) }
         }

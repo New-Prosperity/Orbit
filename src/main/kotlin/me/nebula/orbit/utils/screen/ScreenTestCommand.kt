@@ -16,6 +16,7 @@ import net.minestom.server.command.builder.Command
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
+import me.nebula.gravity.translation.Keys
 
 private const val EYE_HEIGHT = 1.62
 
@@ -61,7 +62,7 @@ fun screenTestCommand(): Command = command("screen") {
                         bgColor(0xFF0F3460.toInt())
                         hoverColor(0xFF1A5276.toInt())
                         cornerRadius(4)
-                        onClick { player.sendMessage(player.translate("orbit.command.screen.button.play_clicked")) }
+                        onClick { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Button.PlayClicked)) }
                     }
                     progressBar(40, 100, 200, 16) {
                         progress(0.7f)
@@ -72,7 +73,7 @@ fun screenTestCommand(): Command = command("screen") {
                 }
 
                 button("settings", 460, 290, 180, 50) {
-                    onClick { player.sendMessage(player.translate("orbit.command.screen.button.settings_clicked")) }
+                    onClick { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Button.SettingsClicked)) }
                     onHover { hovering ->
                         Screen.update(player) { canvas ->
                             val color = if (hovering) 0xFF6C3483.toInt() else 0xFF533483.toInt()
@@ -84,7 +85,7 @@ fun screenTestCommand(): Command = command("screen") {
 
                 sensitivity(1.0)
                 escToClose()
-                onClose { player.sendMessage(player.translate("orbit.command.screen.closed")) }
+                onClose { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Closed)) }
             }
 
             var progress = 0.0
@@ -145,7 +146,7 @@ fun screenTestCommand(): Command = command("screen") {
                         hoverColor(0xFF94E2D5.toInt())
                         textColor(0xFF1E1E2E.toInt())
                         cornerRadius(6)
-                        onClick { player.sendMessage(player.translate("orbit.command.screen.ui.play")) }
+                        onClick { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Ui.Play)) }
                     }
 
                     button(20, 92, 220, 40, "Settings", DEFAULT_FONT) {
@@ -153,7 +154,7 @@ fun screenTestCommand(): Command = command("screen") {
                         hoverColor(0xFFB4BEFE.toInt())
                         textColor(0xFF1E1E2E.toInt())
                         cornerRadius(6)
-                        onClick { player.sendMessage(player.translate("orbit.command.screen.ui.settings")) }
+                        onClick { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Ui.Settings)) }
                     }
 
                     button(20, 144, 220, 40, "Cosmetics", DEFAULT_FONT) {
@@ -161,7 +162,7 @@ fun screenTestCommand(): Command = command("screen") {
                         hoverColor(0xFFFAB387.toInt())
                         textColor(0xFF1E1E2E.toInt())
                         cornerRadius(6)
-                        onClick { player.sendMessage(player.translate("orbit.command.screen.ui.cosmetics")) }
+                        onClick { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Ui.Cosmetics)) }
                     }
 
                     button(20, 196, 220, 40, "Quit", DEFAULT_FONT) {
@@ -208,7 +209,7 @@ fun screenTestCommand(): Command = command("screen") {
                         hoverColor(0xFF585B70.toInt())
                         textColor(0xFFCDD6F4.toInt())
                         cornerRadius(6)
-                        onClick { player.sendMessage(player.translate("orbit.command.screen.ui.option_a")) }
+                        onClick { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Ui.OptionA)) }
                     }
 
                     button(135, 40, 105, 34, "Option B", DEFAULT_FONT) {
@@ -216,7 +217,7 @@ fun screenTestCommand(): Command = command("screen") {
                         hoverColor(0xFF585B70.toInt())
                         textColor(0xFFCDD6F4.toInt())
                         cornerRadius(6)
-                        onClick { player.sendMessage(player.translate("orbit.command.screen.ui.option_b")) }
+                        onClick { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Ui.OptionB)) }
                     }
 
                     button(20, 84, 220, 34, "Confirm Selection", DEFAULT_FONT) {
@@ -224,13 +225,13 @@ fun screenTestCommand(): Command = command("screen") {
                         hoverColor(0xFF94E2D5.toInt())
                         textColor(0xFF1E1E2E.toInt())
                         cornerRadius(6)
-                        onClick { player.sendMessage(player.translate("orbit.command.screen.ui.confirmed")) }
+                        onClick { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Ui.Confirmed)) }
                     }
                 }
 
                 sensitivity(1.0)
                 escToClose()
-                onClose { player.sendMessage(player.translate("orbit.command.screen.ui.closed")) }
+                onClose { player.sendMessage(player.translate(Keys.Orbit.Command.Screen.Ui.Closed)) }
             }
 
             var tickTask: net.minestom.server.timer.Task? = null
@@ -249,7 +250,7 @@ fun screenTestCommand(): Command = command("screen") {
             if (player.hasScreenOpen) {
                 player.closeScreen()
             } else {
-                player.sendMessage(player.translate("orbit.command.screen.no_screen_open"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Screen.NoScreenOpen))
             }
         }
     }

@@ -6,6 +6,7 @@ import me.nebula.ether.utils.hazelcast.Store
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
 import me.nebula.orbit.Orbit
+import me.nebula.orbit.notification.OrbitNotifications
 import me.nebula.orbit.utils.gametest.PacketInterceptor
 import me.nebula.orbit.utils.gametest.TestPlayerConnection
 import net.minestom.server.MinecraftServer
@@ -84,6 +85,7 @@ object NebulaTestFixture {
                 val server = MinecraftServer.init()
                 server.start("127.0.0.1", 0)
             }
+            OrbitNotifications.install()
             minestomBooted = true
         }
     }

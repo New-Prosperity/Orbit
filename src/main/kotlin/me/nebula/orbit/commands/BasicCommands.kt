@@ -2,6 +2,7 @@ package me.nebula.orbit.commands
 
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
+import me.nebula.orbit.user.asNebulaUser
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.commandbuilder.suggestPlayers
 import me.nebula.orbit.utils.gui.gui
@@ -18,6 +19,8 @@ import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.tag.Tag
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 private val GOD_TAG = Tag.Boolean("nebula:god_mode")
 private var eventNode: EventNode<*>? = null
@@ -89,24 +92,24 @@ private fun gamemodeCommand() = command("gamemode") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMessage(player.translate("orbit.command.gamemode.usage"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Gamemode.Usage))
             return@onPlayerExecute
         }
         val mode = parseGameMode(cmdArgs[0]) ?: run {
-            player.sendMessage(player.translate("orbit.command.gamemode.unknown", "mode" to cmdArgs[0]))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Gamemode.Unknown, "mode" to cmdArgs[0]))
             return@onPlayerExecute
         }
         val target = targetOrSelf(player, cmdArgs, 1) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs[1]))
+            player.sendMessage(player.translate(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs[1]))
             return@onPlayerExecute
         }
         target.gameMode = mode
         val modeName = mode.name.lowercase()
         if (target === player) {
-            player.sendMessage(player.translate("orbit.command.gamemode.set_self", "mode" to modeName))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Gamemode.SetSelf, "mode" to modeName))
         } else {
-            player.sendMessage(player.translate("orbit.command.gamemode.set_other", "name" to target.username, "mode" to modeName))
-            target.sendMessage(target.translate("orbit.command.gamemode.set_by_other", "mode" to modeName))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Gamemode.SetOther, "name" to target.username, "mode" to modeName))
+            target.sendMessage(target.translate(Keys.Orbit.Command.Gamemode.SetByOther, "mode" to modeName))
         }
     }
 }
@@ -121,7 +124,7 @@ private fun flyCommand() = command("fly") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         val target = targetOrSelf(player, cmdArgs, 0) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs?.getOrNull(0).orEmpty()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs?.getOrNull(0).orEmpty()))
             return@onPlayerExecute
         }
         val enabled = !target.isAllowFlying
@@ -129,10 +132,10 @@ private fun flyCommand() = command("fly") {
         if (!enabled) target.isFlying = false
         val stateKey = if (enabled) "orbit.command.fly.enabled" else "orbit.command.fly.disabled"
         if (target === player) {
-            player.sendMessage(player.translate(stateKey + ".self"))
+            player.sendMessage(player.translate((stateKey + ".self").asTranslationKey()))
         } else {
-            player.sendMessage(player.translate(stateKey + ".other", "name" to target.username))
-            target.sendMessage(target.translate(stateKey + ".self"))
+            player.sendMessage(player.translate((stateKey + ".other").asTranslationKey(), "name" to target.username))
+            target.sendMessage(target.translate((stateKey + ".self").asTranslationKey()))
         }
     }
 }
@@ -146,16 +149,17 @@ private fun healCommand() = command("heal") {
     }
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
-        val target = targetOrSelf(player, cmdArgs, 0) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs?.getOrNull(0).orEmpty()))
+        val targetPlayer = targetOrSelf(player, cmdArgs, 0) ?: run {
+            reply(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs?.getOrNull(0).orEmpty())
             return@onPlayerExecute
         }
-        target.health = target.getAttributeValue(Attribute.MAX_HEALTH).toFloat()
-        if (target === player) {
-            player.sendMessage(player.translate("orbit.command.heal.self"))
+        targetPlayer.health = targetPlayer.getAttributeValue(Attribute.MAX_HEALTH).toFloat()
+        if (targetPlayer === player) {
+            reply(Keys.Orbit.Command.Heal.Self)
         } else {
-            player.sendMessage(player.translate("orbit.command.heal.other", "name" to target.username))
-            target.sendMessage(target.translate("orbit.command.heal.by_other"))
+            val targetUser = targetPlayer.asNebulaUser()
+            reply(Keys.Orbit.Command.Heal.Other, "name" to targetUser.username)
+            targetUser.sendMessage(targetUser.translate(Keys.Orbit.Command.Heal.ByOther))
         }
     }
 }
@@ -170,16 +174,17 @@ private fun feedCommand() = command("feed") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         val target = targetOrSelf(player, cmdArgs, 0) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs?.getOrNull(0).orEmpty()))
+            reply(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs?.getOrNull(0).orEmpty())
             return@onPlayerExecute
         }
         target.food = 20
         target.foodSaturation = 5.0f
         if (target === player) {
-            player.sendMessage(player.translate("orbit.command.feed.self"))
+            reply(Keys.Orbit.Command.Feed.Self)
         } else {
-            player.sendMessage(player.translate("orbit.command.feed.other", "name" to target.username))
-            target.sendMessage(target.translate("orbit.command.feed.by_other"))
+            val targetUser = target.asNebulaUser()
+            reply(Keys.Orbit.Command.Feed.Other, "name" to targetUser.username)
+            targetUser.sendMessage(targetUser.translate(Keys.Orbit.Command.Feed.ByOther))
         }
     }
 }
@@ -198,31 +203,31 @@ private fun teleportCommand() = command("tp") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMessage(player.translate("orbit.command.tp.usage"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Tp.Usage))
             return@onPlayerExecute
         }
         when (cmdArgs.size) {
             1 -> {
                 val target = resolveOnline(cmdArgs[0]) ?: run {
-                    player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs[0]))
+                    player.sendMessage(player.translate(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs[0]))
                     return@onPlayerExecute
                 }
                 player.teleport(target.position)
-                player.sendMessage(player.translate("orbit.command.tp.to_player", "name" to target.username))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Tp.ToPlayer, "name" to target.username))
             }
             3 -> {
                 val x = cmdArgs[0].toDoubleOrNull()
                 val y = cmdArgs[1].toDoubleOrNull()
                 val z = cmdArgs[2].toDoubleOrNull()
                 if (x == null || y == null || z == null) {
-                    player.sendMessage(player.translate("orbit.command.tp.invalid_coords"))
+                    player.sendMessage(player.translate(Keys.Orbit.Command.Tp.InvalidCoords))
                     return@onPlayerExecute
                 }
                 player.teleport(Pos(x, y, z, player.position.yaw(), player.position.pitch()))
-                player.sendMessage(player.translate("orbit.command.tp.to_coords",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Tp.ToCoords,
                     "x" to "%.1f".format(x), "y" to "%.1f".format(y), "z" to "%.1f".format(z)))
             }
-            else -> player.sendMessage(player.translate("orbit.command.tp.usage"))
+            else -> player.sendMessage(player.translate(Keys.Orbit.Command.Tp.Usage))
         }
     }
 }
@@ -241,24 +246,24 @@ private fun speedCommand() = command("speed") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMessage(player.translate("orbit.command.speed.usage"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Speed.Usage))
             return@onPlayerExecute
         }
         val value = cmdArgs[0].toIntOrNull()?.coerceIn(1, 10) ?: run {
-            player.sendMessage(player.translate("orbit.command.speed.range"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Speed.Range))
             return@onPlayerExecute
         }
         val target = targetOrSelf(player, cmdArgs, 1) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs[1]))
+            player.sendMessage(player.translate(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs[1]))
             return@onPlayerExecute
         }
         target.getAttribute(Attribute.MOVEMENT_SPEED).baseValue = 0.1 * value
         target.flyingSpeed = 0.05f * value
         if (target === player) {
-            player.sendMessage(player.translate("orbit.command.speed.set_self", "value" to value.toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Speed.SetSelf, "value" to value.toString()))
         } else {
-            player.sendMessage(player.translate("orbit.command.speed.set_other", "name" to target.username, "value" to value.toString()))
-            target.sendMessage(target.translate("orbit.command.speed.set_by_other", "value" to value.toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Speed.SetOther, "name" to target.username, "value" to value.toString()))
+            target.sendMessage(target.translate(Keys.Orbit.Command.Speed.SetByOther, "value" to value.toString()))
         }
     }
 }
@@ -273,12 +278,12 @@ private fun killCommand() = command("kill") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         val target = targetOrSelf(player, cmdArgs, 0) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs?.getOrNull(0).orEmpty()))
+            reply(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs?.getOrNull(0).orEmpty())
             return@onPlayerExecute
         }
         target.kill()
         if (target !== player) {
-            player.sendMessage(player.translate("orbit.command.kill.other", "name" to target.username))
+            reply(Keys.Orbit.Command.Kill.Other, "name" to target.username)
         }
     }
 }
@@ -294,15 +299,16 @@ private fun clearCommand() = command("clear") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         val target = targetOrSelf(player, cmdArgs, 0) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs?.getOrNull(0).orEmpty()))
+            reply(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs?.getOrNull(0).orEmpty())
             return@onPlayerExecute
         }
         target.inventory.clear()
         if (target === player) {
-            player.sendMessage(player.translate("orbit.command.clear.self"))
+            reply(Keys.Orbit.Command.Clear.Self)
         } else {
-            player.sendMessage(player.translate("orbit.command.clear.other", "name" to target.username))
-            target.sendMessage(target.translate("orbit.command.clear.by_other"))
+            val targetUser = target.asNebulaUser()
+            reply(Keys.Orbit.Command.Clear.Other, "name" to targetUser.username)
+            targetUser.sendMessage(targetUser.translate(Keys.Orbit.Command.Clear.ByOther))
         }
     }
 }
@@ -317,14 +323,14 @@ private fun pingCommand() = command("ping") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         val target = targetOrSelf(player, cmdArgs, 0) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs?.getOrNull(0).orEmpty()))
+            reply(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs?.getOrNull(0).orEmpty())
             return@onPlayerExecute
         }
         val ms = target.latency.toString()
         if (target === player) {
-            player.sendMessage(player.translate("orbit.command.ping.self", "ms" to ms))
+            reply(Keys.Orbit.Command.Ping.Self, "ms" to ms)
         } else {
-            player.sendMessage(player.translate("orbit.command.ping.other", "name" to target.username, "ms" to ms))
+            reply(Keys.Orbit.Command.Ping.Other, "name" to target.username, "ms" to ms)
         }
     }
 }
@@ -339,7 +345,7 @@ private fun godCommand() = command("god") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         val target = targetOrSelf(player, cmdArgs, 0) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs?.getOrNull(0).orEmpty()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs?.getOrNull(0).orEmpty()))
             return@onPlayerExecute
         }
         val enabled = if (target.getTag(GOD_TAG) == true) {
@@ -351,10 +357,10 @@ private fun godCommand() = command("god") {
         }
         val stateKey = if (enabled) "orbit.command.god.enabled" else "orbit.command.god.disabled"
         if (target === player) {
-            player.sendMessage(player.translate(stateKey + ".self"))
+            player.sendMessage(player.translate((stateKey + ".self").asTranslationKey()))
         } else {
-            player.sendMessage(player.translate(stateKey + ".other", "name" to target.username))
-            target.sendMessage(target.translate(stateKey + ".self"))
+            player.sendMessage(player.translate((stateKey + ".other").asTranslationKey(), "name" to target.username))
+            target.sendMessage(target.translate((stateKey + ".self").asTranslationKey()))
         }
     }
 }
@@ -378,7 +384,7 @@ private fun giveCommand() = command("give") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMessage(player.translate("orbit.command.give.usage"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Give.Usage))
             return@onPlayerExecute
         }
         val input = cmdArgs[0].lowercase()
@@ -386,22 +392,22 @@ private fun giveCommand() = command("give") {
         val material = Material.fromKey(key)
             ?: Material.values().firstOrNull { it.key().value().equals(input, ignoreCase = true) }
         if (material == null) {
-            player.sendMessage(player.translate("orbit.command.give.unknown", "item" to cmdArgs[0]))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Give.Unknown, "item" to cmdArgs[0]))
             return@onPlayerExecute
         }
         val amount = (cmdArgs.getOrNull(1)?.toIntOrNull() ?: 1).coerceIn(1, 6400)
         val target = targetOrSelf(player, cmdArgs, 2) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs[2]))
+            player.sendMessage(player.translate(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs[2]))
             return@onPlayerExecute
         }
         target.inventory.addItemStack(ItemStack.of(material, amount))
         val itemKey = material.key().value()
         val amountStr = amount.toString()
         if (target === player) {
-            player.sendMessage(player.translate("orbit.command.give.self", "amount" to amountStr, "item" to itemKey))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Give.Self, "amount" to amountStr, "item" to itemKey))
         } else {
-            player.sendMessage(player.translate("orbit.command.give.other", "amount" to amountStr, "item" to itemKey, "name" to target.username))
-            target.sendMessage(target.translate("orbit.command.give.received", "amount" to amountStr, "item" to itemKey))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Give.Other, "amount" to amountStr, "item" to itemKey, "name" to target.username))
+            target.sendMessage(target.translate(Keys.Orbit.Command.Give.Received, "amount" to amountStr, "item" to itemKey))
         }
     }
 }
@@ -418,7 +424,7 @@ private fun timeCommand() = command("time") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMessage(player.translate("orbit.command.time.usage"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Time.Usage))
             return@onPlayerExecute
         }
         val ticks = when (cmdArgs[0].lowercase()) {
@@ -429,12 +435,12 @@ private fun timeCommand() = command("time") {
             else -> cmdArgs[0].toLongOrNull()
         }
         if (ticks == null) {
-            player.sendMessage(player.translate("orbit.command.time.invalid", "input" to cmdArgs[0]))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Time.Invalid, "input" to cmdArgs[0]))
             return@onPlayerExecute
         }
         val instance = player.instance ?: return@onPlayerExecute
         instance.time = ticks
-        player.sendMessage(player.translate("orbit.command.time.set", "ticks" to ticks.toString()))
+        player.sendMessage(player.translate(Keys.Orbit.Command.Time.Set, "ticks" to ticks.toString()))
     }
 }
 
@@ -450,7 +456,7 @@ private fun weatherCommand() = command("weather") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMessage(player.translate("orbit.command.weather.usage"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Weather.Usage))
             return@onPlayerExecute
         }
         val state = when (cmdArgs[0].lowercase()) {
@@ -460,12 +466,12 @@ private fun weatherCommand() = command("weather") {
             else -> null
         }
         if (state == null) {
-            player.sendMessage(player.translate("orbit.command.weather.unknown", "input" to cmdArgs[0]))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Weather.Unknown, "input" to cmdArgs[0]))
             return@onPlayerExecute
         }
         val instance = player.instance ?: return@onPlayerExecute
         WeatherController.setWeather(instance, state)
-        player.sendMessage(player.translate("orbit.command.weather.set", "state" to state.name.lowercase()))
+        player.sendMessage(player.translate(Keys.Orbit.Command.Weather.Set, "state" to state.name.lowercase()))
     }
 }
 
@@ -480,16 +486,16 @@ private fun tphereCommand() = command("tphere") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMessage(player.translate("orbit.command.tphere.usage"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Tphere.Usage))
             return@onPlayerExecute
         }
         val target = resolveOnline(cmdArgs[0]) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs[0]))
+            player.sendMessage(player.translate(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs[0]))
             return@onPlayerExecute
         }
         target.teleport(player.position)
-        player.sendMessage(player.translate("orbit.command.tphere.summoned", "name" to target.username))
-        target.sendMessage(target.translate("orbit.command.tphere.received", "name" to player.username))
+        player.sendMessage(player.translate(Keys.Orbit.Command.Tphere.Summoned, "name" to target.username))
+        target.sendMessage(target.translate(Keys.Orbit.Command.Tphere.Received, "name" to player.username))
     }
 }
 
@@ -503,15 +509,15 @@ private fun invseeCommand() = command("invsee") {
     onPlayerExecute {
         val cmdArgs = args.get("args") as? Array<String>
         if (cmdArgs.isNullOrEmpty()) {
-            player.sendMessage(player.translate("orbit.command.invsee.usage"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Invsee.Usage))
             return@onPlayerExecute
         }
         val target = resolveOnline(cmdArgs[0]) ?: run {
-            player.sendMessage(player.translate("orbit.command.player_not_found", "name" to cmdArgs[0]))
+            player.sendMessage(player.translate(Keys.Orbit.Command.PlayerNotFound, "name" to cmdArgs[0]))
             return@onPlayerExecute
         }
         val inv = target.inventory
-        val g = gui(player.translateRaw("orbit.command.invsee.title", "name" to target.username), rows = 5) {
+        val g = gui(player.translateRaw(Keys.Orbit.Command.Invsee.Title, "name" to target.username), rows = 5) {
             for (i in 9 until 36) {
                 val item = inv.getItemStack(i)
                 if (!item.isAir) slot(i - 9, item)

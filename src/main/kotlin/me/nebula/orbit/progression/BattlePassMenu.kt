@@ -12,6 +12,8 @@ import me.nebula.orbit.utils.gui.paginatedGui
 import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 object BattlePassMenu {
 
@@ -29,7 +31,7 @@ object BattlePassMenu {
         val active = BattlePassRegistry.activePasses()
         val data = BattlePassStore.load(player.uuid) ?: BattlePassData()
 
-        val selectorGui = gui(player.translateRaw("orbit.battlepass.title"), rows = 3) {
+        val selectorGui = gui(player.translateRaw(Keys.Orbit.Battlepass.Title), rows = 3) {
             active.forEachIndexed { index, definition ->
                 val progress = data.passes[definition.id] ?: BattlePassProgress()
                 val material = Material.fromKey(definition.icon) ?: Material.EXPERIENCE_BOTTLE
@@ -37,26 +39,26 @@ object BattlePassMenu {
 
                 slot(10 + index, itemStack(material) {
                     name(player.translateRaw(definition.nameKey))
-                    lore(player.translateRaw("orbit.battlepass.tier_progress",
+                    lore(player.translateRaw(Keys.Orbit.Battlepass.TierProgress,
                         "tier" to progress.tier.toString(),
                         "max" to definition.maxTier.toString(),
                     ))
-                    lore(player.translateRaw("orbit.battlepass.xp_progress",
+                    lore(player.translateRaw(Keys.Orbit.Battlepass.XpProgress,
                         "xp" to progress.xp.toString(),
                         "needed" to xpNeeded.toString(),
                     ))
-                    lore(player.translateRaw("orbit.battlepass.days_remaining",
+                    lore(player.translateRaw(Keys.Orbit.Battlepass.DaysRemaining,
                         "days" to definition.daysRemaining().toString(),
                     ))
                     if (progress.premium) {
-                        lore(player.translateRaw("orbit.battlepass.xp_boost"))
+                        lore(player.translateRaw(Keys.Orbit.Battlepass.XpBoost))
                     }
                     clean()
                 }) { p -> openTierView(p, definition.id) }
             }
 
             slot(16, itemStack(Material.BOOK) {
-                name("<gray>${player.translateRaw("orbit.battlepass.history_title")}")
+                name("<gray>${player.translateRaw(Keys.Orbit.Battlepass.HistoryTitle)}")
                 clean()
             }) { p -> openSeasonHistory(p) }
 
@@ -75,26 +77,26 @@ object BattlePassMenu {
 
             staticSlot(4, itemStack(Material.CLOCK) {
                 name(player.translateRaw(definition.nameKey))
-                lore(player.translateRaw("orbit.battlepass.tier_progress",
+                lore(player.translateRaw(Keys.Orbit.Battlepass.TierProgress,
                     "tier" to progress.tier.toString(),
                     "max" to definition.maxTier.toString(),
                 ))
-                lore(player.translateRaw("orbit.battlepass.xp_progress",
+                lore(player.translateRaw(Keys.Orbit.Battlepass.XpProgress,
                     "xp" to progress.xp.toString(),
                     "needed" to xpNeeded.toString(),
                 ))
-                lore(player.translateRaw("orbit.battlepass.total_xp",
+                lore(player.translateRaw(Keys.Orbit.Battlepass.TotalXp,
                     "xp" to progress.totalXpEarned.toString(),
                 ))
                 if (definition.isExpired()) {
-                    lore(player.translateRaw("orbit.battlepass.season_ended"))
+                    lore(player.translateRaw(Keys.Orbit.Battlepass.SeasonEnded))
                 } else {
-                    lore(player.translateRaw("orbit.battlepass.days_remaining",
+                    lore(player.translateRaw(Keys.Orbit.Battlepass.DaysRemaining,
                         "days" to definition.daysRemaining().toString(),
                     ))
                 }
                 if (progress.premium) {
-                    lore(player.translateRaw("orbit.battlepass.xp_boost"))
+                    lore(player.translateRaw(Keys.Orbit.Battlepass.XpBoost))
                 }
                 clean()
             })
@@ -126,7 +128,7 @@ object BattlePassMenu {
                 item(itemStack(tierMaterial) {
                     name("<white>Tier $tier")
                     if (freeReward != null) {
-                        lore(player.translateRaw("orbit.battlepass.free_reward",
+                        lore(player.translateRaw(Keys.Orbit.Battlepass.FreeReward,
                             "reward" to "${freeReward.amount}x ${freeReward.value}",
                         ))
                     }
@@ -136,13 +138,13 @@ object BattlePassMenu {
                             premiumClaimed -> "<green>"
                             else -> "<dark_purple>"
                         }
-                        lore("${premiumMat}${player.translateRaw("orbit.battlepass.premium_reward",
+                        lore("${premiumMat}${player.translateRaw(Keys.Orbit.Battlepass.PremiumReward,
                             "reward" to "${premiumReward.amount}x ${premiumReward.value}",
                         )}")
                     }
                     when {
-                        reached && !freeClaimed -> lore("<yellow>${player.translateRaw("orbit.battlepass.click_claim")}")
-                        !reached -> lore("<red>${player.translateRaw("orbit.battlepass.locked")}")
+                        reached && !freeClaimed -> lore("<yellow>${player.translateRaw(Keys.Orbit.Battlepass.ClickClaim)}")
+                        !reached -> lore("<red>${player.translateRaw(Keys.Orbit.Battlepass.Locked)}")
                     }
                     clean()
                 }) { p ->
@@ -159,8 +161,8 @@ object BattlePassMenu {
 
             if (!progress.premium && definition.premiumPrice > 0) {
                 staticSlot(46, itemStack(Material.GOLD_INGOT) {
-                    name("<gold>${player.translateRaw("orbit.battlepass.unlock_premium")}")
-                    lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
+                    name("<gold>${player.translateRaw(Keys.Orbit.Battlepass.UnlockPremium)}")
+                    lore(player.translateRaw(Keys.Orbit.Battlepass.PremiumCost, "price" to definition.premiumPrice.toString()))
                     clean()
                 }) { p ->
                     openPremiumConfirmation(p, passId)
@@ -169,7 +171,7 @@ object BattlePassMenu {
 
             if (progress.tier < definition.maxTier && definition.tierPurchasePrice > 0) {
                 staticSlot(48, itemStack(Material.EMERALD) {
-                    name("<green>${player.translateRaw("orbit.battlepass.buy_tier",
+                    name("<green>${player.translateRaw(Keys.Orbit.Battlepass.BuyTier,
                         "cost" to definition.tierPurchasePrice.toString(),
                     )}")
                     clean()
@@ -181,13 +183,13 @@ object BattlePassMenu {
 
             if (BattlePassRegistry.activePasses().size > 1) {
                 staticSlot(49, itemStack(Material.ARROW) {
-                    name("<gray>${player.translateRaw("orbit.battlepass.back")}")
+                    name("<gray>${player.translateRaw(Keys.Orbit.Battlepass.Back)}")
                     clean()
                 }) { p -> openPassSelector(p) }
             }
 
             staticSlot(50, itemStack(Material.BOOK) {
-                name("<gray>${player.translateRaw("orbit.battlepass.history_title")}")
+                name("<gray>${player.translateRaw(Keys.Orbit.Battlepass.HistoryTitle)}")
                 clean()
             }) { p -> openSeasonHistory(p) }
         }
@@ -198,10 +200,10 @@ object BattlePassMenu {
         val data = BattlePassStore.load(player.uuid) ?: BattlePassData()
         val history = data.seasonHistory
 
-        val historyGui = gui(player.translateRaw("orbit.battlepass.history_title"), rows = 3) {
+        val historyGui = gui(player.translateRaw(Keys.Orbit.Battlepass.HistoryTitle), rows = 3) {
             if (history.isEmpty()) {
                 slot(13, itemStack(Material.BARRIER) {
-                    name("<gray>${player.translateRaw("orbit.battlepass.history_empty")}")
+                    name("<gray>${player.translateRaw(Keys.Orbit.Battlepass.HistoryEmpty)}")
                     clean()
                 })
             } else {
@@ -212,20 +214,20 @@ object BattlePassMenu {
                     val nameKey = def?.nameKey?.value ?: summary.passId
                     val maxTier = def?.maxTier ?: 50
                     val status = if (summary.completedAt > 0) {
-                        player.translateRaw("orbit.battlepass.history_completed")
+                        player.translateRaw(Keys.Orbit.Battlepass.HistoryCompleted)
                     } else {
-                        player.translateRaw("orbit.battlepass.history_incomplete")
+                        player.translateRaw(Keys.Orbit.Battlepass.HistoryIncomplete)
                     }
                     val material = def?.icon?.let { Material.fromKey(it) } ?: Material.PAPER
 
                     slot(slotIndex, itemStack(material) {
-                        name(player.translateRaw("orbit.battlepass.history_entry",
-                            "season" to player.translateRaw(nameKey),
+                        name(player.translateRaw(Keys.Orbit.Battlepass.HistoryEntry,
+                            "season" to player.translateRaw(nameKey.asTranslationKey()),
                             "tier" to summary.finalTier.toString(),
                             "max" to maxTier.toString(),
                             "status" to status,
                         ))
-                        lore(player.translateRaw("orbit.battlepass.total_xp",
+                        lore(player.translateRaw(Keys.Orbit.Battlepass.TotalXp,
                             "xp" to summary.totalXp.toString(),
                         ))
                         clean()
@@ -242,19 +244,19 @@ object BattlePassMenu {
         val definition = BattlePassRegistry[passId] ?: return
 
         val confirm = confirmGui(
-            title = player.translateRaw("orbit.battlepass.premium_confirm_title"),
+            title = player.translateRaw(Keys.Orbit.Battlepass.PremiumConfirmTitle),
             confirmItem = itemStack(Material.GREEN_WOOL) {
-                name("<green>${player.translateRaw("orbit.battlepass.premium_confirm")}")
-                lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
+                name("<green>${player.translateRaw(Keys.Orbit.Battlepass.PremiumConfirm)}")
+                lore(player.translateRaw(Keys.Orbit.Battlepass.PremiumCost, "price" to definition.premiumPrice.toString()))
                 clean()
             },
             cancelItem = itemStack(Material.RED_WOOL) {
-                name("<red>${player.translateRaw("orbit.battlepass.premium_cancel")}")
+                name("<red>${player.translateRaw(Keys.Orbit.Battlepass.PremiumCancel)}")
                 clean()
             },
             previewItem = itemStack(Material.GOLD_INGOT) {
-                name("<gold>${player.translateRaw("orbit.battlepass.unlock_premium")}")
-                lore(player.translateRaw("orbit.battlepass.premium_cost", "price" to definition.premiumPrice.toString()))
+                name("<gold>${player.translateRaw(Keys.Orbit.Battlepass.UnlockPremium)}")
+                lore(player.translateRaw(Keys.Orbit.Battlepass.PremiumCost, "price" to definition.premiumPrice.toString()))
                 clean()
             },
             onConfirm = { p ->

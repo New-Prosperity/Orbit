@@ -20,6 +20,8 @@ import net.minestom.server.entity.metadata.display.ItemDisplayMeta
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 private val spawnedModels: MutableSet<StandaloneModelOwner> = ConcurrentHashMap.newKeySet()
 
@@ -30,12 +32,12 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
         onPlayerExecute {
             val blueprints = ModelEngine.blueprints()
             if (blueprints.isEmpty()) {
-                player.sendMessage(player.translate("orbit.command.me.list.empty"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.List.Empty))
                 return@onPlayerExecute
             }
-            player.sendMessage(player.translate("orbit.command.me.list.header", "count" to blueprints.size.toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.List.Header, "count" to blueprints.size.toString()))
             blueprints.forEach { (name, bp) ->
-                player.sendMessage(player.translate("orbit.command.me.list.entry",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.List.Entry,
                     "name" to name,
                     "bones" to bp.bones.size.toString(),
                     "animations" to bp.animations.size.toString(),
@@ -52,32 +54,32 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
         onPlayerExecute {
             val name: String? = args.get("blueprint")
             if (name == null) {
-                player.sendMessage(player.translate("orbit.command.me.info.usage"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Info.Usage))
                 return@onPlayerExecute
             }
             val bp = ModelEngine.blueprintOrNull(name)
             if (bp == null) {
-                player.sendMessage(player.translate("orbit.command.me.blueprint_not_found", "name" to name))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.BlueprintNotFound, "name" to name))
                 return@onPlayerExecute
             }
-            player.sendMessage(player.translate("orbit.command.me.info.header", "name" to bp.name))
-            player.sendMessage(player.translate("orbit.command.me.info.bones", "count" to bp.bones.size.toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Info.Header, "name" to bp.name))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Info.Bones, "count" to bp.bones.size.toString()))
             bp.traverseDepthFirst { bone, depth ->
                 val indent = "  ".repeat(depth + 1)
-                player.sendMessage(player.translate("orbit.command.me.info.bone_entry",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Info.BoneEntry,
                     "indent" to indent, "name" to bone.name))
             }
             if (bp.animations.isNotEmpty()) {
-                player.sendMessage(player.translate("orbit.command.me.info.animations", "count" to bp.animations.size.toString()))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Info.Animations, "count" to bp.animations.size.toString()))
                 bp.animations.forEach { (_, anim) ->
-                    player.sendMessage(player.translate("orbit.command.me.info.animation_entry",
+                    player.sendMessage(player.translate(Keys.Orbit.Command.Me.Info.AnimationEntry,
                         "name" to anim.name,
                         "length" to anim.length.toString(),
                         "loop" to anim.loop.toString(),
                     ))
                 }
             }
-            player.sendMessage(player.translate("orbit.command.me.info.roots", "names" to bp.rootBoneNames.joinToString(", ")))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Info.Roots, "names" to bp.rootBoneNames.joinToString(", ")))
         }
     }
 
@@ -94,11 +96,11 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
             val cmdArgs = args.get("args") as? Array<String>
             val blueprintName = cmdArgs?.getOrNull(0)
             if (blueprintName.isNullOrEmpty()) {
-                player.sendMessage(player.translate("orbit.command.me.spawn.usage"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Spawn.Usage))
                 return@onPlayerExecute
             }
             if (ModelEngine.blueprintOrNull(blueprintName) == null) {
-                player.sendMessage(player.translate("orbit.command.me.blueprint_not_found", "name" to blueprintName))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.BlueprintNotFound, "name" to blueprintName))
                 return@onPlayerExecute
             }
             val scale = cmdArgs.getOrNull(1)?.toFloatOrNull() ?: 1.0f
@@ -112,20 +114,20 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
             owner.show(player)
             spawnedModels += owner
             val key = if (noIdle) "orbit.command.me.spawn.success_noidle" else "orbit.command.me.spawn.success"
-            player.sendMessage(player.translate(key, "name" to blueprintName, "scale" to scale.toString()))
+            player.sendMessage(player.translate(key.asTranslationKey(), "name" to blueprintName, "scale" to scale.toString()))
         }
     }
 
     subCommand("despawn") {
         onPlayerExecute {
             if (spawnedModels.isEmpty()) {
-                player.sendMessage(player.translate("orbit.command.me.despawn.empty"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Despawn.Empty))
                 return@onPlayerExecute
             }
             val count = spawnedModels.size
             spawnedModels.forEach { it.remove() }
             spawnedModels.clear()
-            player.sendMessage(player.translate("orbit.command.me.despawn.success", "count" to count.toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Despawn.Success, "count" to count.toString()))
         }
     }
 
@@ -144,14 +146,14 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
         }
         onPlayerExecute {
             if (spawnedModels.isEmpty()) {
-                player.sendMessage(player.translate("orbit.command.me.animate.empty"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Animate.Empty))
                 return@onPlayerExecute
             }
             @Suppress("UNCHECKED_CAST")
             val cmdArgs = args.get("args") as? Array<String>
             val animationName = cmdArgs?.getOrNull(0)
             if (animationName.isNullOrEmpty()) {
-                player.sendMessage(player.translate("orbit.command.me.animate.usage"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Animate.Usage))
                 return@onPlayerExecute
             }
             val speed = cmdArgs.getOrNull(1)?.toFloatOrNull() ?: 1f
@@ -175,9 +177,9 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
                 }
             }
             if (played == 0) {
-                player.sendMessage(player.translate("orbit.command.me.animate.not_found", "name" to animationName))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Animate.NotFound, "name" to animationName))
             } else {
-                player.sendMessage(player.translate("orbit.command.me.animate.success",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Animate.Success,
                     "name" to animationName, "count" to played.toString()))
             }
         }
@@ -193,19 +195,19 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
         onPlayerExecute {
             val name: String? = args.get("name")
             if (name == null) {
-                player.sendMessage(player.translate("orbit.command.me.reload.usage"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Reload.Usage))
                 return@onPlayerExecute
             }
             try {
                 val result = ModelGenerator.generateRaw(resources, "$name.bbmodel")
                 ModelEngine.registerBlueprint(name, result.blueprint)
-                player.sendMessage(player.translate("orbit.command.me.reload.success",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Reload.Success,
                     "name" to name,
                     "bones" to result.blueprint.bones.size.toString(),
                     "animations" to result.blueprint.animations.size.toString(),
                 ))
             } catch (e: Exception) {
-                player.sendMessage(player.translate("orbit.command.me.reload.failed",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Reload.Failed,
                     "name" to name, "error" to (e.message ?: "")))
             }
         }
@@ -215,14 +217,14 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
         onPlayerExecute {
             val entities = ModelEngine.allModeledEntities()
             if (entities.isEmpty()) {
-                player.sendMessage(player.translate("orbit.command.me.entities.empty"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Entities.Empty))
                 return@onPlayerExecute
             }
-            player.sendMessage(player.translate("orbit.command.me.entities.header", "count" to entities.size.toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Entities.Header, "count" to entities.size.toString()))
             entities.forEach { modeled ->
                 val pos = modeled.owner.position
                 val modelNames = modeled.models.keys.joinToString(", ")
-                player.sendMessage(player.translate("orbit.command.me.entities.entry",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Entities.Entry,
                     "id" to modeled.owner.ownerId.toString(),
                     "x" to pos.blockX().toString(),
                     "y" to pos.blockY().toString(),
@@ -248,30 +250,30 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
             val cmdArgs = args.get("args") as? Array<String>
             val blueprintName = cmdArgs?.getOrNull(0)
             if (blueprintName.isNullOrEmpty()) {
-                player.sendMessage(player.translate("orbit.command.me.testreal.usage"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testreal.Usage))
                 return@onPlayerExecute
             }
             val bp = ModelEngine.blueprintOrNull(blueprintName)
             if (bp == null) {
-                player.sendMessage(player.translate("orbit.command.me.blueprint_not_found", "name" to blueprintName))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.BlueprintNotFound, "name" to blueprintName))
                 return@onPlayerExecute
             }
             val boneName = cmdArgs.getOrNull(1) ?: bp.rootBoneNames.firstOrNull()
             val bone = boneName?.let { bp.bones[it] }
             if (bone == null) {
-                player.sendMessage(player.translate("orbit.command.me.testreal.bone_not_found",
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testreal.BoneNotFound,
                     "available" to bp.bones.keys.joinToString(", ")))
                 return@onPlayerExecute
             }
             val item = bone.modelItem
             if (item == null) {
-                player.sendMessage(player.translate("orbit.command.me.testreal.no_model_item", "name" to boneName))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testreal.NoModelItem, "name" to boneName))
                 return@onPlayerExecute
             }
             val itemModel = item.get(DataComponents.ITEM_MODEL)
-            player.sendMessage(player.translate("orbit.command.me.testreal.spawn_log_model", "value" to itemModel.toString()))
-            player.sendMessage(player.translate("orbit.command.me.testreal.spawn_log_stack", "value" to item.toString()))
-            player.sendMessage(player.translate("orbit.command.me.testreal.spawn_log_components", "value" to item.get(DataComponents.ITEM_MODEL).toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testreal.SpawnLogModel, "value" to itemModel.toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testreal.SpawnLogStack, "value" to item.toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testreal.SpawnLogComponents, "value" to item.get(DataComponents.ITEM_MODEL).toString()))
 
             val entity = Entity(EntityType.ITEM_DISPLAY)
             val meta = entity.entityMeta as ItemDisplayMeta
@@ -282,7 +284,7 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
             meta.setNotifyAboutChanges(true)
             entity.setInstance(instance, player.position.add(0.0, 2.0, 0.0))
 
-            player.sendMessage(player.translate("orbit.command.me.testreal.spawned"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testreal.Spawned))
         }
     }
 
@@ -290,8 +292,8 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
         onPlayerExecute {
             val instance = player.instance ?: return@onPlayerExecute
             val item = ItemStack.of(Material.PAPER).with(DataComponents.ITEM_MODEL, "minecraft:me_debug_cube")
-            player.sendMessage(player.translate("orbit.command.me.testcube.spawning"))
-            player.sendMessage(player.translate("orbit.command.me.testcube.expected"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testcube.Spawning))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testcube.Expected))
 
             val entity = Entity(EntityType.ITEM_DISPLAY)
             val meta = entity.entityMeta as ItemDisplayMeta
@@ -302,25 +304,25 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
             meta.setNotifyAboutChanges(true)
             entity.setInstance(instance, player.position.add(0.0, 2.0, 0.0))
 
-            player.sendMessage(player.translate("orbit.command.me.testcube.spawned"))
-            player.sendMessage(player.translate("orbit.command.me.testcube.diagnostic_yes"))
-            player.sendMessage(player.translate("orbit.command.me.testcube.diagnostic_no"))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testcube.Spawned))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testcube.DiagnosticYes))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Testcube.DiagnosticNo))
         }
     }
 
     subCommand("ids") {
         onPlayerExecute {
             val all = ModelIdRegistry.all()
-            player.sendMessage(player.translate("orbit.command.me.ids.header"))
-            player.sendMessage(player.translate("orbit.command.me.ids.total", "count" to all.size.toString()))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Ids.Header))
+            player.sendMessage(player.translate(Keys.Orbit.Command.Me.Ids.Total, "count" to all.size.toString()))
             if (all.isNotEmpty()) {
-                player.sendMessage(player.translate("orbit.command.me.ids.sample_header"))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Me.Ids.SampleHeader))
                 all.entries.take(10).forEach { (key, id) ->
-                    player.sendMessage(player.translate("orbit.command.me.ids.sample_entry",
+                    player.sendMessage(player.translate(Keys.Orbit.Command.Me.Ids.SampleEntry,
                         "key" to key, "id" to id.toString()))
                 }
                 if (all.size > 10) {
-                    player.sendMessage(player.translate("orbit.command.me.ids.more", "count" to (all.size - 10).toString()))
+                    player.sendMessage(player.translate(Keys.Orbit.Command.Me.Ids.More, "count" to (all.size - 10).toString()))
                 }
             }
         }

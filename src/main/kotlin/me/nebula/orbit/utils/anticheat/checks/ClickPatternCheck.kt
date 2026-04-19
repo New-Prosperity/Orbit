@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.anticheat.checks
 
-import me.nebula.gravity.property.NetworkProperties
-import me.nebula.gravity.property.PropertyStore
+import me.nebula.gravity.config.ConfigStore
+import me.nebula.gravity.config.NetworkConfig
 import me.nebula.orbit.utils.anticheat.AntiCheat
 import me.nebula.orbit.utils.anticheat.AntiCheatCheck
 import net.minestom.server.entity.GameMode
@@ -29,7 +29,7 @@ object ClickPatternCheck : AntiCheatCheck {
 
     override fun install(node: EventNode<in Event>) {
         node.addListener(EntityAttackEvent::class.java) { event ->
-            if (!PropertyStore[NetworkProperties.AC_CHECK_CLICK_PATTERN_ENABLED]) return@addListener
+            if (!ConfigStore.get(NetworkConfig.AC_CHECK_CLICK_PATTERN_ENABLED)) return@addListener
             val player = event.entity as? Player ?: return@addListener
             if (player.gameMode == GameMode.CREATIVE) return@addListener
 

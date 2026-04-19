@@ -23,6 +23,7 @@ import java.util.EnumSet
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import me.nebula.gravity.translation.Keys
 
 private val logger = logger("ReplayViewer")
 
@@ -98,7 +99,7 @@ class ReplayViewer(
 
         player.onComplete {
             logger.info { "Replay ${replayFile.header.matchId} playback complete" }
-            viewers.forEach { it.sendMessage(it.translate("orbit.replay.finished")) }
+            viewers.forEach { it.sendMessage(it.translate(Keys.Orbit.Replay.Finished)) }
         }
 
         player.play { frame ->

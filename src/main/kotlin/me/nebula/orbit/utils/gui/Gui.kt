@@ -1,11 +1,13 @@
 package me.nebula.orbit.utils.gui
 
+import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.itembuilder.itemStack
-import me.nebula.orbit.utils.sound.playSound
 import me.nebula.orbit.utils.scheduler.delay
+import me.nebula.orbit.utils.sound.playSound
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
+import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.inventory.InventoryCloseEvent
 import net.minestom.server.event.inventory.InventoryPreClickEvent
@@ -16,11 +18,16 @@ import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.sound.SoundEvent
 import net.minestom.server.tag.Tag
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 val CUSTOM_GUI_TAG: Tag<Boolean> = Tag.Boolean("nebula:custom_gui").defaultValue(false)
 
-private fun rowsToType(rows: Int): InventoryType = when (rows) {
+internal val DEFAULT_FILLER: ItemStack = itemStack(Material.GRAY_STAINED_GLASS_PANE) { name(" "); hideTooltip() }
+internal val DEFAULT_BORDER: ItemStack = itemStack(Material.BLACK_STAINED_GLASS_PANE) { name(" "); hideTooltip() }
+
+internal fun rowsToType(rows: Int): InventoryType = when (rows) {
     1 -> InventoryType.CHEST_1_ROW
     2 -> InventoryType.CHEST_2_ROW
     3 -> InventoryType.CHEST_3_ROW
@@ -30,262 +37,158 @@ private fun rowsToType(rows: Int): InventoryType = when (rows) {
     else -> error("Invalid row count: $rows (must be 1-6)")
 }
 
-private val DEFAULT_FILLER = itemStack(Material.GRAY_STAINED_GLASS_PANE) { name(" "); hideTooltip() }
-private val DEFAULT_BORDER = itemStack(Material.BLACK_STAINED_GLASS_PANE) { name(" "); hideTooltip() }
+private val guiLogger = logger("Gui")
 
-data class GuiSlot(
-    val item: ItemStack,
-    val onClick: (Player) -> Unit = {},
-    val sound: SoundEvent? = null,
-)
-
-class Gui(
-    private val title: String,
-    private val type: InventoryType,
-    private val slots: Map<Int, GuiSlot>,
+class Gui internal constructor(
+    val title: String,
+    val type: InventoryType,
+    initialSlots: Map<Int, GuiSlot>,
     private val fillItem: ItemStack?,
     private val borderItem: ItemStack?,
     private val onClose: ((Player) -> Unit)?,
     private val clickSound: SoundEvent?,
     private val preventClose: Boolean,
+    private val allowedInteractionSlots: Set<Int>,
 ) {
 
-    fun open(player: Player) {
-        val inventory = Inventory(type, miniMessage.deserialize(title))
-        inventory.setTag(CUSTOM_GUI_TAG, true)
-        val size = type.size
+    val size: Int = type.size
+    private val slots = ConcurrentHashMap<Int, GuiSlot>(initialSlots)
+    private val inventoryRef = AtomicReference<Inventory>()
+    private val eventNodeRef = AtomicReference<EventNode<Event>>()
+    private val closedFlag = AtomicBoolean(false)
 
-        borderItem?.let { border ->
-            val cols = 9
-            val rows = size / cols
+    @Volatile
+    private var viewer: Player? = null
+
+    val inventory: Inventory? get() = inventoryRef.get()
+    val isOpen: Boolean get() = viewer != null && !closedFlag.get()
+
+    fun open(player: Player) {
+        val inv = Inventory(type, miniMessage.deserialize(title))
+        inv.setTag(CUSTOM_GUI_TAG, true)
+        inventoryRef.set(inv)
+        viewer = player
+        closedFlag.set(false)
+        renderAll(inv)
+        attachNode(inv)
+        GuiRegistry.track(player, this)
+        player.openInventory(inv)
+    }
+
+    fun updateSlot(slot: Int, guiSlot: GuiSlot) {
+        require(slot in 0 until size) { "Slot $slot out of bounds for size $size" }
+        slots[slot] = guiSlot
+        inventoryRef.get()?.setItemStack(slot, guiSlot.item)
+    }
+
+    fun updateItem(slot: Int, item: ItemStack) {
+        require(slot in 0 until size) { "Slot $slot out of bounds for size $size" }
+        val existing = slots[slot]
+        val next = existing?.copy(item = item) ?: GuiSlot(item)
+        slots[slot] = next
+        inventoryRef.get()?.setItemStack(slot, item)
+    }
+
+    fun updateItem(slot: Int, item: ItemStack, onClick: (ClickContext) -> Unit) {
+        require(slot in 0 until size) { "Slot $slot out of bounds for size $size" }
+        slots[slot] = GuiSlot(item, onClick)
+        inventoryRef.get()?.setItemStack(slot, item)
+    }
+
+    fun removeSlot(slot: Int) {
+        require(slot in 0 until size) { "Slot $slot out of bounds for size $size" }
+        slots.remove(slot)
+        inventoryRef.get()?.setItemStack(slot, ItemStack.AIR)
+    }
+
+    fun refresh() {
+        val inv = inventoryRef.get() ?: return
+        for (i in 0 until size) inv.setItemStack(i, ItemStack.AIR)
+        renderAll(inv)
+    }
+
+    fun getSlot(slot: Int): GuiSlot? = slots[slot]
+
+    fun slotCount(): Int = slots.size
+
+    internal fun forceClose(player: Player, notify: Boolean) {
+        if (!closedFlag.compareAndSet(false, true)) return
+        eventNodeRef.get()?.let { MinecraftServer.getGlobalEventHandler().removeChild(it) }
+        if (notify) onClose?.invoke(player)
+        GuiRegistry.untrack(player, this)
+        viewer = null
+    }
+
+    private fun renderAll(inv: Inventory) {
+        val cols = 9
+        val rows = size / cols
+        if (borderItem != null) {
             for (i in 0 until size) {
                 val row = i / cols
                 val col = i % cols
                 if (row == 0 || row == rows - 1 || col == 0 || col == cols - 1) {
-                    if (i !in slots) inventory.setItemStack(i, border)
+                    if (!slots.containsKey(i)) inv.setItemStack(i, borderItem)
                 }
             }
         }
-
-        fillItem?.let { fill ->
+        if (fillItem != null) {
             for (i in 0 until size) {
-                if (i !in slots && inventory.getItemStack(i).isAir) {
-                    inventory.setItemStack(i, fill)
+                if (!slots.containsKey(i) && inv.getItemStack(i).isAir) {
+                    inv.setItemStack(i, fillItem)
                 }
             }
         }
+        for ((i, slot) in slots) inv.setItemStack(i, slot.item)
+    }
 
-        slots.forEach { (i, slot) -> inventory.setItemStack(i, slot.item) }
+    private fun attachNode(inv: Inventory) {
+        val node = EventNode.all("gui-${System.identityHashCode(inv)}")
+        eventNodeRef.set(node)
 
-        val guiNode = EventNode.all("gui-${System.identityHashCode(inventory)}")
-        val removed = AtomicBoolean(false)
-        val cleanup = { p: Player ->
-            if (removed.compareAndSet(false, true)) {
-                onClose?.invoke(p)
-                MinecraftServer.getGlobalEventHandler().removeChild(guiNode)
-            }
-        }
-        guiNode.addListener(InventoryPreClickEvent::class.java) { event ->
+        node.addListener(InventoryPreClickEvent::class.java) { event ->
             val clicked = event.inventory ?: return@addListener
-            if (clicked !== inventory) return@addListener
-            event.isCancelled = true
-            val guiSlot = slots[event.slot] ?: return@addListener
-            val sound = guiSlot.sound ?: clickSound
-            sound?.let { event.player.playSound(it, 1f, 1f) }
-            guiSlot.onClick(event.player)
-        }
-        guiNode.addListener(InventoryCloseEvent::class.java) { event ->
-            if (event.inventory !== inventory) return@addListener
-            if (preventClose) {
-                delay(1) { event.player.openInventory(inventory) }
+            if (clicked !== inv) return@addListener
+            val click = event.click
+            val clickType = GuiClickType.fromMinestom(click)
+
+            if (clickType.isDrag || clickType.isHotbarShortcut || clickType == GuiClickType.UNKNOWN) {
+                event.isCancelled = true
                 return@addListener
             }
-            cleanup(event.player)
-        }
-        guiNode.addListener(PlayerDisconnectEvent::class.java) { event ->
-            if (event.player.openInventory !== inventory) return@addListener
-            cleanup(event.player)
-        }
-        MinecraftServer.getGlobalEventHandler().addChild(guiNode)
 
-        player.openInventory(inventory)
+            val eventSlot = event.slot
+            val guiSlot = slots[eventSlot]
+
+            if (guiSlot == null) {
+                if (eventSlot in allowedInteractionSlots) return@addListener
+                event.isCancelled = true
+                return@addListener
+            }
+
+            event.isCancelled = true
+
+            val sound = guiSlot.sound ?: clickSound
+            sound?.let { event.player.playSound(it, 1f, 1f) }
+            val ctx = ClickContext(event.player, eventSlot, clickType, this)
+            runCatching { guiSlot.dispatch(ctx) }
+                .onFailure { guiLogger.warn(it) { "GUI click handler threw for slot $eventSlot" } }
+        }
+        node.addListener(InventoryCloseEvent::class.java) { event ->
+            if (event.inventory !== inv) return@addListener
+            if (preventClose && !closedFlag.get()) {
+                delay(1) {
+                    if (!closedFlag.get()) event.player.openInventory(inv)
+                }
+                return@addListener
+            }
+            forceClose(event.player, notify = true)
+        }
+        node.addListener(PlayerDisconnectEvent::class.java) { event ->
+            if (event.player.openInventory !== inv) return@addListener
+            forceClose(event.player, notify = false)
+        }
+        MinecraftServer.getGlobalEventHandler().addChild(node)
     }
 }
-
-class GuiBuilder @PublishedApi internal constructor(private val title: String, private val rows: Int) {
-
-    @PublishedApi internal val slots = mutableMapOf<Int, GuiSlot>()
-    @PublishedApi internal var fillItem: ItemStack? = null
-    @PublishedApi internal var borderItem: ItemStack? = null
-    @PublishedApi internal var onCloseHandler: ((Player) -> Unit)? = null
-    @PublishedApi internal var clickSound: SoundEvent? = null
-    @PublishedApi internal var preventClose: Boolean = false
-
-    fun slot(index: Int, item: ItemStack, onClick: (Player) -> Unit = {}) {
-        require(index in 0 until rows * 9) { "Slot $index out of bounds for $rows rows" }
-        slots[index] = GuiSlot(item, onClick)
-    }
-
-    fun slot(index: Int, item: ItemStack, sound: SoundEvent, onClick: (Player) -> Unit) {
-        require(index in 0 until rows * 9) { "Slot $index out of bounds for $rows rows" }
-        slots[index] = GuiSlot(item, onClick, sound)
-    }
-
-    fun fill(material: Material) { fillItem = itemStack(material) { name(" "); hideTooltip() } }
-    fun fill(item: ItemStack) { fillItem = item }
-    fun fillDefault() { fillItem = DEFAULT_FILLER }
-
-    fun border(material: Material) { borderItem = itemStack(material) { name(" "); hideTooltip() } }
-    fun border(item: ItemStack) { borderItem = item }
-    fun borderDefault() { borderItem = DEFAULT_BORDER }
-
-    fun onClose(handler: (Player) -> Unit) { onCloseHandler = handler }
-    fun clickSound(sound: SoundEvent) { clickSound = sound }
-    fun preventClose() { preventClose = true }
-
-    fun backButton(slot: Int, onClick: (Player) -> Unit) {
-        slots[slot] = GuiSlot(
-            itemStack(Material.ARROW) { name("<gray>Back"); clean() },
-            onClick,
-            SoundEvent.UI_BUTTON_CLICK,
-        )
-    }
-
-    fun closeButton(slot: Int) {
-        slots[slot] = GuiSlot(
-            itemStack(Material.BARRIER) { name("<red>Close"); clean() },
-            { it.closeInventory() },
-            SoundEvent.UI_BUTTON_CLICK,
-        )
-    }
-
-    @PublishedApi internal fun build(): Gui = Gui(
-        title, rowsToType(rows), slots.toMap(), fillItem, borderItem,
-        onCloseHandler, clickSound, preventClose,
-    )
-}
-
-inline fun gui(title: String, rows: Int = 3, block: GuiBuilder.() -> Unit): Gui =
-    GuiBuilder(title, rows).apply(block).build()
 
 fun Player.openGui(gui: Gui) = gui.open(this)
-
-class PaginatedGui(
-    private val title: String,
-    private val rows: Int,
-    private val items: List<GuiSlot>,
-    private val staticSlots: Map<Int, GuiSlot>,
-    private val fillItem: ItemStack?,
-    private val borderItem: ItemStack?,
-    private val contentSlots: IntRange,
-    private val clickSound: SoundEvent?,
-) {
-    private val pageSize = contentSlots.count()
-    val totalPages: Int get() = ((items.size + pageSize - 1) / pageSize).coerceAtLeast(1)
-
-    fun open(player: Player, page: Int = 0) {
-        val safePage = page.coerceIn(0, totalPages - 1)
-        val builder = GuiBuilder("$title <dark_gray>(${safePage + 1}/$totalPages)", rows)
-
-        fillItem?.let { builder.fill(it) }
-        borderItem?.let { builder.border(it) }
-        clickSound?.let { builder.clickSound(it) }
-
-        val offset = safePage * pageSize
-        contentSlots.forEachIndexed { i, slot ->
-            val itemIndex = offset + i
-            if (itemIndex < items.size) {
-                builder.slots[slot] = items[itemIndex]
-            }
-        }
-
-        staticSlots.forEach { (slot, guiSlot) -> builder.slots[slot] = guiSlot }
-
-        if (safePage > 0) {
-            builder.slots[rows * 9 - 9] = GuiSlot(
-                itemStack(Material.ARROW) { name("<yellow>Previous Page"); clean() },
-                { p -> open(p, safePage - 1) },
-                SoundEvent.UI_BUTTON_CLICK,
-            )
-        }
-        if (safePage < totalPages - 1) {
-            builder.slots[rows * 9 - 1] = GuiSlot(
-                itemStack(Material.ARROW) { name("<yellow>Next Page"); clean() },
-                { p -> open(p, safePage + 1) },
-                SoundEvent.UI_BUTTON_CLICK,
-            )
-        }
-
-        builder.build().open(player)
-    }
-}
-
-class PaginatedGuiBuilder @PublishedApi internal constructor(private val title: String, private val rows: Int) {
-
-    @PublishedApi internal val items = mutableListOf<GuiSlot>()
-    @PublishedApi internal val staticSlots = mutableMapOf<Int, GuiSlot>()
-    @PublishedApi internal var fillItem: ItemStack? = null
-    @PublishedApi internal var borderItem: ItemStack? = null
-    @PublishedApi internal var contentRange: IntRange = 10..rows * 9 - 11
-    @PublishedApi internal var clickSound: SoundEvent? = null
-
-    fun item(item: ItemStack, onClick: (Player) -> Unit = {}) {
-        items += GuiSlot(item, onClick)
-    }
-
-    fun <T> items(collection: Collection<T>, transform: (T) -> ItemStack, onClick: (Player, T) -> Unit = { _, _ -> }) {
-        collection.forEach { element ->
-            items += GuiSlot(transform(element), onClick = { p -> onClick(p, element) })
-        }
-    }
-
-    fun staticSlot(index: Int, item: ItemStack, onClick: (Player) -> Unit = {}) {
-        staticSlots[index] = GuiSlot(item, onClick)
-    }
-
-    fun fill(material: Material) { fillItem = itemStack(material) { name(" "); hideTooltip() } }
-    fun border(material: Material) { borderItem = itemStack(material) { name(" "); hideTooltip() } }
-    fun contentSlots(range: IntRange) { contentRange = range }
-    fun clickSound(sound: SoundEvent) { clickSound = sound }
-
-    fun backButton(slot: Int, onClick: (Player) -> Unit) {
-        staticSlots[slot] = GuiSlot(
-            itemStack(Material.ARROW) { name("<gray>Back"); clean() },
-            onClick,
-            SoundEvent.UI_BUTTON_CLICK,
-        )
-    }
-
-    @PublishedApi internal fun build(): PaginatedGui =
-        PaginatedGui(title, rows, items.toList(), staticSlots.toMap(), fillItem, borderItem, contentRange, clickSound)
-}
-
-inline fun paginatedGui(title: String, rows: Int = 6, block: PaginatedGuiBuilder.() -> Unit): PaginatedGui =
-    PaginatedGuiBuilder(title, rows).apply(block).build()
-
-fun confirmGui(
-    title: String,
-    message: String,
-    onConfirm: (Player) -> Unit,
-    onCancel: (Player) -> Unit = { it.closeInventory() },
-): Gui = gui(title, 3) {
-    fillDefault()
-    clickSound(SoundEvent.UI_BUTTON_CLICK)
-    slot(11, itemStack(Material.LIME_STAINED_GLASS_PANE) { name("<green><bold>Confirm"); lore(message); clean() }) { onConfirm(it) }
-    slot(15, itemStack(Material.RED_STAINED_GLASS_PANE) { name("<red><bold>Cancel"); lore(message); clean() }) { onCancel(it) }
-}
-
-fun confirmGui(
-    title: String,
-    confirmItem: ItemStack,
-    cancelItem: ItemStack,
-    previewItem: ItemStack? = null,
-    onConfirm: (Player) -> Unit,
-    onCancel: (Player) -> Unit = { it.closeInventory() },
-): Gui = gui(title, 3) {
-    fillDefault()
-    clickSound(SoundEvent.UI_BUTTON_CLICK)
-    slot(11, confirmItem) { onConfirm(it) }
-    previewItem?.let { slot(13, it) }
-    slot(15, cancelItem) { onCancel(it) }
-}

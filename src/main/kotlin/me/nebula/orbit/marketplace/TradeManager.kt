@@ -19,6 +19,8 @@ import net.minestom.server.entity.Player
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import me.nebula.gravity.translation.Keys
+import me.nebula.ether.utils.translation.asTranslationKey
 
 object TradeManager {
 
@@ -72,37 +74,37 @@ object TradeManager {
 
     fun sendRequest(initiator: Player, target: Player) {
         if (initiator.uuid == target.uuid) {
-            initiator.sendMessage(initiator.translate("orbit.trade.cannot_trade_self"))
+            initiator.sendMessage(initiator.translate(Keys.Orbit.Trade.CannotTradeSelf))
             return
         }
         if (isTrading(initiator.uuid)) {
-            initiator.sendMessage(initiator.translate("orbit.trade.already_trading"))
+            initiator.sendMessage(initiator.translate(Keys.Orbit.Trade.AlreadyTrading))
             return
         }
         if (isTrading(target.uuid)) {
-            initiator.sendMessage(initiator.translate("orbit.trade.player_busy", "player" to target.username))
+            initiator.sendMessage(initiator.translate(Keys.Orbit.Trade.PlayerBusy, "player" to target.username))
             return
         }
         if (pendingRequests.containsKey(target.uuid)) {
-            initiator.sendMessage(initiator.translate("orbit.trade.player_busy", "player" to target.username))
+            initiator.sendMessage(initiator.translate(Keys.Orbit.Trade.PlayerBusy, "player" to target.username))
             return
         }
         if (pendingRequests.values.any { it.initiatorId == initiator.uuid }) {
-            initiator.sendMessage(initiator.translate("orbit.trade.already_sent"))
+            initiator.sendMessage(initiator.translate(Keys.Orbit.Trade.AlreadySent))
             return
         }
 
         val request = TradeRequest(initiator.uuid, initiator.username, target.uuid, System.currentTimeMillis() + REQUEST_TIMEOUT_TICKS * 50L)
         pendingRequests[target.uuid] = request
 
-        initiator.sendMessage(initiator.translate("orbit.trade.request_sent", "player" to target.username))
-        target.sendMessage(target.translate("orbit.trade.request_received", "player" to initiator.username))
+        initiator.sendMessage(initiator.translate(Keys.Orbit.Trade.RequestSent, "player" to target.username))
+        target.sendMessage(target.translate(Keys.Orbit.Trade.RequestReceived, "player" to initiator.username))
 
         delay(REQUEST_TIMEOUT_TICKS) {
             val pending = pendingRequests.remove(target.uuid)
             if (pending != null && pending.initiatorId == initiator.uuid) {
                 val initiatorPlayer = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(initiator.uuid)
-                initiatorPlayer?.sendMessage(initiatorPlayer.translate("orbit.trade.request_expired"))
+                initiatorPlayer?.sendMessage(initiatorPlayer.translate(Keys.Orbit.Trade.RequestExpired))
             }
         }
     }
@@ -112,7 +114,7 @@ object TradeManager {
 
         val initiator = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(request.initiatorId)
         if (initiator == null) {
-            target.sendMessage(target.translate("orbit.trade.request_expired"))
+            target.sendMessage(target.translate(Keys.Orbit.Trade.RequestExpired))
             return
         }
 
@@ -126,8 +128,8 @@ object TradeManager {
     fun denyRequest(target: Player) {
         val request = pendingRequests.remove(target.uuid) ?: return
         val initiator = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(request.initiatorId)
-        initiator?.sendMessage(initiator.translate("orbit.trade.request_denied", "player" to target.username))
-        target.sendMessage(target.translate("orbit.trade.request_denied_self"))
+        initiator?.sendMessage(initiator.translate(Keys.Orbit.Trade.RequestDenied, "player" to target.username))
+        target.sendMessage(target.translate(Keys.Orbit.Trade.RequestDeniedSelf))
     }
 
     fun hasPendingRequest(targetId: UUID): Boolean = pendingRequests.containsKey(targetId)
@@ -193,7 +195,7 @@ object TradeManager {
             val paid = EconomyStore.executeOnKey(session.initiatorId, PurchaseCosmeticProcessor("coins", initiatorFee))
             if (!paid) {
                 session.locked.set(false)
-                initiator.sendMessage(initiator.translate("orbit.trade.insufficient_fee", "amount" to initiatorFee.toInt().toString()))
+                initiator.sendMessage(initiator.translate(Keys.Orbit.Trade.InsufficientFee, "amount" to initiatorFee.toInt().toString()))
                 cancelSession(session, "orbit.trade.cancelled")
                 return
             }
@@ -204,7 +206,7 @@ object TradeManager {
             if (!paid) {
                 if (initiatorFee > 0) EconomyStore.executeOnKey(session.initiatorId, AddBalanceProcessor("coins", initiatorFee))
                 session.locked.set(false)
-                target.sendMessage(target.translate("orbit.trade.insufficient_fee", "amount" to targetFee.toInt().toString()))
+                target.sendMessage(target.translate(Keys.Orbit.Trade.InsufficientFee, "amount" to targetFee.toInt().toString()))
                 cancelSession(session, "orbit.trade.cancelled")
                 return
             }
@@ -262,8 +264,8 @@ object TradeManager {
 
         initiator.closeInventory()
         target.closeInventory()
-        initiator.sendMessage(initiator.translate("orbit.trade.completed"))
-        target.sendMessage(target.translate("orbit.trade.completed"))
+        initiator.sendMessage(initiator.translate(Keys.Orbit.Trade.Completed))
+        target.sendMessage(target.translate(Keys.Orbit.Trade.Completed))
 
         activeSessions.remove(session.initiatorId)
         activeSessions.remove(session.targetId)
@@ -287,8 +289,8 @@ object TradeManager {
 
         initiator?.closeInventory()
         target?.closeInventory()
-        initiator?.sendMessage(initiator.translate(messageKey))
-        target?.sendMessage(target.translate(messageKey))
+        initiator?.sendMessage(initiator.translate(messageKey.asTranslationKey()))
+        target?.sendMessage(target.translate(messageKey.asTranslationKey()))
     }
 
     fun onDisconnect(player: Player) {

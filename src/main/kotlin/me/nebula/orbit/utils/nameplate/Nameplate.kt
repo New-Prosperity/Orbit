@@ -37,6 +37,7 @@ import net.minestom.server.timer.Task
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import me.nebula.ether.utils.translation.asTranslationKey
 
 private const val META_NO_GRAVITY = 5
 private const val META_DISPLAY_TRANSLATION = 11
@@ -389,7 +390,7 @@ object NameplateManager {
         val layout = plate.layout
         if (layout.translationKey != null) {
             val args = buildTranslationArgs(plate.target).map { (k, v) -> k to resolveInlineTags(v) }
-            return viewer.translate(layout.translationKey, *args.toTypedArray())
+            return viewer.translate(layout.translationKey.asTranslationKey(), *args.toTypedArray())
         }
         val parts = mutableListOf<Component>()
         for (line in layout.lines) {

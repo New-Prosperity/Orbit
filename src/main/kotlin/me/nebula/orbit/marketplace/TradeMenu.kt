@@ -10,6 +10,7 @@ import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
+import me.nebula.gravity.translation.Keys
 
 object TradeMenu {
 
@@ -29,7 +30,7 @@ object TradeMenu {
         val myOffers = session.offersOf(player.uuid)
         val theirOffers = session.otherOffersOf(player.uuid)
 
-        val gui = gui(player.translateRaw("orbit.trade.menu_title", "player" to otherName), rows = 6) {
+        val gui = gui(player.translateRaw(Keys.Orbit.Trade.MenuTitle, "player" to otherName), rows = 6) {
             for (i in 0 until 54) {
                 val col = i % 9
                 if (col == 4) {
@@ -50,10 +51,10 @@ object TradeMenu {
                 slot(slotIdx, itemStack(material) {
                     name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
                     if (offered) {
-                        lore("<green>${player.translateRaw("orbit.trade.offered")}")
+                        lore("<green>${player.translateRaw(Keys.Orbit.Trade.Offered)}")
                         glowing()
                     } else {
-                        lore("<yellow>${player.translateRaw("orbit.trade.click_to_offer")}")
+                        lore("<yellow>${player.translateRaw(Keys.Orbit.Trade.ClickToOffer)}")
                     }
                     clean()
                 }) { p -> TradeManager.toggleOffer(p, cosmeticId) }
@@ -67,7 +68,7 @@ object TradeMenu {
                     val material = Material.fromKey(definition.material) ?: Material.BARRIER
                     slot(slotIdx, itemStack(material) {
                         name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
-                        lore("<aqua>${player.translateRaw("orbit.trade.their_offer")}")
+                        lore("<aqua>${player.translateRaw(Keys.Orbit.Trade.TheirOffer)}")
                         clean()
                     })
                 }
@@ -77,24 +78,24 @@ object TradeMenu {
 
             slot(48, itemStack(if (myConfirmed) Material.LIME_WOOL else Material.GREEN_WOOL) {
                 if (myConfirmed) {
-                    name("<green>${player.translateRaw("orbit.trade.confirmed")}")
+                    name("<green>${player.translateRaw(Keys.Orbit.Trade.Confirmed)}")
                     if (otherConfirmed) {
-                        lore("<green>${player.translateRaw("orbit.trade.both_confirmed")}")
+                        lore("<green>${player.translateRaw(Keys.Orbit.Trade.BothConfirmed)}")
                     } else {
-                        lore("<yellow>${player.translateRaw("orbit.trade.waiting")}")
+                        lore("<yellow>${player.translateRaw(Keys.Orbit.Trade.Waiting)}")
                     }
                     glowing()
                 } else {
-                    name("<green>${player.translateRaw("orbit.trade.confirm")}")
+                    name("<green>${player.translateRaw(Keys.Orbit.Trade.Confirm)}")
                     if (otherConfirmed) {
-                        lore("<green>${player.translateRaw("orbit.trade.other_confirmed")}")
+                        lore("<green>${player.translateRaw(Keys.Orbit.Trade.OtherConfirmed)}")
                     }
                 }
                 clean()
             }) { p -> TradeManager.confirm(p) }
 
             slot(50, itemStack(Material.RED_WOOL) {
-                name("<red>${player.translateRaw("orbit.trade.cancel")}")
+                name("<red>${player.translateRaw(Keys.Orbit.Trade.Cancel)}")
                 clean()
             }) { p -> TradeManager.cancel(p) }
 

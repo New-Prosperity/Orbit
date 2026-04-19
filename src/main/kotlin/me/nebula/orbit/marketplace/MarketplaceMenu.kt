@@ -32,6 +32,7 @@ import me.nebula.orbit.utils.gui.paginatedGui
 import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.entity.Player
 import net.minestom.server.item.Material
+import me.nebula.gravity.translation.Keys
 
 object MarketplaceMenu {
 
@@ -62,21 +63,21 @@ object MarketplaceMenu {
 
     fun openMain(player: Player) {
         if (TradeManager.isTrading(player.uuid)) {
-            player.sendMessage(player.translate("orbit.trade.already_trading"))
+            player.sendMessage(player.translate(Keys.Orbit.Trade.AlreadyTrading))
             return
         }
-        val gui = gui(player.translateRaw("orbit.marketplace.menu.title"), rows = 3) {
+        val gui = gui(player.translateRaw(Keys.Orbit.Marketplace.Menu.Title), rows = 3) {
             fillDefault()
             slot(11, itemStack(Material.EMERALD) {
-                name("<green>${player.translateRaw("orbit.marketplace.menu.browse")}")
+                name("<green>${player.translateRaw(Keys.Orbit.Marketplace.Menu.Browse)}")
                 clean()
             }) { openBrowseCategories(it) }
             slot(13, itemStack(Material.GOLD_INGOT) {
-                name("<gold>${player.translateRaw("orbit.marketplace.menu.sell")}")
+                name("<gold>${player.translateRaw(Keys.Orbit.Marketplace.Menu.Sell)}")
                 clean()
             }) { openSellSelect(it) }
             slot(15, itemStack(Material.BOOK) {
-                name("<yellow>${player.translateRaw("orbit.marketplace.menu.my_listings")}")
+                name("<yellow>${player.translateRaw(Keys.Orbit.Marketplace.Menu.MyListings)}")
                 clean()
             }) { openMyListings(it) }
         }
@@ -84,7 +85,7 @@ object MarketplaceMenu {
     }
 
     private fun openBrowseCategories(player: Player) {
-        val gui = gui(player.translateRaw("orbit.marketplace.browse.title"), rows = 5) {
+        val gui = gui(player.translateRaw(Keys.Orbit.Marketplace.Browse.Title), rows = 5) {
             fillDefault()
             categorySlots.forEach { (category, config) ->
                 val (slot, material) = config
@@ -111,10 +112,10 @@ object MarketplaceMenu {
                 val material = Material.fromKey(definition.material) ?: Material.BARRIER
                 item(itemStack(material) {
                     name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
-                    lore(player.translateRaw("orbit.marketplace.listing.seller", "seller" to listing.sellerName))
-                    lore(player.translateRaw("orbit.marketplace.listing.price", "price" to listing.price.toString()))
+                    lore(player.translateRaw(Keys.Orbit.Marketplace.Listing.Seller, "seller" to listing.sellerName))
+                    lore(player.translateRaw(Keys.Orbit.Marketplace.Listing.Price, "price" to listing.price.toString()))
                     if (definition.maxLevel > 1) {
-                        lore(player.translateRaw("orbit.marketplace.listing.level", "level" to listing.cosmeticLevel.toString()))
+                        lore(player.translateRaw(Keys.Orbit.Marketplace.Listing.Level, "level" to listing.cosmeticLevel.toString()))
                     }
                     clean()
                 }) { p -> openBuyConfirmation(p, listing) }
@@ -126,7 +127,7 @@ object MarketplaceMenu {
 
     private fun openBuyConfirmation(player: Player, listing: MarketplaceListing) {
         if (listing.sellerId == player.uuid) {
-            player.sendMessage(player.translate("orbit.marketplace.cannot_buy_own"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.CannotBuyOwn))
             return
         }
 
@@ -134,20 +135,20 @@ object MarketplaceMenu {
         val material = Material.fromKey(definition.material) ?: Material.BARRIER
 
         val confirm = confirmGui(
-            title = player.translateRaw("orbit.marketplace.confirm_buy.title"),
+            title = player.translateRaw(Keys.Orbit.Marketplace.ConfirmBuy.Title),
             confirmItem = itemStack(Material.GREEN_WOOL) {
-                name("<green>${player.translateRaw("orbit.marketplace.confirm_buy.accept")}")
-                lore(player.translateRaw("orbit.marketplace.confirm_buy.cost", "price" to listing.price.toString()))
+                name("<green>${player.translateRaw(Keys.Orbit.Marketplace.ConfirmBuy.Accept)}")
+                lore(player.translateRaw(Keys.Orbit.Marketplace.ConfirmBuy.Cost, "price" to listing.price.toString()))
                 clean()
             },
             cancelItem = itemStack(Material.RED_WOOL) {
-                name("<red>${player.translateRaw("orbit.marketplace.confirm_buy.cancel")}")
+                name("<red>${player.translateRaw(Keys.Orbit.Marketplace.ConfirmBuy.Cancel)}")
                 clean()
             },
             previewItem = itemStack(material) {
                 name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
-                lore(player.translateRaw("orbit.marketplace.listing.seller", "seller" to listing.sellerName))
-                lore(player.translateRaw("orbit.marketplace.confirm_buy.cost", "price" to listing.price.toString()))
+                lore(player.translateRaw(Keys.Orbit.Marketplace.Listing.Seller, "seller" to listing.sellerName))
+                lore(player.translateRaw(Keys.Orbit.Marketplace.ConfirmBuy.Cost, "price" to listing.price.toString()))
                 clean()
             },
             onConfirm = { p -> executeBuy(p, listing) },
@@ -159,13 +160,13 @@ object MarketplaceMenu {
     private fun executeBuy(player: Player, listing: MarketplaceListing) {
         val definition = CosmeticRegistry[listing.cosmeticId]
         if (definition == null) {
-            player.sendMessage(player.translate("orbit.marketplace.listing_unavailable"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.ListingUnavailable))
             return
         }
 
         val claimed = MarketplaceListingStore.delete(listing.id)
         if (claimed == null) {
-            player.sendMessage(player.translate("orbit.marketplace.listing_unavailable"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.ListingUnavailable))
             openBrowseCategories(player)
             return
         }
@@ -173,7 +174,7 @@ object MarketplaceMenu {
         val paid = EconomyStore.executeOnKey(player.uuid, PurchaseCosmeticProcessor("coins", claimed.price.toDouble()))
         if (!paid) {
             MarketplaceListingStore.save(claimed.id, claimed)
-            player.sendMessage(player.translate("orbit.marketplace.insufficient_funds"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.InsufficientFunds))
             openBrowseCategories(player)
             return
         }
@@ -182,7 +183,7 @@ object MarketplaceMenu {
         if (!received) {
             EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", claimed.price.toDouble()))
             MarketplaceListingStore.save(claimed.id, claimed)
-            player.sendMessage(player.translate("orbit.marketplace.already_owned"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.AlreadyOwned))
             openBrowseCategories(player)
             return
         }
@@ -222,7 +223,7 @@ object MarketplaceMenu {
             "<green><lang:orbit.marketplace.sold_notification:${claimed.cosmeticId}:${player.username}:${claimed.price}:${sellerProceeds.toInt()}>"
         ))
 
-        player.sendMessage(player.translate("orbit.marketplace.purchased",
+        player.sendMessage(player.translate(Keys.Orbit.Marketplace.Purchased,
             "cosmetic" to player.translateRaw(definition.nameKey),
             "price" to claimed.price.toString()
         ))
@@ -232,7 +233,7 @@ object MarketplaceMenu {
     fun openSellSelect(player: Player) {
         val playerData = CosmeticStore.load(player.uuid) ?: CosmeticPlayerData()
         if (playerData.owned.isEmpty()) {
-            player.sendMessage(player.translate("orbit.marketplace.sell.no_cosmetics"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.Sell.NoCosmetics))
             return
         }
 
@@ -243,11 +244,11 @@ object MarketplaceMenu {
         }
 
         if (sellable.isEmpty()) {
-            player.sendMessage(player.translate("orbit.marketplace.sell.no_cosmetics"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.Sell.NoCosmetics))
             return
         }
 
-        val gui = paginatedGui(player.translateRaw("orbit.marketplace.sell.title"), rows = 6) {
+        val gui = paginatedGui(player.translateRaw(Keys.Orbit.Marketplace.Sell.Title), rows = 6) {
             border(Material.GRAY_STAINED_GLASS_PANE)
             for ((cosmeticId, level, definition) in sellable) {
                 val material = Material.fromKey(definition.material) ?: Material.BARRIER
@@ -255,10 +256,10 @@ object MarketplaceMenu {
                 item(itemStack(material) {
                     name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
                     if (definition.maxLevel > 1) {
-                        lore(player.translateRaw("orbit.marketplace.listing.level", "level" to level.toString()))
+                        lore(player.translateRaw(Keys.Orbit.Marketplace.Listing.Level, "level" to level.toString()))
                     }
                     if (equipped) {
-                        lore("<yellow>${player.translateRaw("orbit.marketplace.sell.equipped_warning")}")
+                        lore("<yellow>${player.translateRaw(Keys.Orbit.Marketplace.Sell.EquippedWarning)}")
                     }
                     clean()
                 }) { p -> openSellPricing(p, cosmeticId, level) }
@@ -272,7 +273,7 @@ object MarketplaceMenu {
         val definition = CosmeticRegistry[cosmeticId] ?: return
         val basePrice = rarityPriceDefaults[definition.rarity.name] ?: definition.price
 
-        val gui = gui(player.translateRaw("orbit.marketplace.sell.pricing_title"), rows = 3) {
+        val gui = gui(player.translateRaw(Keys.Orbit.Marketplace.Sell.PricingTitle), rows = 3) {
             fillDefault()
             priceSlot(this, player, 10, basePrice / 2, cosmeticId, level)
             priceSlot(this, player, 11, basePrice, cosmeticId, level)
@@ -287,14 +288,14 @@ object MarketplaceMenu {
 
     private fun priceSlot(builder: GuiBuilder, player: Player, slot: Int, price: Int, cosmeticId: String, level: Int) {
         builder.slot(slot, itemStack(Material.GOLD_NUGGET) {
-            name("<gold>$price ${player.translateRaw("orbit.marketplace.coins")}")
+            name("<gold>$price ${player.translateRaw(Keys.Orbit.Marketplace.Coins)}")
             clean()
         }) { p -> executeSell(p, cosmeticId, level, price) }
     }
 
     private fun executeSell(player: Player, cosmeticId: String, level: Int, price: Int) {
         if (TradeManager.isTrading(player.uuid)) {
-            player.sendMessage(player.translate("orbit.trade.already_trading"))
+            player.sendMessage(player.translate(Keys.Orbit.Trade.AlreadyTrading))
             return
         }
 
@@ -303,7 +304,7 @@ object MarketplaceMenu {
 
         val activeCount = MarketplaceListingStore.query(listingsBySellerPredicate(player.uuid)).size
         if (activeCount >= MarketplaceListingStore.MAX_ACTIVE_LISTINGS) {
-            player.sendMessage(player.translate("orbit.marketplace.max_listings",
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.MaxListings,
                 "max" to MarketplaceListingStore.MAX_ACTIVE_LISTINGS.toString()
             ))
             return
@@ -311,7 +312,7 @@ object MarketplaceMenu {
 
         val removedLevel = CosmeticStore.executeOnKey(player.uuid, RemoveCosmeticProcessor(cosmeticId))
         if (removedLevel == 0) {
-            player.sendMessage(player.translate("orbit.marketplace.sell.not_owned"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.Sell.NotOwned))
             openSellSelect(player)
             return
         }
@@ -329,7 +330,7 @@ object MarketplaceMenu {
             source = "orbit",
         )
 
-        player.sendMessage(player.translate("orbit.marketplace.listed",
+        player.sendMessage(player.translate(Keys.Orbit.Marketplace.Listed,
             "cosmetic" to player.translateRaw(definition.nameKey),
             "price" to price.toString()
         ))
@@ -341,20 +342,20 @@ object MarketplaceMenu {
             .sortedByDescending { it.listedAt }
 
         if (listings.isEmpty()) {
-            player.sendMessage(player.translate("orbit.marketplace.my_listings.empty"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.MyListings.Empty))
             openMain(player)
             return
         }
 
-        val gui = paginatedGui(player.translateRaw("orbit.marketplace.my_listings.title"), rows = 6) {
+        val gui = paginatedGui(player.translateRaw(Keys.Orbit.Marketplace.MyListings.Title), rows = 6) {
             border(Material.GRAY_STAINED_GLASS_PANE)
             for (listing in listings) {
                 val definition = CosmeticRegistry[listing.cosmeticId] ?: continue
                 val material = Material.fromKey(definition.material) ?: Material.BARRIER
                 item(itemStack(material) {
                     name("${definition.rarity.colorTag}${player.translateRaw(definition.nameKey)}")
-                    lore(player.translateRaw("orbit.marketplace.listing.price", "price" to listing.price.toString()))
-                    lore("<red>${player.translateRaw("orbit.marketplace.my_listings.cancel")}")
+                    lore(player.translateRaw(Keys.Orbit.Marketplace.Listing.Price, "price" to listing.price.toString()))
+                    lore("<red>${player.translateRaw(Keys.Orbit.Marketplace.MyListings.Cancel)}")
                     clean()
                 }) { p -> executeCancelListing(p, listing) }
             }
@@ -366,7 +367,7 @@ object MarketplaceMenu {
     private fun executeCancelListing(player: Player, listing: MarketplaceListing) {
         val removed = MarketplaceListingStore.delete(listing.id)
         if (removed == null) {
-            player.sendMessage(player.translate("orbit.marketplace.listing_unavailable"))
+            player.sendMessage(player.translate(Keys.Orbit.Marketplace.ListingUnavailable))
             openMyListings(player)
             return
         }
@@ -374,7 +375,7 @@ object MarketplaceMenu {
         CosmeticStore.executeOnKey(player.uuid, TransferCosmeticProcessor(removed.cosmeticId, removed.cosmeticLevel))
         CosmeticDataCache.invalidate(player.uuid)
 
-        player.sendMessage(player.translate("orbit.marketplace.listing_cancelled",
+        player.sendMessage(player.translate(Keys.Orbit.Marketplace.ListingCancelled,
             "cosmetic" to (CosmeticRegistry[removed.cosmeticId]?.let { player.translateRaw(it.nameKey) } ?: removed.cosmeticId)
         ))
         openMyListings(player)
