@@ -94,8 +94,8 @@ object ConfigHistoryMenu {
             lore("<gray>Entry: <white>${rev.entryKey}")
             rev.actorName?.let { lore("<gray>Actor: <yellow>$it") }
             rev.reason?.let { lore("<gray>Reason: <white>$it") }
-            if (rev.previousRaw != null) lore("<gray>From: <red>${rev.previousRaw!!.take(64)}")
-            if (rev.newRaw != null) lore("<gray>To: <green>${rev.newRaw!!.take(64)}")
+            rev.previousRaw?.let { lore("<gray>From: <red>${it.take(64)}") }
+            rev.newRaw?.let { lore("<gray>To: <green>${it.take(64)}") }
             if (rev.isRollback) lore("<light_purple>↩ Rollback")
             emptyLoreLine()
             lore("<yellow>Click to rollback")

@@ -95,13 +95,15 @@ object ConfigDraftsMenu {
                 item(itemStack(Material.PAPER) {
                     name("<yellow>${diffEntry.entryKey}")
                     diffEntry.qualifier?.let { lore("<gray>Qualifier: <white>$it") }
-                    if (diffEntry.previousRaw != null) {
-                        lore("<gray>Was: <red>${diffEntry.previousRaw!!.take(60)}")
+                    val prev = diffEntry.previousRaw
+                    if (prev != null) {
+                        lore("<gray>Was: <red>${prev.take(60)}")
                     } else {
                         lore("<gray>Was: <dark_gray>(unset)")
                     }
-                    if (diffEntry.newRaw != null) {
-                        lore("<gray>Will be: <green>${diffEntry.newRaw!!.take(60)}")
+                    val next = diffEntry.newRaw
+                    if (next != null) {
+                        lore("<gray>Will be: <green>${next.take(60)}")
                     } else {
                         lore("<gray>Will be: <dark_red>(deleted)")
                     }

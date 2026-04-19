@@ -1,6 +1,7 @@
 package me.nebula.orbit.event
 
 import me.nebula.orbit.mode.game.GamePhase
+import me.nebula.orbit.rules.RuleKey
 import me.nebula.orbit.rules.RuleRegistry
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -27,7 +28,8 @@ class GameEventBusTest {
 
         bus.publish(GameEvent.PhaseChanged(GamePhase.STARTING, GamePhase.PLAYING))
         val key = RuleRegistry.register("bus_test_rule", default = false)
-        bus.publish(GameEvent.RuleChanged(key as me.nebula.orbit.rules.RuleKey<Any>, false, true))
+        @Suppress("UNCHECKED_CAST")
+        bus.publish(GameEvent.RuleChanged(key as RuleKey<Any>, false, true))
 
         assertEquals(1, phaseEvents.size)
         assertEquals(1, ruleEvents.size)
