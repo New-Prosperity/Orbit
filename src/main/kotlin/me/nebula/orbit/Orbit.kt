@@ -47,7 +47,11 @@ import me.nebula.gravity.party.PartyLookupStore
 import me.nebula.gravity.party.PartyStore
 import me.nebula.gravity.player.PlayerStore
 import me.nebula.gravity.player.PreferenceStore
+import me.nebula.gravity.config.ConfigDraftStore
+import me.nebula.gravity.config.ConfigEntryStore
 import me.nebula.gravity.config.ConfigPropagationInstaller
+import me.nebula.gravity.config.ConfigRevisionStore
+import me.nebula.gravity.config.ConfigScheduleStore
 import me.nebula.gravity.config.ConfigStore
 import me.nebula.gravity.config.NetworkConfig
 import me.nebula.gravity.config.PlayerConfig
@@ -293,6 +297,10 @@ object Orbit {
                         }
                     }
                     stores {
+                        +ConfigEntryStore
+                        +ConfigRevisionStore
+                        +ConfigScheduleStore
+                        +ConfigDraftStore
                         +PlayerStore
                         +SanctionStore
                         +SessionStore

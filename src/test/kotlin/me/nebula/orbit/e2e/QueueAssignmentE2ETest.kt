@@ -1,6 +1,10 @@
 package me.nebula.orbit.e2e
 
 import io.mockk.mockk
+import me.nebula.gravity.config.ConfigDraftStore
+import me.nebula.gravity.config.ConfigEntryStore
+import me.nebula.gravity.config.ConfigRevisionStore
+import me.nebula.gravity.config.ConfigScheduleStore
 import me.nebula.gravity.config.ConfigStore
 import me.nebula.gravity.queue.PoolConfig
 import me.nebula.gravity.queue.PoolConfigStore
@@ -45,6 +49,10 @@ class QueueAssignmentE2ETest {
         NebulaTestFixture.registerStore(RatingStore)
         NebulaTestFixture.registerStore(RankStore)
         NebulaTestFixture.registerStore(PlayerRankStore)
+        NebulaTestFixture.registerStore(ConfigEntryStore)
+        NebulaTestFixture.registerStore(ConfigRevisionStore)
+        NebulaTestFixture.registerStore(ConfigScheduleStore)
+        NebulaTestFixture.registerStore(ConfigDraftStore)
         ConfigStore.initialize()
         proton = mockk(relaxed = true)
     }
