@@ -23,7 +23,6 @@ private val PROFILE_VISIBILITY_OPTIONS = listOf("PUBLIC", "FRIENDS", "PRIVATE")
 private val COSMETIC_DISPLAY_OPTIONS = listOf("FULL", "REDUCED", "NONE")
 
 fun settingsCommand(): Command = command("settings") {
-    aliases("prefs", "preferences")
     onPlayerExecute { openSettingsGui(player) }
 }
 
