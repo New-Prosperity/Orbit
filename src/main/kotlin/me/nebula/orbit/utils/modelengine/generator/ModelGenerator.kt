@@ -231,7 +231,10 @@ object ModelGenerator {
         )
     }
 
-    fun buildFlatModel(model: BlockbenchModel): Pair<GeneratedBoneModel, ByteArray> {
+    fun buildFlatModel(
+        model: BlockbenchModel,
+        elementFilter: (BbElement) -> Boolean = { true },
+    ): Pair<GeneratedBoneModel, ByteArray> {
         val atlas = AtlasManager.stitch(model.textures)
         val atlasBytes = AtlasManager.toBytes(atlas.image)
         val allElements = mutableListOf<GeneratedElement>()
@@ -239,7 +242,7 @@ object ModelGenerator {
         fun collectElements(group: BbGroup) {
             val elements = group.children.filterIsInstance<BbGroupChild.ElementRef>()
                 .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
-                .filter { it.visibility }
+                .filter { it.visibility && elementFilter(it) }
             allElements += buildBoneElements(elements, group, atlas, model.resolution).elements
             group.children.filterIsInstance<BbGroupChild.SubGroup>()
                 .filter { it.group.visibility }

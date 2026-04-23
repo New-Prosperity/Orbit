@@ -3,10 +3,12 @@ package me.nebula.orbit.mode.hub
 import me.nebula.gravity.messaging.NetworkMessenger
 import me.nebula.gravity.messaging.PartyQueueNotificationMessage
 import me.nebula.gravity.party.PartyManager
+import me.nebula.gravity.player.PreferenceStore
 import me.nebula.gravity.config.isGameModeInMaintenance
 import me.nebula.gravity.queue.PoolConfig
 import me.nebula.gravity.queue.PoolConfigStore
 import me.nebula.gravity.queue.QueueStore
+import me.nebula.orbit.perks.EconomyPerks
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.gui.gui
@@ -82,15 +84,17 @@ object SelectorMenu {
 
         val members = PartyManager.collectMembers(player.uuid)
 
-        if (members.size > config.maxPartySize) {
+        val effectiveMax = EconomyPerks.partyMaxSize(player.uuid, config.maxPartySize)
+        if (members.size > effectiveMax) {
             player.sendMessage(player.translate(Keys.Orbit.Queue.Error.PartyTooLarge,
-                "max" to config.maxPartySize.toString()))
+                "max" to effectiveMax.toString()))
             return
         }
 
         queuedGameModes.computeIfAbsent(player.uuid) { ConcurrentHashMap.newKeySet() }.add(config.gameMode)
 
-        QueueStore.enqueue(config.gameMode, player.uuid, members)
+        val autofill = PreferenceStore.load(player.uuid)?.autofillEnabled ?: true
+        QueueStore.enqueue(config.gameMode, player.uuid, members, autofill)
 
         val displayName = player.translateRaw("orbit.gamemode.${config.gameMode}".asTranslationKey())
         player.sendMessage(player.translate(Keys.Orbit.Queue.Joined, "gamemode" to displayName))

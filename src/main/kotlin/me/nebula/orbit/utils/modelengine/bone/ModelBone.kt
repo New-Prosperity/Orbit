@@ -27,6 +27,8 @@ class ModelBone(val blueprint: BlueprintBone) {
     var animatedRotation: Quat = QUAT_IDENTITY
     var animatedScale: Vec = Vec(1.0, 1.0, 1.0)
 
+    var placementRotation: Quat = QUAT_IDENTITY
+
     var visible: Boolean = blueprint.visible
     var modelItem: ItemStack? = blueprint.modelItem
     var skinPartId: Int? = null
@@ -57,7 +59,7 @@ class ModelBone(val blueprint: BlueprintBone) {
 
         val localTransform = BoneTransform(
             position = localPosition.add(animatedPosition),
-            leftRotation = quatNormalize(quatMultiply(localRotation, animatedRotation)),
+            leftRotation = quatNormalize(quatMultiply(placementRotation, quatMultiply(localRotation, animatedRotation))),
             scale = Vec(
                 localScale.x() * animatedScale.x(),
                 localScale.y() * animatedScale.y(),

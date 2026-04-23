@@ -1,6 +1,7 @@
 package me.nebula.orbit.event
 
 import me.nebula.orbit.mode.game.GamePhase
+import me.nebula.orbit.mode.game.battleroyale.zone.ZoneState
 import me.nebula.orbit.rules.RuleKey
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.variant.GameVariant
@@ -20,4 +21,8 @@ sealed interface GameEvent {
     data class GameEnded(val result: MatchResult) : GameEvent
     data class VariantActivated(val variant: GameVariant) : GameEvent
     data class RuleChanged<T : Any>(val key: RuleKey<T>, val old: T, val new: T) : GameEvent
+    data class ZoneTransition(val from: ZoneState, val to: ZoneState) : GameEvent
+    data class PlayerKnocked(val victim: Player, val attacker: Player?) : GameEvent
+    data class PlayerRevived(val player: Player, val reviver: Player) : GameEvent
+    data class PlayerBledOut(val player: Player) : GameEvent
 }

@@ -3,6 +3,9 @@ package me.nebula.orbit.commands
 import me.nebula.ether.utils.parse.enumValueOfOrNull
 import me.nebula.orbit.utils.botai.BotAI
 import me.nebula.orbit.utils.commandbuilder.CommandBuilderDsl
+import me.nebula.orbit.utils.commandbuilder.testBehaviorArgument
+import me.nebula.orbit.utils.commandbuilder.testBotPresetArgument
+import me.nebula.orbit.utils.commandbuilder.testIdArgument
 import me.nebula.orbit.utils.gametest.GameTestRegistry
 import me.nebula.orbit.utils.gametest.GameTestRunner
 import me.nebula.orbit.utils.gametest.TestBehavior
@@ -11,16 +14,11 @@ import kotlin.time.Duration.Companion.seconds
 
 internal fun CommandBuilderDsl.installLiveBotSubcommands() {
     subCommand("behavior") {
-        wordArgument("target")
-        wordArgument("behavior")
-        tabComplete { sender, input ->
-            val parts = input.trim().split("\\s+".toRegex())
-            val session = GameTestRunner.getLiveSession(sender) ?: return@tabComplete emptyList()
-            when {
-                parts.size <= 5 -> session.botPlayers.map { it.username }
-                else -> TestBehavior.entries.map { it.name.lowercase() }
-            }.filter { it.startsWith(parts.last(), ignoreCase = true) }
+        wordArgument("target") {
+            val session = GameTestRunner.getLiveSession(player) ?: return@wordArgument emptyList()
+            session.botPlayers.map { it.username }.filter { it.startsWith(partial, ignoreCase = true) }
         }
+        testBehaviorArgument("behavior")
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {
@@ -49,12 +47,7 @@ internal fun CommandBuilderDsl.installLiveBotSubcommands() {
     }
 
     subCommand("behaviorall") {
-        wordArgument("behavior")
-        tabComplete { _, input ->
-            val prefix = input.substringAfterLast(" ")
-            TestBehavior.entries.map { it.name.lowercase() }
-                .filter { it.startsWith(prefix, ignoreCase = true) }
-        }
+        testBehaviorArgument("behavior")
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {
@@ -162,12 +155,8 @@ internal fun CommandBuilderDsl.installLiveBotSubcommands() {
     }
 
     subCommand("preset") {
-        wordArgument("preset")
+        testBotPresetArgument("preset")
         intArgument("count")
-        tabComplete { _, input ->
-            val prefix = input.substringAfterLast(" ")
-            TestBotPresets.names().filter { it.startsWith(prefix, ignoreCase = true) }.toList()
-        }
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {
@@ -254,11 +243,7 @@ internal fun CommandBuilderDsl.installLiveBotSubcommands() {
     }
 
     subCommand("run") {
-        wordArgument("testId")
-        tabComplete { _, input ->
-            val prefix = input.substringAfterLast(" ")
-            GameTestRegistry.ids().filter { it.startsWith(prefix, ignoreCase = true) }
-        }
+        testIdArgument("testId")
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {

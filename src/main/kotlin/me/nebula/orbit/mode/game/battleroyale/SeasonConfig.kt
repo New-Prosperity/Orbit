@@ -11,6 +11,8 @@ import me.nebula.orbit.mode.config.TabListConfig
 import me.nebula.orbit.mode.game.TimingConfig
 import me.nebula.orbit.mode.game.battleroyale.seasons.season1
 import me.nebula.orbit.utils.chestloot.ChestLootTable
+import me.nebula.orbit.utils.chestloot.LootRarity
+import me.nebula.orbit.utils.supplydrop.SupplyDropScheduleConfig
 
 data class Season(
     val id: Int,
@@ -36,6 +38,20 @@ data class Season(
     val cosmetics: CosmeticConfig = CosmeticConfig(),
     val mapPreset: String? = null,
     val lobbyWorld: LobbyWorldConfig? = null,
+    val airdropTable: String? = null,
+    val killstreakTable: String? = null,
+    val supplyDropSchedule: SupplyDropScheduleConfig = SupplyDropScheduleConfig(enabled = false),
+    val killstreakAirdrop: KillstreakAirdropConfig = KillstreakAirdropConfig(enabled = false),
+    val team: BattleRoyaleTeamConfig = BattleRoyaleTeamConfig(),
+)
+
+data class KillstreakAirdropConfig(
+    val enabled: Boolean = true,
+    val milestones: Map<Int, LootRarity> = mapOf(
+        3 to LootRarity.RARE,
+        5 to LootRarity.EPIC,
+        10 to LootRarity.LEGENDARY,
+    ),
 )
 
 data class VoteCategoryDef(

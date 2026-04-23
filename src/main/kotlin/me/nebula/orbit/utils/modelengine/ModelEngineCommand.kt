@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.modelengine
 
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.translation.translate
+import me.nebula.orbit.utils.commandbuilder.blueprintArgument
 import me.nebula.orbit.utils.commandbuilder.command
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.generator.ModelIdRegistry
@@ -47,10 +48,7 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
     }
 
     subCommand("info") {
-        wordArgument("blueprint")
-        tabComplete { _, input ->
-            ModelEngine.blueprints().keys.filter { it.startsWith(input, ignoreCase = true) }
-        }
+        blueprintArgument("blueprint")
         onPlayerExecute {
             val name: String? = args.get("blueprint")
             if (name == null) {
@@ -85,11 +83,8 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
 
     subCommand("spawn") {
         stringArrayArgument("args")
-        tabComplete { _, input ->
-            val tokens = input.split(" ")
-            if (tokens.size <= 1) {
-                ModelEngine.blueprints().keys.filter { it.startsWith(tokens[0], ignoreCase = true) }
-            } else emptyList()
+        tabComplete { _, partial ->
+            ModelEngine.blueprints().keys.filter { it.startsWith(partial, ignoreCase = true) }
         }
         onPlayerExecute {
             @Suppress("UNCHECKED_CAST")
@@ -133,16 +128,13 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
 
     subCommand("animate") {
         stringArrayArgument("args")
-        tabComplete { _, input ->
-            val tokens = input.split(" ")
-            if (tokens.size <= 1) {
-                spawnedModels.asSequence()
-                    .flatMap { it.modeledEntity?.models?.values?.asSequence().orEmpty() }
-                    .flatMap { it.blueprint.animations.keys.asSequence() }
-                    .distinct()
-                    .filter { it.startsWith(tokens[0], ignoreCase = true) }
-                    .toList()
-            } else emptyList()
+        tabComplete { _, partial ->
+            spawnedModels.asSequence()
+                .flatMap { it.modeledEntity?.models?.values?.asSequence().orEmpty() }
+                .flatMap { it.blueprint.animations.keys.asSequence() }
+                .distinct()
+                .filter { it.startsWith(partial, ignoreCase = true) }
+                .toList()
         }
         onPlayerExecute {
             if (spawnedModels.isEmpty()) {
@@ -186,11 +178,10 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
     }
 
     subCommand("reload") {
-        wordArgument("name")
-        tabComplete { _, input ->
+        wordArgument("name") {
             resources.list("models", "bbmodel")
                 .map { it.substringAfterLast('/').substringBeforeLast('.') }
-                .filter { it.startsWith(input, ignoreCase = true) }
+                .filter { it.startsWith(partial, ignoreCase = true) }
         }
         onPlayerExecute {
             val name: String? = args.get("name")
@@ -238,11 +229,8 @@ fun modelEngineCommand(resources: ResourceManager): Command = command("me") {
 
     subCommand("testreal") {
         stringArrayArgument("args")
-        tabComplete { _, input ->
-            val tokens = input.split(" ")
-            if (tokens.size <= 1) {
-                ModelEngine.blueprints().keys.filter { it.startsWith(tokens[0], ignoreCase = true) }
-            } else emptyList()
+        tabComplete { _, partial ->
+            ModelEngine.blueprints().keys.filter { it.startsWith(partial, ignoreCase = true) }
         }
         onPlayerExecute {
             val instance = player.instance ?: return@onPlayerExecute

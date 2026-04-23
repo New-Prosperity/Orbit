@@ -109,6 +109,10 @@ class ActiveModel(val blueprint: ModelBlueprint, autoPlayIdle: Boolean = true) {
         bones.values.forEach { it.resetAnimation() }
     }
 
+    fun setRootPlacementRotation(rotation: me.nebula.orbit.utils.modelengine.math.Quat) {
+        rootBones.forEach { it.placementRotation = rotation }
+    }
+
     fun tickAnimations(deltaSeconds: Float) {
         resetAllAnimations()
         animationHandler.tick(this, deltaSeconds)

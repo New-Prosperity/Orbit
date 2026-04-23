@@ -16,14 +16,35 @@ import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.orbit.utils.achievement.AchievementTriggerManager
 import me.nebula.orbit.utils.challenge.ChallengeRegistry
 import me.nebula.gravity.cosmetic.CosmeticStore
+import me.nebula.gravity.player.PreferenceStore
+import me.nebula.gravity.player.TogglePreferenceProcessor
 import me.nebula.gravity.party.PartyLookupStore
 import me.nebula.orbit.mode.game.GameMode
 import me.nebula.orbit.mode.game.GamePhase
 import me.nebula.orbit.mode.game.GameSettings
 import me.nebula.orbit.mode.game.battleroyale.script.BorderController
 import me.nebula.orbit.mode.game.battleroyale.script.DeathmatchController
+import me.nebula.orbit.mode.game.battleroyale.script.ShrinkBorder
 import me.nebula.orbit.mode.game.battleroyale.script.buildBorderSteps
+import me.nebula.orbit.mode.game.battleroyale.spawn.SpawnContext
+import me.nebula.orbit.mode.game.battleroyale.spawn.SpawnImmunityController
 import me.nebula.orbit.mode.game.battleroyale.spawn.SpawnModeRegistry
+import me.nebula.orbit.event.GameEvent
+import me.nebula.orbit.loadout.LoadoutDeliveryRuntime
+import me.nebula.orbit.loadout.LoadoutMenu
+import me.nebula.orbit.mode.game.battleroyale.downed.DownedPlayerController
+import me.nebula.orbit.mode.game.battleroyale.downed.DownedPlayerRuntime
+import me.nebula.orbit.mode.game.battleroyale.downed.DownedReviveListener
+import me.nebula.orbit.mode.game.battleroyale.downed.FinalReason
+import me.nebula.orbit.mode.game.battleroyale.team.RespawnBeacon
+import me.nebula.orbit.mode.game.battleroyale.team.TeamDamageMarker
+import me.nebula.orbit.mode.game.battleroyale.team.TeamHudController
+import me.nebula.orbit.utils.chestloot.LegendaryChestRenderer
+import me.nebula.orbit.utils.supplydrop.SupplyDropScheduler
+import me.nebula.orbit.mode.game.battleroyale.zone.ManagedZoneBorderDriver
+import me.nebula.orbit.mode.game.battleroyale.zone.ZoneController
+import me.nebula.orbit.mode.game.battleroyale.zone.ZoneHudOverlay
+import me.nebula.orbit.mode.game.battleroyale.zone.ZoneShrinkController
 import me.nebula.orbit.rules.Rules
 import me.nebula.orbit.variant.GameComponent
 import me.nebula.orbit.variant.GameVariantPool
@@ -56,8 +77,6 @@ import me.nebula.orbit.utils.spectatortoolkit.SpectatorTargetStats
 import me.nebula.orbit.utils.spectatortoolkit.SpectatorToolkit
 import me.nebula.orbit.utils.spectatortoolkit.spectatorToolkit
 import me.nebula.orbit.utils.stattracker.StatTracker
-import me.nebula.orbit.utils.worldborder.ManagedWorldBorder
-import me.nebula.orbit.utils.worldborder.managedWorldBorder
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
@@ -65,7 +84,9 @@ import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.entity.damage.DamageType
 import net.minestom.server.event.entity.EntityDamageEvent
 import net.minestom.server.instance.InstanceContainer
+import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
+import net.minestom.server.sound.SoundEvent
 import net.minestom.server.tag.Tag
 import java.time.Duration
 import java.util.UUID
@@ -73,7 +94,7 @@ import java.util.concurrent.ConcurrentHashMap
 import net.minestom.server.timer.Task
 import me.nebula.gravity.translation.Keys
 
-class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderController, DeathmatchController {
+class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderController, DeathmatchController, ZoneShrinkController {
 
     private val logger = logger("BattleRoyaleMode")
     private val season = SeasonConfig.current
@@ -111,13 +132,48 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
     private val lastAttackerTag = Tag.UUID("br_last_attacker")
     private val lastAttackerTimeTag = Tag.Long("br_last_attacker_time")
     private val killPipeline = BattleRoyaleKillPipeline(this, brDeathRecapTracker, lastAttackerTag, lastAttackerTimeTag)
-    private var worldBorder: ManagedWorldBorder? = null
+    private val zoneController = ZoneController(
+        eventBus = events,
+        zoneShrinkingEnabled = { rules[Rules.ZONE_SHRINKING] },
+    )
+    private val zoneHudOverlay = ZoneHudOverlay(this) { zoneController.state }
+    private val loadoutDelivery = LoadoutDeliveryRuntime(
+        modeId = "battleroyale",
+        events = events,
+    )
     private var borderDamageTask: Task? = null
-    private var currentBorderDamage = season.borderDamagePerSecond
+    private var downedTask: Task? = null
     @Volatile private var deathmatchActive = false
-    @Volatile private var spawnBlocking = false
+    private val spawnImmunity = SpawnImmunityController()
     private var spawnModeResult: SpawnModeResult? = null
     private val playerMaps = ConcurrentHashMap<UUID, MutableSet<String>>()
+    private var supplyDropScheduler: SupplyDropScheduler? = null
+    private var legendaryChestRenderer: LegendaryChestRenderer? = null
+    private val killstreakDropsFired = ConcurrentHashMap<UUID, MutableSet<Int>>()
+    private val downedRuntime = DownedPlayerRuntime()
+    private val downedController = DownedPlayerController(
+        config = season.team,
+        onFinalEliminate = ::onDownedFinalEliminate,
+        onRevived = ::onDownedRevived,
+    )
+    private val downedReviveListener = DownedReviveListener(
+        controller = downedController,
+        tracker = tracker,
+        config = season.team,
+    )
+    private val teamHud = TeamHudController(
+        tracker = tracker,
+        downed = downedController,
+        config = season.team,
+    )
+    private val teamDamageMarker = TeamDamageMarker(tracker = tracker, config = season.team)
+    private val respawnBeacon = RespawnBeacon(
+        tracker = tracker,
+        config = season.team,
+        resolveRespawnPos = { reviver -> reviver.position },
+        respawnCallback = { revived, reviver -> onBeaconRespawn(revived, reviver) },
+        broadcast = { componentFactory -> broadcastAll { p -> p.sendMessage(componentFactory(p)) } },
+    )
 
     init {
         if (season.goldenHead.enabled) GoldenHeadManager.configure(season.goldenHead)
@@ -135,10 +191,10 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
 
     override fun buildLobbyHotbar(): Hotbar = hotbar("br-lobby") {
         slot(3, itemStack(Material.BOOK) {
-            name("<green><bold>Kit Selector")
+            name("<green><bold>Loadout")
             clean()
         }) { player ->
-            BattleRoyaleKitManager.openKitMenu(player)
+            LoadoutMenu.open(player, "battleroyale")
         }
         slot(5, itemStack(Material.PAPER) {
             name("<yellow>Vote on Settings <gray>(Right Click)")
@@ -146,6 +202,35 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
         }) { player ->
             BattleRoyaleVoteManager.openCategoryMenu(player)
         }
+        configuredSlot(7, autofillItem(enabled = true)) {
+            id("br_autofill_toggle")
+            dynamicItem { player -> autofillItem(enabled = autofillOn(player.uuid)) }
+            sound(SoundEvent.UI_BUTTON_CLICK)
+            onClick { player -> toggleAutofill(player) }
+        }
+    }
+
+    private fun autofillOn(uuid: UUID): Boolean =
+        PreferenceStore.load(uuid)?.autofillEnabled ?: true
+
+    private fun autofillItem(enabled: Boolean): ItemStack = itemStack(
+        if (enabled) Material.LIME_CONCRETE else Material.RED_CONCRETE
+    ) {
+        name(if (enabled) "<green><bold>Autofill: ON" else "<red><bold>Autofill: OFF")
+        lore(if (enabled) "<gray>You'll be matched with others to complete a team." else "<gray>You'll queue alone.")
+        lore("<dark_gray>Click to toggle")
+        clean()
+    }
+
+    private fun toggleAutofill(player: Player) {
+        val newValue = PreferenceStore.executeOnKey(
+            player.uuid, TogglePreferenceProcessor("autofillEnabled"),
+        )
+        lobbyLifecycleInternal.currentHotbar?.refreshSlot(player, 7)
+        player.sendMessage(player.translate(
+            if (newValue) Keys.Orbit.Game.Br.Autofill.EnabledChat
+            else Keys.Orbit.Game.Br.Autofill.DisabledChat,
+        ))
     }
 
     private val votedValues = ConcurrentHashMap<String, Int>()
@@ -170,67 +255,91 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
 
         if (season.goldenHead.enabled) GoldenHeadManager.install()
         LegendaryListener.install()
-
-        worldBorder = gameInstance.managedWorldBorder {
-            diameter(season.border.initialDiameter)
-            center(season.border.centerX, season.border.centerZ)
+        if (season.team.enabled && season.team.reviveEnabled) downedReviveListener.install()
+        if (season.team.enabled && season.team.respawnBeaconEnabled) {
+            respawnBeacon.install()
+            ChestLootManager.configureStackDecorator { stack -> respawnBeacon.decorate(stack) }
         }
+
+        zoneController.attach(
+            driver = ManagedZoneBorderDriver(gameInstance),
+            initialDiameter = season.border.initialDiameter,
+            centerX = season.border.centerX,
+            centerZ = season.border.centerZ,
+            initialDamagePerSecond = season.borderDamagePerSecond,
+        )
+        zoneHudOverlay.install()
 
         val mapRadius = generatedMap?.mapRadius ?: (season.border.initialDiameter / 2).toInt()
         val spawnComponent = activeVariant?.find<GameComponent.Spawn>()
-        val spawnConfig = season.spawnMode
-        val result = if (spawnComponent != null) {
-            val provider = SpawnModeRegistry.resolve(spawnComponent.spawnModeId)
-                ?: error("Unknown spawn mode id: ${spawnComponent.spawnModeId}")
-            provider.execute(
-                config = spawnConfig,
-                players = players,
-                instance = gameInstance,
-                center = spawnPoint,
-                mapRadius = mapRadius,
-                onPlayerReady = { player, pos ->
-                    player.teleport(pos)
-                    player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
-                    applyVotedHealth(player)
-                    BattleRoyaleKitManager.resolveKit(player).apply(player)
-                },
-                onComplete = { spawnBlocking = false },
-            )
-        } else {
-            SpawnModeExecutor.execute(
-                config = spawnConfig,
-                players = players,
-                instance = gameInstance,
-                center = spawnPoint,
-                mapRadius = mapRadius,
-                onPlayerReady = { player, pos ->
-                    player.teleport(pos)
-                    player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
-                    applyVotedHealth(player)
-                    BattleRoyaleKitManager.resolveKit(player).apply(player)
-                },
-                onBusComplete = { spawnBlocking = false },
-            )
-        }
+        val providerId = spawnComponent?.spawnModeId ?: "battle_royale_bus"
+        val provider = SpawnModeRegistry.resolve(providerId)
+            ?: error("Unknown spawn mode id: $providerId")
+        val result = provider.execute(SpawnContext(
+            config = season.spawnMode,
+            players = players,
+            instance = gameInstance,
+            center = spawnPoint,
+            mapRadius = mapRadius,
+            onPlayerReady = { player, pos ->
+                player.teleport(pos)
+                player.gameMode = net.minestom.server.entity.GameMode.SURVIVAL
+                applyVotedHealth(player)
+                BattleRoyaleKitManager.resolveKit(player).apply(player)
+            },
+            onComplete = null,
+            random = kotlin.random.Random(gameStartTime.coerceAtLeast(1L)),
+            teamOf = { uuid -> tracker.teamOf(uuid) },
+            onImmunityGrant = { uuid, pos -> spawnImmunity.grant(uuid, pos) },
+        ))
 
         spawnModeResult = result
-        spawnBlocking = result.pvpBlocked
+        for (p in players) loadoutDelivery.scheduleForPlayer(p)
+
+        val airdropTable = season.airdropTable?.let { ChestLootManager[it] }
+        if (airdropTable != null) {
+            supplyDropScheduler = SupplyDropScheduler(
+                instance = gameInstance,
+                events = events,
+                defaultTable = airdropTable,
+                config = season.supplyDropSchedule,
+            )
+        }
+        legendaryChestRenderer = LegendaryChestRenderer(gameInstance).also { it.install() }
     }
 
     override fun variantPool(): GameVariantPool = BattleRoyaleVariants.POOL
 
     override fun onPlayingStart() {
         brDeathRecapTracker.gameStartTime = System.currentTimeMillis()
-        variantController.runAuxiliarySteps(buildBorderSteps(season, borderSpeedMultiplier()))
+        loadoutDelivery.start()
+        supplyDropScheduler?.install()
+        if (!variantDeclaresBorderShrinks()) {
+            variantController.runAuxiliarySteps(buildBorderSteps(season, borderSpeedMultiplier()))
+        }
+
+        downedTask = repeat(1) {
+            if (phase != GamePhase.PLAYING) return@repeat
+            downedReviveListener.tickRevives()
+            downedController.tick()
+        }
 
         borderDamageTask = repeat(20) {
             if (phase != GamePhase.PLAYING) return@repeat
-            val border = worldBorder ?: return@repeat
+            zoneController.tick(System.currentTimeMillis())
+            updateDownedActionBars()
+            teamHud.tick()
+            val damage = zoneController.currentDamage
+            if (damage <= 0f) return@repeat
             for (uuid in tracker.alive.toSet()) {
                 val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
-                if (border.isOutside(player.position)) {
-                    player.damage(DamageType.OUT_OF_WORLD, currentBorderDamage)
+                if (zoneController.isOutside(player.position)) {
+                    player.damage(DamageType.OUT_OF_WORLD, damage)
                 }
+            }
+            for (uuid in spawnImmunity.activeUuids()) {
+                val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
+                spawnImmunity.checkMovement(uuid, player.position)
             }
         }
 
@@ -272,15 +381,60 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
             ))
         }
 
+        maybeBroadcastTeamWipe(player, killerName)
+        teamHud.onPlayerRemoved(player.uuid)
+
         if (season.deathmatch.enabled && !deathmatchActive && tracker.aliveCount <= season.deathmatch.triggerAtPlayers) {
             startDeathmatch()
         }
     }
 
+    private fun maybeBroadcastTeamWipe(victim: Player, killerName: String) {
+        val teamCfg = season.team
+        if (!teamCfg.enabled || teamCfg.teamSize <= 1) return
+        val team = tracker.teamOf(victim.uuid) ?: return
+        if (!tracker.isTeamEliminated(team)) return
+        broadcastAll { p ->
+            p.sendMessage(p.translate(
+                Keys.Orbit.Killfeed.TeamWipe,
+                "team" to team,
+                "killer" to killerName,
+            ))
+        }
+    }
+
+    override fun onKillStreak(player: Player, streak: Int) {
+        val config = season.killstreakAirdrop
+        if (!config.enabled) return
+        val rarity = config.milestones[streak] ?: return
+        val alreadyFired = killstreakDropsFired.computeIfAbsent(player.uuid) { ConcurrentHashMap.newKeySet() }
+        if (!alreadyFired.add(streak)) return
+        val scheduler = supplyDropScheduler ?: return
+        val table = season.killstreakTable?.let { ChestLootManager[it] } ?: return
+        scheduler.launchPersonalDrop(player.position, rarity, table)
+        broadcastAll { p ->
+            p.sendMessage(p.translate(
+                Keys.Orbit.Game.Br.Killstreak.DropIncoming,
+                "player" to player.displayUsername,
+                "streak" to streak.toString(),
+                "rarity" to rarity.displayLabel,
+            ))
+        }
+    }
+
     override fun onPlayerDamaged(victim: Player, attacker: Player?, amount: Float, event: EntityDamageEvent): Boolean {
         if (!rules[Rules.DAMAGE_ENABLED]) return false
-        if (spawnBlocking && attacker != null) return false
+        if (attacker != null && spawnImmunity.isImmune(victim.uuid)) {
+            spawnImmunity.onDamageTaken(victim.uuid)
+            return false
+        }
         if (attacker != null && !rules[Rules.PVP_ENABLED]) return false
+
+        if (downedController.isDowned(victim.uuid)) {
+            event.isCancelled = true
+            downedController.absorbDamage(victim.uuid, amount.toInt().coerceAtLeast(1))
+            return false
+        }
 
         if (attacker != null && attacker.uuid != victim.uuid) {
             victim.setTag(lastAttackerTag, attacker.uuid)
@@ -296,11 +450,84 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
             distance = attacker?.let { it.position.distance(victim.position) },
         ))
 
+        teamDamageMarker.flash(victim)
+
         if (victim.health - amount <= 0) {
             return killPipeline.handleLethal(victim, attacker, amount, event)
         }
 
         return true
+    }
+
+    internal fun tryKnock(victim: Player, attacker: Player?): Boolean {
+        val teamCfg = season.team
+        if (!teamCfg.enabled || !teamCfg.reviveEnabled) return false
+        if (downedController.isDowned(victim.uuid)) return false
+        val team = tracker.teamOf(victim.uuid) ?: return false
+        val aliveMates = tracker.aliveInTeam(team).count { it != victim.uuid }
+        if (aliveMates == 0) return false
+        val knock = downedController.knock(victim.uuid, attacker?.uuid)
+        if (knock.isFailure) return false
+        downedRuntime.applyDownedState(victim)
+        val attackerName = attacker?.displayUsername ?: "?"
+        broadcastAll { p ->
+            p.sendMessage(p.translate(
+                Keys.Orbit.Game.Br.Downed.KnockedBroadcast,
+                "victim" to victim.displayUsername,
+                "attacker" to attackerName,
+            ))
+        }
+        events.publish(GameEvent.PlayerKnocked(victim, attacker))
+        return true
+    }
+
+    private fun onDownedFinalEliminate(uuid: UUID, reason: FinalReason) {
+        val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: return
+        downedRuntime.clearDownedState(player, restoreHealth = false)
+        if (reason == FinalReason.BLEEDOUT) {
+            broadcastAll { p ->
+                p.sendMessage(p.translate(
+                    Keys.Orbit.Game.Br.Downed.BledOutBroadcast,
+                    "victim" to player.displayUsername,
+                ))
+            }
+            events.publish(GameEvent.PlayerBledOut(player))
+        }
+        eliminate(player)
+    }
+
+    private fun onBeaconRespawn(revived: Player, reviver: Player) {
+        revive(revived, reviver.position)
+        revived.health = revived.getAttributeValue(Attribute.MAX_HEALTH).toFloat()
+        events.publish(GameEvent.PlayerRespawned(revived))
+    }
+
+    private fun onDownedRevived(reviverUuid: UUID, revivedUuid: UUID) {
+        val reviver = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(reviverUuid) ?: return
+        val revived = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(revivedUuid) ?: return
+        downedRuntime.clearDownedState(revived, restoreHealth = true)
+        downedReviveListener.onRevived(reviverUuid)
+        broadcastAll { p ->
+            p.sendMessage(p.translate(
+                Keys.Orbit.Game.Br.Downed.RevivedBroadcast,
+                "revived" to revived.displayUsername,
+                "reviver" to reviver.displayUsername,
+            ))
+        }
+        events.publish(GameEvent.PlayerRevived(revived, reviver))
+    }
+
+    private fun updateDownedActionBars() {
+        if (downedController.activeCount() == 0) return
+        val now = System.currentTimeMillis()
+        for (uuid in downedController.activeUuids()) {
+            val player = MinecraftServer.getConnectionManager().getOnlinePlayerByUuid(uuid) ?: continue
+            val remaining = downedController.bleedoutRemainingSeconds(uuid, now)
+            player.sendActionBar(player.translate(
+                Keys.Orbit.Game.Br.Downed.SelfSubtitle,
+                "seconds" to remaining.toString(),
+            ))
+        }
     }
 
     internal fun resolveKillerForVictim(victim: Player): UUID? = resolveKiller(victim)
@@ -318,15 +545,31 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
     override fun onGameReset() {
         borderDamageTask?.cancel()
         borderDamageTask = null
-        worldBorder?.setDiameter(season.border.initialDiameter)
-        worldBorder = null
+        downedTask?.cancel()
+        downedTask = null
+        downedReviveListener.uninstall()
+        respawnBeacon.uninstall()
+        ChestLootManager.configureStackDecorator(null)
+        zoneController.end()
+        zoneHudOverlay.uninstall()
+        zoneController.reset()
+        loadoutDelivery.shutdown()
         StatTracker.clear()
         brDeathRecapTracker.clear()
         deathmatchActive = false
-        spawnBlocking = false
+        spawnImmunity.releaseAll()
         spawnModeResult?.let { SpawnModeExecutor.cleanup(it) }
         spawnModeResult = null
-        currentBorderDamage = season.borderDamagePerSecond
+        supplyDropScheduler?.uninstall()
+        supplyDropScheduler = null
+        legendaryChestRenderer?.uninstall()
+        legendaryChestRenderer = null
+        killstreakDropsFired.clear()
+        downedController.clearAll()
+        downedRuntime.clearAll()
+        teamHud.clear()
+        teamDamageMarker.clear()
+        ChestLootManager.resetChests()
 
         ChestLootManager.clear()
         LegendaryListener.uninstall()
@@ -536,12 +779,15 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
     }
 
     override fun shrinkBorderTo(diameter: Double, durationSeconds: Double) {
-        if (!rules[Rules.ZONE_SHRINKING]) return
-        worldBorder?.shrinkTo(diameter, durationSeconds)
+        zoneController.shrinkBorderTo(diameter, durationSeconds)
+    }
+
+    override fun planZoneShrink(targetDiameter: Double, durationSeconds: Double, announceLeadSeconds: Double) {
+        zoneController.planShrink(targetDiameter, durationSeconds, announceLeadSeconds)
     }
 
     override fun setBorderDamage(damagePerSecond: Double) {
-        currentBorderDamage = damagePerSecond.toFloat()
+        zoneController.setBorderDamage(damagePerSecond)
     }
 
     override fun startDeathmatch() {
@@ -559,7 +805,10 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
             }
         }
 
-        worldBorder?.shrinkTo(season.deathmatch.borderDiameter, season.deathmatch.borderShrinkSeconds.toDouble())
+        zoneController.shrinkForDeathmatch(
+            season.deathmatch.borderDiameter,
+            season.deathmatch.borderShrinkSeconds.toDouble(),
+        )
     }
 
     private fun scheduleDeathmatchCheck() {
@@ -576,6 +825,11 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
             player.getAttribute(Attribute.MAX_HEALTH).baseValue = health.toDouble()
             player.health = health.toFloat()
         }
+    }
+
+    private fun variantDeclaresBorderShrinks(): Boolean {
+        val script = activeVariant?.find<GameComponent.Script>() ?: return false
+        return script.steps.any { step -> step.actions.any { it is ShrinkBorder } }
     }
 
     private fun borderSpeedMultiplier(): Double = when (votedValues["border"] ?: 1) {

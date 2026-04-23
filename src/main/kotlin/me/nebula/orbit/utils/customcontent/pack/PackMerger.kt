@@ -6,6 +6,9 @@ import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
+import me.nebula.orbit.utils.customcontent.furniture.BlockbenchColliderParser
+import me.nebula.orbit.utils.customcontent.furniture.FurnitureJsonLoader
+import me.nebula.orbit.utils.customcontent.furniture.FurnitureRegistry
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.modelengine.generator.BbDisplaySlot
 import me.nebula.orbit.utils.modelengine.generator.BlockbenchParser
@@ -69,9 +72,18 @@ object PackMerger {
         val customItemModels = mutableMapOf<String, GeneratedBoneModel>()
         val customItemTextures = mutableMapOf<String, ByteArray>()
 
+        val furnitureItemIds = FurnitureRegistry.all().map { it.itemId }.toSet()
+
         CustomItemRegistry.all().forEach { item ->
+            if (item.id in furnitureItemIds) return@forEach
             processCustomContentModel(resources, item.id, item.modelPath, modelsDirectory,
                 customItemModels, customItemTextures)
+        }
+
+        val furnitureModels = mutableMapOf<String, GeneratedBoneModel>()
+        val furnitureTextures = mutableMapOf<String, ByteArray>()
+        FurnitureRegistry.all().forEach { def ->
+            processFurnitureModel(resources, def.id, furnitureModels, furnitureTextures)
         }
 
         val customBlockModels = mutableMapOf<String, GeneratedBoneModel>()
@@ -94,6 +106,13 @@ object PackMerger {
         }
         customBlockModels.forEach { (id, model) ->
             entries["assets/minecraft/models/customcontent/blocks/$id.json"] = buildModelJson(model)
+        }
+
+        furnitureTextures.forEach { (path, bytes) ->
+            entries["assets/minecraft/textures/customcontent/$path"] = bytes
+        }
+        furnitureModels.forEach { (id, model) ->
+            entries["assets/minecraft/models/customcontent/furniture/$id.json"] = buildModelJson(model)
         }
 
         val itemOverrides = collectItemOverrides()
@@ -178,6 +197,24 @@ object PackMerger {
         )
     }
 
+    private fun processFurnitureModel(
+        resources: ResourceManager,
+        id: String,
+        modelOutput: MutableMap<String, GeneratedBoneModel>,
+        textureOutput: MutableMap<String, ByteArray>,
+    ) {
+        val filePath = "customcontent/furniture/$id.bbmodel"
+        if (!resources.exists(filePath)) {
+            logger.warn { "Furniture '$id' has no .bbmodel at $filePath — skipping model emission" }
+            return
+        }
+        val model = resources.reader(filePath).use { BlockbenchParser.parse(id, it) }
+        val excluded = BlockbenchColliderParser.elementUuidsUnderColliderBones(model, FurnitureJsonLoader.DEFAULT_COLLIDER_PREFIX)
+        val (boneModel, atlasBytes) = ModelGenerator.buildFlatModel(model, elementFilter = { it.uuid !in excluded })
+        modelOutput[id] = boneModel
+        textureOutput["${id}_atlas.png"] = atlasBytes
+    }
+
     private fun processCustomContentModel(
         resources: ResourceManager,
         id: String,
@@ -199,13 +236,17 @@ object PackMerger {
 
     private fun collectItemOverrides(): Map<Material, List<ItemModelOverrideWriter.OverrideEntry>> {
         val overrides = mutableMapOf<Material, MutableList<ItemModelOverrideWriter.OverrideEntry>>()
+        val furnitureItemIds = FurnitureRegistry.all().associateBy { it.itemId }
 
         CustomItemRegistry.all().forEach { item ->
+            val furniture = furnitureItemIds[item.id]
+            val modelPath = if (furniture != null) {
+                "customcontent/furniture/${furniture.id}"
+            } else {
+                "customcontent/items/${item.id}"
+            }
             overrides.getOrPut(item.baseMaterial) { mutableListOf() }
-                .add(ItemModelOverrideWriter.OverrideEntry(
-                    item.customModelDataId,
-                    "customcontent/items/${item.id}",
-                ))
+                .add(ItemModelOverrideWriter.OverrideEntry(item.customModelDataId, modelPath))
         }
 
         CustomBlockRegistry.all().forEach { block ->

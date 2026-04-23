@@ -1,11 +1,21 @@
 package me.nebula.orbit.mode.game.battleroyale.script
 
+import me.nebula.orbit.mode.game.battleroyale.zone.ZoneShrinkController
 import me.nebula.orbit.script.GameContext
 import me.nebula.orbit.script.ScriptAction
 
-data class ShrinkBorder(val diameter: Double, val durationSeconds: Double) : ScriptAction {
+data class ShrinkBorder(
+    val diameter: Double,
+    val durationSeconds: Double,
+    val announceLeadSeconds: Double = 0.0,
+) : ScriptAction {
     override fun execute(ctx: GameContext) {
-        (ctx.gameMode as? BorderController)?.shrinkBorderTo(diameter, durationSeconds)
+        val mode = ctx.gameMode
+        if (announceLeadSeconds > 0.0 && mode is ZoneShrinkController) {
+            mode.planZoneShrink(diameter, durationSeconds, announceLeadSeconds)
+            return
+        }
+        (mode as? BorderController)?.shrinkBorderTo(diameter, durationSeconds)
     }
 }
 

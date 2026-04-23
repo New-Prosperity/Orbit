@@ -6,10 +6,12 @@ import me.nebula.orbit.mode.config.LobbyConfig
 import me.nebula.orbit.mode.game.TimingConfig
 import me.nebula.orbit.mode.game.battleroyale.DeathmatchConfig
 import me.nebula.orbit.mode.game.battleroyale.GoldenHeadConfig
+import me.nebula.orbit.mode.game.battleroyale.KillstreakAirdropConfig
 import me.nebula.orbit.mode.game.battleroyale.Season
-import me.nebula.orbit.mode.game.battleroyale.SpawnMode
 import me.nebula.orbit.mode.game.battleroyale.SpawnModeConfig
 import me.nebula.orbit.mode.game.battleroyale.season
+import me.nebula.orbit.utils.chestloot.LootRarity
+import me.nebula.orbit.utils.supplydrop.SupplyDropScheduleConfig
 
 fun season1(): Season = season(1) {
     xp("kill" to 50L, "win" to 200L, "survival" to 25L)
@@ -171,9 +173,9 @@ fun season1(): Season = season(1) {
         name("orbit.game.br.vote.category.duration")
         icon("minecraft:clock")
         default(1)
-        option("orbit.game.br.vote.duration.short", "minecraft:clock", 600)
-        option("orbit.game.br.vote.duration.normal", "minecraft:clock", 900)
-        option("orbit.game.br.vote.duration.long", "minecraft:clock", 1200)
+        option("orbit.game.br.vote.duration.short", "minecraft:clock", 2700)
+        option("orbit.game.br.vote.duration.normal", "minecraft:clock", 3300)
+        option("orbit.game.br.vote.duration.long", "minecraft:clock", 3900)
     }
 
     vote("health") {
@@ -220,7 +222,7 @@ fun season1(): Season = season(1) {
 
     timing(TimingConfig(
         countdownSeconds = 15,
-        gameDurationSeconds = 900,
+        gameDurationSeconds = 3300,
         endingDurationSeconds = 10,
         gracePeriodSeconds = 30,
         minPlayers = 2,
@@ -239,12 +241,15 @@ fun season1(): Season = season(1) {
         shrinkDuration = 300,
     )
 
-    borderPhase(startAfter = 120, targetDiameter = 300.0, shrinkDuration = 60, damage = 1f)
-    borderPhase(startAfter = 300, targetDiameter = 150.0, shrinkDuration = 60, damage = 2f)
-    borderPhase(startAfter = 480, targetDiameter = 50.0, shrinkDuration = 60, damage = 3f)
+    borderPhase(startAfter = 1980, targetDiameter = 350.0, shrinkDuration = 180, damage = 1f, announceLead = 180)
+    borderPhase(startAfter = 2340, targetDiameter = 200.0, shrinkDuration = 150, damage = 2f, announceLead = 120)
+    borderPhase(startAfter = 2610, targetDiameter = 120.0, shrinkDuration = 90, damage = 3f, announceLead = 90)
+    borderPhase(startAfter = 2820, targetDiameter = 60.0, shrinkDuration = 60, damage = 5f, announceLead = 60)
+    borderPhase(startAfter = 2970, targetDiameter = 30.0, shrinkDuration = 45, damage = 8f, announceLead = 45)
+    borderPhase(startAfter = 3090, targetDiameter = 10.0, shrinkDuration = 30, damage = 10f, announceLead = 30)
+    borderPhase(startAfter = 3180, targetDiameter = 5.0, shrinkDuration = 30, damage = 10f, announceLead = 30)
 
     spawnMode(SpawnModeConfig(
-        mode = SpawnMode.BATTLE_ROYALE,
         ringRadius = 80.0,
         extendedRingRadius = 200.0,
         busHeight = 150.0,
@@ -282,4 +287,29 @@ fun season1(): Season = season(1) {
 
     mapPreset("perfect")
     lobbyWorld("worlds/lobby")
+
+    registerLootTable(buildStandardChest())
+    registerLootTable(buildAirdropChest())
+    registerLootTable(buildKillstreakChest())
+
+    airdropTable("br_chest_airdrop")
+    killstreakTable("br_chest_killstreak")
+
+    supplyDropSchedule(SupplyDropScheduleConfig(
+        enabled = true,
+        firstPhase = 2,
+        dropAltitudeOffset = 90.0,
+        fallSpeed = 0.6,
+        announceRadius = 300.0,
+        chestDurationTicks = 900,
+    ))
+
+    killstreakAirdrop(KillstreakAirdropConfig(
+        enabled = true,
+        milestones = mapOf(
+            3 to LootRarity.RARE,
+            5 to LootRarity.EPIC,
+            10 to LootRarity.LEGENDARY,
+        ),
+    ))
 }

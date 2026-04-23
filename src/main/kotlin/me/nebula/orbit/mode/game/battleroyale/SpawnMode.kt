@@ -1,6 +1,7 @@
 package me.nebula.orbit.mode.game.battleroyale
 
 import me.nebula.ether.utils.logging.logger
+import me.nebula.orbit.mode.game.battleroyale.spawn.SpawnContext
 import me.nebula.orbit.utils.chat.miniMessage
 import me.nebula.orbit.utils.entitymount.EntityMountManager
 import me.nebula.orbit.utils.particle.spawnParticle
@@ -24,21 +25,13 @@ import net.minestom.server.potion.PotionEffect
 import net.minestom.server.timer.Task
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ThreadLocalRandom
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
-
-enum class SpawnMode {
-    HUNGER_GAMES,
-    EXTENDED_HUNGER_GAMES,
-    RANDOM,
-    BATTLE_ROYALE,
-}
+import kotlin.random.Random
 
 data class SpawnModeConfig(
-    val mode: SpawnMode = SpawnMode.HUNGER_GAMES,
     val ringRadius: Double = 80.0,
     val extendedRingRadius: Double = 200.0,
     val busHeight: Double = 150.0,
@@ -52,6 +45,11 @@ data class SpawnModeConfig(
     val spawnProtectionTicks: Int = 0,
     val busEjectArmTicks: Int = 60,
     val busRoutePreviewSteps: Int = 32,
+    val podHeight: Double = 180.0,
+    val podSpacingRadius: Double = 140.0,
+    val teamClusterSpacing: Double = 4.0,
+    val teamClusterRadius: Double = 160.0,
+    val themedRingFacingInward: Boolean = true,
 )
 
 data class SpawnModeResult(
@@ -60,75 +58,52 @@ data class SpawnModeResult(
     val busTask: Task? = null,
     val dismountNode: EventNode<*>? = null,
     val ejectedPlayers: MutableSet<UUID> = ConcurrentHashMap.newKeySet(),
+    val immunityPlayers: Set<UUID> = emptySet(),
 )
 
 object SpawnModeExecutor {
 
     private val logger = logger("SpawnModeExecutor")
 
-    fun execute(
-        config: SpawnModeConfig,
-        players: List<Player>,
-        instance: Instance,
-        center: Pos,
-        mapRadius: Int,
-        onPlayerReady: (Player, Pos) -> Unit,
-        onBusComplete: (() -> Unit)? = null,
-    ): SpawnModeResult = when (config.mode) {
-        SpawnMode.HUNGER_GAMES -> executeRing(config, config.ringRadius, players, instance, center, mapRadius, onPlayerReady)
-        SpawnMode.EXTENDED_HUNGER_GAMES -> executeRing(config, config.extendedRingRadius, players, instance, center, mapRadius, onPlayerReady)
-        SpawnMode.RANDOM -> executeRandom(config, players, instance, center, mapRadius, onPlayerReady)
-        SpawnMode.BATTLE_ROYALE -> executeBus(config, players, instance, center, mapRadius, onPlayerReady, onBusComplete)
-    }
-
-    private fun executeRing(
-        config: SpawnModeConfig,
-        radius: Double,
-        players: List<Player>,
-        instance: Instance,
-        center: Pos,
-        mapRadius: Int,
-        onPlayerReady: (Player, Pos) -> Unit,
-    ): SpawnModeResult {
+    fun ring(ctx: SpawnContext, radius: Double): SpawnModeResult {
+        val players = ctx.players
         if (players.isEmpty()) return SpawnModeResult(pvpBlocked = false)
-        val effectiveRadius = radius.coerceAtMost(mapRadius - config.edgeMargin)
+        val config = ctx.config
+        val effectiveRadius = radius.coerceAtMost(ctx.mapRadius - config.edgeMargin)
         val angleStep = 2 * Math.PI / players.size
-        val shuffled = players.shuffled()
+        val shuffled = players.shuffled(ctx.random.asJavaRandom())
+        val immunities = mutableSetOf<UUID>()
 
         shuffled.forEachIndexed { index, player ->
             val angle = angleStep * index
-            val x = center.x() + cos(angle) * effectiveRadius
-            val z = center.z() + sin(angle) * effectiveRadius
-            val height = findSurfaceHeight(instance, x.toInt(), z.toInt())
+            val x = ctx.center.x() + cos(angle) * effectiveRadius
+            val z = ctx.center.z() + sin(angle) * effectiveRadius
+            val height = findSurfaceHeight(ctx.instance, x.toInt(), z.toInt())
             val yaw = Math.toDegrees(-angle + Math.PI).toFloat()
             val pos = Pos(x, height + 1.0, z, yaw, 0f)
-            onPlayerReady(player, pos)
+            ctx.onPlayerReady(player, pos)
+            ctx.onImmunityGrant(player.uuid, pos)
+            immunities += player.uuid
         }
 
-        return SpawnModeResult(pvpBlocked = false)
+        return SpawnModeResult(pvpBlocked = false, immunityPlayers = immunities)
     }
 
-    private fun executeRandom(
-        config: SpawnModeConfig,
-        players: List<Player>,
-        instance: Instance,
-        center: Pos,
-        mapRadius: Int,
-        onPlayerReady: (Player, Pos) -> Unit,
-    ): SpawnModeResult {
-        val rng = ThreadLocalRandom.current()
-        val effectiveRadius = mapRadius - config.randomEdgeMargin.toInt()
+    fun random(ctx: SpawnContext): SpawnModeResult {
+        val config = ctx.config
+        val effectiveRadius = ctx.mapRadius - config.randomEdgeMargin.toInt()
         val placed = mutableListOf<Pos>()
-        val shuffled = players.shuffled()
+        val shuffled = ctx.players.shuffled(ctx.random.asJavaRandom())
+        val immunities = mutableSetOf<UUID>()
 
         for (player in shuffled) {
             var pos: Pos? = null
             for (attempt in 0 until config.maxSpawnAttempts) {
-                val angle = rng.nextDouble(2 * Math.PI)
-                val dist = rng.nextDouble(config.randomMinDistance, effectiveRadius.toDouble())
-                val x = center.x() + cos(angle) * dist
-                val z = center.z() + sin(angle) * dist
-                val height = findSurfaceHeight(instance, x.toInt(), z.toInt())
+                val angle = ctx.random.nextDouble() * 2 * Math.PI
+                val dist = config.randomMinDistance + ctx.random.nextDouble() * (effectiveRadius - config.randomMinDistance)
+                val x = ctx.center.x() + cos(angle) * dist
+                val z = ctx.center.z() + sin(angle) * dist
+                val height = findSurfaceHeight(ctx.instance, x.toInt(), z.toInt())
                 if (height < 1) continue
                 val candidate = Pos(x, height + 1.0, z)
                 val tooClose = placed.any { it.distance(candidate) < config.randomMinDistance }
@@ -138,36 +113,30 @@ object SpawnModeExecutor {
                 break
             }
             val spawnPos = pos ?: run {
-                val fallbackAngle = rng.nextDouble(2 * Math.PI)
-                val fallbackDist = rng.nextDouble(config.randomMinDistance, effectiveRadius.toDouble())
-                val x = center.x() + cos(fallbackAngle) * fallbackDist
-                val z = center.z() + sin(fallbackAngle) * fallbackDist
-                val height = findSurfaceHeight(instance, x.toInt(), z.toInt()).coerceAtLeast(config.fallbackSurfaceY)
+                val fallbackAngle = ctx.random.nextDouble() * 2 * Math.PI
+                val fallbackDist = config.randomMinDistance + ctx.random.nextDouble() * (effectiveRadius - config.randomMinDistance)
+                val x = ctx.center.x() + cos(fallbackAngle) * fallbackDist
+                val z = ctx.center.z() + sin(fallbackAngle) * fallbackDist
+                val height = findSurfaceHeight(ctx.instance, x.toInt(), z.toInt()).coerceAtLeast(config.fallbackSurfaceY)
                 Pos(x, height + 1.0, z, Math.toDegrees(-fallbackAngle + Math.PI).toFloat(), 0f)
             }
             placed.add(spawnPos)
-            onPlayerReady(player, spawnPos)
+            ctx.onPlayerReady(player, spawnPos)
+            ctx.onImmunityGrant(player.uuid, spawnPos)
+            immunities += player.uuid
         }
 
-        return SpawnModeResult(pvpBlocked = false)
+        return SpawnModeResult(pvpBlocked = false, immunityPlayers = immunities)
     }
 
-    private fun executeBus(
-        config: SpawnModeConfig,
-        players: List<Player>,
-        instance: Instance,
-        center: Pos,
-        mapRadius: Int,
-        onPlayerReady: (Player, Pos) -> Unit,
-        onBusComplete: (() -> Unit)?,
-    ): SpawnModeResult {
-        val rng = ThreadLocalRandom.current()
-        val angle = rng.nextDouble(2 * Math.PI)
-        val effectiveRadius = mapRadius - config.edgeMargin
-        val startX = center.x() + cos(angle) * effectiveRadius
-        val startZ = center.z() + sin(angle) * effectiveRadius
-        val endX = center.x() - cos(angle) * effectiveRadius
-        val endZ = center.z() - sin(angle) * effectiveRadius
+    fun bus(ctx: SpawnContext): SpawnModeResult {
+        val config = ctx.config
+        val angle = ctx.random.nextDouble() * 2 * Math.PI
+        val effectiveRadius = ctx.mapRadius - config.edgeMargin
+        val startX = ctx.center.x() + cos(angle) * effectiveRadius
+        val startZ = ctx.center.z() + sin(angle) * effectiveRadius
+        val endX = ctx.center.x() - cos(angle) * effectiveRadius
+        val endZ = ctx.center.z() - sin(angle) * effectiveRadius
 
         val busPos = Pos(startX, config.busHeight, startZ)
         val bus = Entity(EntityType.ARMOR_STAND)
@@ -177,13 +146,13 @@ object SpawnModeExecutor {
         meta.isSmall = true
         meta.isHasNoGravity = true
         meta.setNotifyAboutChanges(true)
-        bus.setInstance(instance, busPos).join()
+        bus.setInstance(ctx.instance, busPos).join()
 
         val ejected = mutableSetOf<UUID>()
 
-        for (player in players) {
+        for (player in ctx.players) {
             EntityMountManager.mount(player, bus)
-            onPlayerReady(player, busPos)
+            ctx.onPlayerReady(player, busPos)
         }
 
         val dx = endX - startX
@@ -195,7 +164,7 @@ object SpawnModeExecutor {
         var traveled = 0.0
         var tickCount = 0
 
-        drawRoutePreview(instance, startX, startZ, endX, endZ, config)
+        drawRoutePreview(ctx.instance, startX, startZ, endX, endZ, config)
 
         val node = EventNode.all("br-bus-dismount")
         node.addListener(PlayerPacketEvent::class.java) { event ->
@@ -209,6 +178,7 @@ object SpawnModeExecutor {
                 return@addListener
             }
             ejectFromBus(player, config, ejected)
+            ctx.onImmunityGrant(player.uuid, player.position)
         }
         MinecraftServer.getGlobalEventHandler().addChild(node)
 
@@ -216,19 +186,20 @@ object SpawnModeExecutor {
             tickCount++
             traveled += config.busSpeed
             if (traveled >= totalDist) {
-                for (player in players) {
+                for (player in ctx.players) {
                     if (player.uuid !in ejected && EntityMountManager.isMounted(player)) {
                         ejectFromBus(player, config, ejected)
+                        ctx.onImmunityGrant(player.uuid, player.position)
                     }
                 }
                 bus.remove()
-                onBusComplete?.invoke()
+                ctx.onComplete?.invoke()
                 return@repeat
             }
 
-            if (ejected.size >= players.size) {
+            if (ejected.size >= ctx.players.size) {
                 bus.remove()
-                onBusComplete?.invoke()
+                ctx.onComplete?.invoke()
                 return@repeat
             }
 
@@ -243,7 +214,7 @@ object SpawnModeExecutor {
             bus.refreshPosition(newPos)
             bus.velocity = Vec(dirX * ServerFlag.SERVER_TICKS_PER_SECOND, 0.0, dirZ * ServerFlag.SERVER_TICKS_PER_SECOND)
 
-            for (player in players) {
+            for (player in ctx.players) {
                 if (player.uuid !in ejected) {
                     val hint = if (tickCount < config.busEjectArmTicks) {
                         val secondsLeft = ((config.busEjectArmTicks - tickCount) / 20) + 1
@@ -302,7 +273,7 @@ object SpawnModeExecutor {
         result.ejectedPlayers.clear()
     }
 
-    private fun findSurfaceHeight(instance: Instance, x: Int, z: Int): Int {
+    fun findSurfaceHeight(instance: Instance, x: Int, z: Int): Int {
         val dim = instance.cachedDimensionType
         for (y in (dim.maxY() - 1) downTo dim.minY()) {
             val block = instance.getBlock(x, y, z)
@@ -310,4 +281,8 @@ object SpawnModeExecutor {
         }
         return 64
     }
+}
+
+internal fun Random.asJavaRandom(): java.util.Random = object : java.util.Random() {
+    override fun next(bits: Int): Int = this@asJavaRandom.nextBits(bits)
 }

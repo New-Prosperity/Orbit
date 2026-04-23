@@ -15,18 +15,8 @@ internal fun CommandBuilderDsl.installAdminSubcommands() {
     subCommand("fill") {
         subCommand("start") {
             intArgument("targetCount")
-            wordArgument("preset")
-            wordArgument("skillRange")
-            tabComplete { _, input ->
-                val parts = input.trim().split("\\s+".toRegex())
-                when (parts.size) {
-                    4 -> listOf("survival", "combat", "pvp", "miner", "gatherer", "passive")
-                        .filter { it.startsWith(parts.last(), ignoreCase = true) }
-                    5 -> listOf("0.2-0.5", "0.3-0.7", "0.5-0.9", "0.0-1.0")
-                        .filter { it.startsWith(parts.last(), ignoreCase = true) }
-                    else -> emptyList()
-                }
-            }
+            enumArgument("preset", "survival", "combat", "pvp", "miner", "gatherer", "passive")
+            enumArgument("skillRange", "0.2-0.5", "0.3-0.7", "0.5-0.9", "0.0-1.0")
             onPlayerExecute {
                 val gm = orbitGameMode()
                 if (gm == null) {

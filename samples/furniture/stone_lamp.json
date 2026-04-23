@@ -1,0 +1,12 @@
+{
+  "id": "stone_lamp",
+  "item": "stone_lamp",
+  "placeSound": "block.stone.place",
+  "breakSound": "block.stone.break",
+  "scale": 1.0,
+  "visualRotationSnap": 0.0,
+  "collision": "solid",
+  "lightLevel": 15,
+
+  "footprint": { "type": "bones", "prefix": "collider" }
+}

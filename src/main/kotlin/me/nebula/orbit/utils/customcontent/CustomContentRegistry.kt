@@ -23,6 +23,11 @@ import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
 import me.nebula.orbit.utils.customcontent.event.CustomBlockBreakHandler
 import me.nebula.orbit.utils.customcontent.event.CustomBlockInteractHandler
 import me.nebula.orbit.utils.customcontent.event.CustomBlockPlaceHandler
+import me.nebula.orbit.utils.customcontent.furniture.BlockbenchColliderParser
+import me.nebula.orbit.utils.customcontent.furniture.Furniture
+import me.nebula.orbit.utils.customcontent.furniture.FurnitureCollisionPack
+import me.nebula.orbit.utils.customcontent.furniture.FurnitureJsonLoader
+import me.nebula.orbit.utils.customcontent.furniture.FurnitureRegistry
 import me.nebula.orbit.utils.customcontent.item.CustomItem
 import me.nebula.orbit.utils.customcontent.item.CustomItemDefinition
 import me.nebula.orbit.utils.customcontent.item.CustomItemDsl
@@ -30,8 +35,10 @@ import me.nebula.orbit.utils.customcontent.item.CustomItemLoader
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.customcontent.pack.PackMerger
 import me.nebula.orbit.utils.customcontent.pack.SpriteItemPack
+import net.minestom.server.item.Material
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.tablist.NegativeSpaceFont
+import me.nebula.orbit.utils.modelengine.generator.BlockbenchParser
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.generator.ModelIdRegistry
 import net.minestom.server.event.Event
@@ -50,6 +57,7 @@ object CustomContentRegistry {
     private const val BLOCKS_DIR = "$BASE_DIR/blocks"
     private const val ARMORS_DIR = "$BASE_DIR/armors"
     private const val SPRITES_DIR = "$BASE_DIR/sprites"
+    private const val FURNITURE_DIR = "$BASE_DIR/furniture"
 
     val packBytes: ByteArray? get() = mergeResult?.packBytes
     val packSha1: String? get() = mergeResult?.sha1
@@ -63,6 +71,7 @@ object CustomContentRegistry {
         resources.ensureDirectory(BLOCKS_DIR)
         resources.ensureDirectory(ARMORS_DIR)
         resources.ensureDirectory(SPRITES_DIR)
+        resources.ensureDirectory(FURNITURE_DIR)
 
         loadSprites()
 
@@ -76,8 +85,9 @@ object CustomContentRegistry {
         blockDefs.forEach { def -> registerBlock(def) }
 
         CustomArmorRegistry.loadFromResources(resources, ARMORS_DIR)
+        loadFurniture()
 
-        if (!CustomItemRegistry.isEmpty() || !CustomBlockRegistry.isEmpty() || !CustomArmorRegistry.isEmpty()) {
+        if (!CustomItemRegistry.isEmpty() || !CustomBlockRegistry.isEmpty() || !CustomArmorRegistry.isEmpty() || !FurnitureRegistry.isEmpty()) {
             CustomBlockPlaceHandler.install(eventNode)
             CustomBlockBreakHandler.install(eventNode)
             CustomBlockInteractHandler.install(eventNode)
@@ -85,9 +95,49 @@ object CustomContentRegistry {
             logger.info {
                 "Registered ${CustomItemRegistry.all().size} custom items, " +
                     "${CustomBlockRegistry.all().size} custom blocks, " +
-                    "${CustomArmorRegistry.all().size} custom armors"
+                    "${CustomArmorRegistry.all().size} custom armors, " +
+                    "${FurnitureRegistry.all().size} furniture definitions"
             }
         }
+
+        if (!FurnitureRegistry.isEmpty()) {
+            Furniture.install()
+        }
+    }
+
+    private fun loadFurniture() {
+        val parsed = runCatching { FurnitureJsonLoader.loadAll(resources, FURNITURE_DIR) }
+            .onFailure { logger.warn { "Failed to load furniture definitions: ${it.message}" } }
+            .getOrDefault(emptyList())
+        for (entry in parsed) {
+            val itemId = entry.definition.itemId
+            if (CustomItemRegistry[itemId] == null) {
+                val autoItem = CustomItemDefinition(
+                    id = itemId,
+                    baseMaterial = Material.PAPER,
+                    displayName = entry.definition.id,
+                    lore = emptyList(),
+                    unbreakable = false,
+                    glowing = false,
+                    maxStackSize = 64,
+                    modelPath = "furniture/${entry.definition.id}.json",
+                )
+                registerItem(autoItem)
+            }
+            runCatching { FurnitureRegistry.register(entry.definition) }
+                .onFailure { logger.warn { "Failed to register furniture '${entry.definition.id}': ${it.message}" } }
+            runCatching { registerFurnitureBlueprint(entry) }
+                .onFailure { logger.warn { "Failed to register ModelEngine blueprint for furniture '${entry.definition.id}': ${it.message}" } }
+        }
+    }
+
+    private fun registerFurnitureBlueprint(entry: FurnitureJsonLoader.ParsedFurniture) {
+        val bbmodelPath = entry.bbmodelPath ?: return
+        val rawModel = resources.reader(bbmodelPath).use { BlockbenchParser.parse(entry.definition.id, it) }
+        val stripped = BlockbenchColliderParser.stripColliders(rawModel, FurnitureJsonLoader.DEFAULT_COLLIDER_PREFIX)
+        val raw = ModelGenerator.generateRaw(stripped)
+        ModelEngine.registerRaw(raw.blueprint.name, raw)
+        logger.info { "Registered ModelEngine blueprint for furniture '${entry.definition.id}' (${raw.boneModels.size} bones)" }
     }
 
     fun registerItem(def: CustomItemDefinition): CustomItem {
@@ -135,6 +185,7 @@ object CustomContentRegistry {
         CustomItemRegistry.clear()
         CustomBlockRegistry.clear()
         CustomArmorRegistry.clear()
+        FurnitureRegistry.clear()
 
         val itemDefs = CustomItemLoader.loadAll(resources, ITEMS_DIR)
         val blockDefs = CustomBlockLoader.loadAll(resources, BLOCKS_DIR)
@@ -143,11 +194,13 @@ object CustomContentRegistry {
         blockDefs.forEach { def -> registerBlock(def) }
 
         CustomArmorRegistry.loadFromResources(resources, ARMORS_DIR)
+        loadFurniture()
 
         logger.info {
             "Reloaded ${CustomItemRegistry.all().size} custom items, " +
                 "${CustomBlockRegistry.all().size} custom blocks, " +
-                "${CustomArmorRegistry.all().size} custom armors"
+                "${CustomArmorRegistry.all().size} custom armors, " +
+                "${FurnitureRegistry.all().size} furniture definitions"
         }
 
         mergePack()
@@ -211,7 +264,12 @@ object CustomContentRegistry {
 
         val playerSkinEntries = PlayerSkinPack.generate()
 
-        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries + tabListOverrides + spriteItemEntries + playerSkinEntries
+        val furnitureCollisionEntries = FurnitureCollisionPack.generate()
+        if (furnitureCollisionEntries.isNotEmpty()) {
+            logger.info { "Generated furniture collision pack: ${furnitureCollisionEntries.size} entries" }
+        }
+
+        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries + tabListOverrides + spriteItemEntries + playerSkinEntries + furnitureCollisionEntries
         val result = PackMerger.merge(resources, MODELS_DIR, allRaw, allShaderEntries)
         mergeResult = result
 

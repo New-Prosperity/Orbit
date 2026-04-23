@@ -5,10 +5,12 @@ import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.orbit.utils.commandbuilder.customContentArgument
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
 import me.nebula.orbit.utils.customcontent.block.BlockHitbox
 import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
+import me.nebula.orbit.utils.customcontent.furniture.installFurnitureSubcommands
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.customcontent.pack.PackUploader
 import net.minestom.server.command.builder.Command
@@ -19,6 +21,8 @@ import me.nebula.ether.utils.translation.asTranslationKey
 
 fun customContentCommand(resources: ResourceManager): Command = command("cc") {
     permission("orbit.customcontent")
+
+    installFurnitureSubcommands()
 
     subCommand("items") {
         onPlayerExecute {
@@ -59,11 +63,8 @@ fun customContentCommand(resources: ResourceManager): Command = command("cc") {
 
     subCommand("give") {
         stringArrayArgument("args")
-        tabComplete { _, input ->
-            val tokens = input.split(" ")
-            if (tokens.size <= 1) {
-                CustomItemRegistry.all().map { it.id }.filter { it.startsWith(tokens[0], ignoreCase = true) }
-            } else emptyList()
+        tabComplete { _, partial ->
+            CustomItemRegistry.all().map { it.id }.filter { it.startsWith(partial, ignoreCase = true) }
         }
         onPlayerExecute {
             @Suppress("UNCHECKED_CAST")
@@ -86,12 +87,7 @@ fun customContentCommand(resources: ResourceManager): Command = command("cc") {
     }
 
     subCommand("info") {
-        wordArgument("id")
-        tabComplete { _, input ->
-            val itemIds = CustomItemRegistry.all().map { it.id }
-            val blockIds = CustomBlockRegistry.all().map { it.id }
-            (itemIds + blockIds).filter { it.startsWith(input, ignoreCase = true) }
-        }
+        customContentArgument("id")
         onPlayerExecute {
             val id: String? = args.get("id")
             if (id == null) {
@@ -152,13 +148,10 @@ fun customContentCommand(resources: ResourceManager): Command = command("cc") {
 
     subCommand("scaffold") {
         stringArrayArgument("args")
-        tabComplete { _, input ->
-            val tokens = input.split(" ")
-            if (tokens.size <= 1) {
-                resources.list("customcontent/models", "bbmodel")
-                    .map { it.substringAfterLast('/').substringBeforeLast('.') }
-                    .filter { it.startsWith(tokens[0], ignoreCase = true) }
-            } else emptyList()
+        tabComplete { _, partial ->
+            resources.list("customcontent/models", "bbmodel")
+                .map { it.substringAfterLast('/').substringBeforeLast('.') }
+                .filter { it.startsWith(partial, ignoreCase = true) }
         }
         onPlayerExecute {
             @Suppress("UNCHECKED_CAST")

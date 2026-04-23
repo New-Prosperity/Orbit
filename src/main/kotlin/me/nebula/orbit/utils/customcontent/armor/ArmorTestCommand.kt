@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.customcontent.armor
 
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.orbit.utils.commandbuilder.customArmorArgument
 import net.minestom.server.command.builder.Command
 import net.minestom.server.command.builder.arguments.ArgumentType
 import me.nebula.gravity.translation.Keys
@@ -31,7 +32,7 @@ fun armorTestCommand(): Command = command("armor") {
     }
 
     subCommand("equip") {
-        stringArgument("armor_id")
+        customArmorArgument("armor_id")
         booleanArgument("enchanted")
         onPlayerExecute {
             val armorId = args.get(ARMOR_ID_ARG)
@@ -48,8 +49,8 @@ fun armorTestCommand(): Command = command("armor") {
     }
 
     subCommand("give") {
-        stringArgument("armor_id")
-        stringArgument("slot")
+        customArmorArgument("armor_id")
+        enumArgument("slot", ArmorPart.all.map { it.id })
         booleanArgument("enchanted")
         onPlayerExecute {
             val armorId = args.get(ARMOR_ID_ARG)

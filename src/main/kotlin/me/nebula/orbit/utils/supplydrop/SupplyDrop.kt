@@ -3,6 +3,8 @@ package me.nebula.orbit.utils.supplydrop
 import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.ether.utils.translation.asTranslationKey
 import me.nebula.orbit.utils.chat.mm
+import me.nebula.orbit.utils.chestloot.ChestLootTable
+import me.nebula.orbit.utils.chestloot.LootRarity
 import me.nebula.orbit.utils.loot.LootTable
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
@@ -29,7 +31,10 @@ data class SupplyDrop(
     val origin: Pos,
     val target: Pos,
     val fallSpeed: Double = 0.5,
-    val lootTable: LootTable,
+    val lootTable: LootTable? = null,
+    val chestTable: ChestLootTable? = null,
+    val tierWeightOverrides: Map<String, Int>? = null,
+    val rarity: LootRarity = LootRarity.RARE,
     val trailParticle: Particle = Particle.FLAME,
     val landingParticle: Particle = Particle.EXPLOSION,
     val landingSound: SoundEvent = SoundEvent.ENTITY_GENERIC_EXPLODE,
@@ -39,7 +44,18 @@ data class SupplyDrop(
     val onLand: ((Pos) -> Unit)? = null,
 ) {
 
+    init {
+        require(lootTable != null || chestTable != null) {
+            "SupplyDrop requires either lootTable (legacy) or chestTable"
+        }
+    }
+
     fun launch(instance: Instance): ActiveSupplyDrop = ActiveSupplyDrop(this, instance)
+
+    internal fun rollLoot(): List<ItemStack> {
+        chestTable?.let { return it.generateItems(tierWeightOverrides) }
+        return lootTable?.roll() ?: emptyList()
+    }
 }
 
 class ActiveSupplyDrop(
@@ -127,8 +143,9 @@ class ActiveSupplyDrop(
 
         config.onLand?.invoke(landPos)
 
-        val loot = config.lootTable.roll()
-        val inventory = Inventory(InventoryType.CHEST_3_ROW, mm("<gold>Supply Drop"))
+        val loot = config.rollLoot()
+        val titleColor = config.rarity.colorTag
+        val inventory = Inventory(InventoryType.CHEST_3_ROW, mm("$titleColor<bold>Supply Drop <dark_gray>(${config.rarity.displayLabel})"))
         loot.forEachIndexed { index, item ->
             if (index < inventory.size) inventory.setItemStack(index, item)
         }
@@ -164,6 +181,9 @@ class SupplyDropBuilder @PublishedApi internal constructor() {
     @PublishedApi internal var target: Pos = Pos(0.0, 64.0, 0.0)
     @PublishedApi internal var fallSpeed: Double = 0.5
     @PublishedApi internal var lootTable: LootTable? = null
+    @PublishedApi internal var chestTable: ChestLootTable? = null
+    @PublishedApi internal var tierWeightOverrides: Map<String, Int>? = null
+    @PublishedApi internal var rarity: LootRarity = LootRarity.RARE
     @PublishedApi internal var trailParticle: Particle = Particle.FLAME
     @PublishedApi internal var landingParticle: Particle = Particle.EXPLOSION
     @PublishedApi internal var landingSound: SoundEvent = SoundEvent.ENTITY_GENERIC_EXPLODE
@@ -176,6 +196,9 @@ class SupplyDropBuilder @PublishedApi internal constructor() {
     fun target(pos: Pos) { target = pos }
     fun fallSpeed(speed: Double) { fallSpeed = speed }
     fun lootTable(table: LootTable) { lootTable = table }
+    fun chestTable(table: ChestLootTable) { chestTable = table }
+    fun tierWeights(weights: Map<String, Int>) { tierWeightOverrides = weights }
+    fun rarity(value: LootRarity) { rarity = value }
     fun trailParticle(particle: Particle) { trailParticle = particle }
     fun landingParticle(particle: Particle) { landingParticle = particle }
     fun landingSound(sound: SoundEvent) { landingSound = sound }
@@ -185,12 +208,17 @@ class SupplyDropBuilder @PublishedApi internal constructor() {
     fun onLand(handler: (Pos) -> Unit) { onLandHandler = handler }
 
     @PublishedApi internal fun build(): SupplyDrop {
-        val table = requireNotNull(lootTable) { "SupplyDrop requires a lootTable" }
+        require(lootTable != null || chestTable != null) {
+            "SupplyDrop requires either lootTable(...) or chestTable(...)"
+        }
         return SupplyDrop(
             origin = origin,
             target = target,
             fallSpeed = fallSpeed,
-            lootTable = table,
+            lootTable = lootTable,
+            chestTable = chestTable,
+            tierWeightOverrides = tierWeightOverrides,
+            rarity = rarity,
             trailParticle = trailParticle,
             landingParticle = landingParticle,
             landingSound = landingSound,

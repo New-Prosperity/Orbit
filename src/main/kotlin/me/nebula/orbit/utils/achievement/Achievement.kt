@@ -15,8 +15,7 @@ import me.nebula.gravity.achievement.AchievementRarity as GravityRarity
 import me.nebula.gravity.achievement.AchievementReward as GravityReward
 import me.nebula.gravity.cosmetic.CosmeticStore
 import me.nebula.gravity.cosmetic.UnlockCosmeticProcessor
-import me.nebula.gravity.economy.AddBalanceProcessor
-import me.nebula.gravity.economy.EconomyStore
+import me.nebula.orbit.perks.EconomyPerks
 import me.nebula.gravity.notification.notify
 import me.nebula.gravity.translation.Keys
 import me.nebula.orbit.Orbit
@@ -270,7 +269,7 @@ object AchievementRegistry {
     private fun distributeRewards(player: Player, achievement: Achievement) {
         for (reward in achievement.rewards) {
             when (reward.type) {
-                "coins" -> EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", reward.amount.toDouble()))
+                "coins" -> EconomyPerks.grantCoins(player.uuid, reward.amount.toDouble())
                 "xp" -> BattlePassManager.addXpToAll(player, reward.amount.toLong())
                 "cosmetic" -> CosmeticStore.executeOnKey(player.uuid, UnlockCosmeticProcessor(reward.value))
             }
@@ -288,7 +287,7 @@ object AchievementRegistry {
                 claimed.add(milestone.threshold)
                 for (reward in milestone.rewards) {
                     when (reward.type) {
-                        "coins" -> EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", reward.amount.toDouble()))
+                        "coins" -> EconomyPerks.grantCoins(player.uuid, reward.amount.toDouble())
                         "xp" -> BattlePassManager.addXpToAll(player, reward.amount.toLong())
                         "cosmetic" -> CosmeticStore.executeOnKey(player.uuid, UnlockCosmeticProcessor(reward.value))
                     }

@@ -1,0 +1,17 @@
+{
+  "id": "oak_chair",
+  "item": "oak_chair",
+  "placeSound": "block.wood.place",
+  "breakSound": "block.wood.break",
+  "scale": 1.0,
+  "visualRotationSnap": 0.0,
+  "collision": "solid",
+
+  "footprint": { "type": "bones", "prefix": "collider" },
+
+  "interaction": {
+    "type": "seat",
+    "offsetY": 0.4,
+    "yawOffsetDegrees": 0
+  }
+}

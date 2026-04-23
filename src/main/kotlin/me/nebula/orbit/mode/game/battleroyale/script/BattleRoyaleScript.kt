@@ -12,15 +12,16 @@ private val BORDER_SHRINK_KEY = "orbit.game.br.border_shrinking".asTranslationKe
 fun buildBorderSteps(season: Season, speedMultiplier: Double = 1.0): List<ScriptStep> {
     if (season.borderPhases.isNotEmpty()) {
         return season.borderPhases.map { phase ->
-            val startDelay = (phase.startAfterSeconds * speedMultiplier).toInt()
+            val announceLead = (phase.announceLeadSeconds * speedMultiplier).toInt()
+            val triggerAt = ((phase.startAfterSeconds - phase.announceLeadSeconds) * speedMultiplier).toInt().coerceAtLeast(0)
             val shrinkDuration = (phase.shrinkDurationSeconds * speedMultiplier).toInt()
             ScriptStep(
                 id = "br_border_phase_${phase.startAfterSeconds}",
-                trigger = ScriptTrigger.AtTime(startDelay.seconds),
+                trigger = ScriptTrigger.AtTime(triggerAt.seconds),
                 actions = listOf(
                     ScriptAction.Announce(BORDER_SHRINK_KEY),
                     SetBorderDamage(phase.damagePerSecond.toDouble()),
-                    ShrinkBorder(phase.targetDiameter, shrinkDuration.toDouble()),
+                    ShrinkBorder(phase.targetDiameter, shrinkDuration.toDouble(), announceLead.toDouble()),
                 ),
             )
         }

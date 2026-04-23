@@ -1,0 +1,11 @@
+{
+  "id": "oak_dining_table",
+  "item": "oak_dining_table",
+  "placeSound": "block.wood.place",
+  "breakSound": "block.wood.break",
+  "scale": 1.0,
+  "visualRotationSnap": 90.0,
+  "collision": "solid",
+
+  "footprint": { "type": "box", "size": [2, 1, 1] }
+}

@@ -4,8 +4,7 @@ import me.nebula.gravity.achievement.AchievementStore
 import me.nebula.gravity.achievement.IncrementAchievementProcessor
 import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.gravity.battlepass.BattlePassDefinition
-import me.nebula.gravity.economy.AddBalanceProcessor
-import me.nebula.gravity.economy.EconomyStore
+import me.nebula.orbit.perks.EconomyPerks
 import me.nebula.gravity.mission.CheckDailyCompletionProcessor
 import me.nebula.gravity.mission.CompletedMission
 import me.nebula.gravity.mission.IncrementMissionProcessor
@@ -85,7 +84,7 @@ object MissionTracker {
     private fun handleCompleted(player: Player, completed: List<CompletedMission>) {
         for (mission in completed) {
             if (mission.coinReward > 0) {
-                EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", mission.coinReward.toDouble()))
+                EconomyPerks.grantCoins(player.uuid, mission.coinReward.toDouble())
             }
             if (mission.xpReward > 0) {
                 BattlePassManager.addXpToAll(player, mission.xpReward.toLong(), activeSeasonSnapshot())
@@ -113,7 +112,7 @@ object MissionTracker {
         val bonusXp = (50 * streak).coerceAtMost(350)
         val bonusCoins = (25 * streak).coerceAtMost(175)
 
-        EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", bonusCoins.toDouble()))
+        EconomyPerks.grantCoins(player.uuid, bonusCoins.toDouble())
         BattlePassManager.addXpToAll(player, bonusXp.toLong(), activeSeasonSnapshot())
 
         player.sendMessage(player.translate(

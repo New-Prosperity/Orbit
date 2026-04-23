@@ -197,7 +197,9 @@ private fun nickPoolCommand(): Command = command("nickpool") {
     }
 
     subCommand("remove") {
-        wordArgument("name")
+        wordArgument("name") {
+            NickPoolStore.all().map { it.name }.filter { it.startsWith(partial, ignoreCase = true) }
+        }
 
         onPlayerExecute {
             val name = requireArg("name") ?: return@onPlayerExecute

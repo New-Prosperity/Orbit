@@ -17,7 +17,7 @@ import me.nebula.orbit.mutator.MutatorEngine
 import me.nebula.orbit.rules.RuleUiWatcher
 import me.nebula.orbit.mode.config.CosmeticConfig
 import me.nebula.orbit.mode.config.PlaceholderResolver
-import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
+import me.nebula.orbit.utils.nebulaworld.NebulaWorldLoader
 import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.achievement.AchievementRegistry
 import me.nebula.orbit.utils.ceremony.Ceremony
@@ -296,7 +296,7 @@ abstract class GameMode : ServerMode {
         val lobbySpawn = lobbyWorld.spawn.toPos()
         val centerX = lobbySpawn.blockX() shr 4
         val centerZ = lobbySpawn.blockZ() shr 4
-        val (instance, future) = AnvilWorldLoader.loadAndPreload(
+        val (instance, future) = NebulaWorldLoader.loadAndPreload(
             "lobby-${this::class.simpleName?.lowercase()}", worldPath,
             centerX, centerZ, lobbyWorld.preloadRadius,
         )
@@ -331,7 +331,7 @@ abstract class GameMode : ServerMode {
         val worldPath = resolveWorldPath(settings.worldPath)
         val centerX = spawnPoint.blockX() shr 4
         val centerZ = spawnPoint.blockZ() shr 4
-        val (instance, future) = AnvilWorldLoader.loadAndPreload(
+        val (instance, future) = NebulaWorldLoader.loadAndPreload(
             "game-${this::class.simpleName?.lowercase()}", worldPath,
             centerX, centerZ, settings.preloadRadius,
         )

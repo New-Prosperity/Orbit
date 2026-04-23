@@ -14,6 +14,7 @@ fun orbitCommand(): Command = command("orbit") {
     installStatusSubcommands()
     installAdminSubcommands()
     installVariantSubcommands()
+    installMapSubcommands()
 
     onPlayerExecute {
         replyMM("<gold><bold>Orbit</bold></gold> <dark_gray>- Admin command")
@@ -22,6 +23,7 @@ fun orbitCommand(): Command = command("orbit") {
         replyMM("<white> /orbit test <dark_gray>- Gametest runner")
         replyMM("<white> /orbit fill <dark_gray>- Lobby filler management")
         replyMM("<white> /orbit variant <dark_gray>- Inspect / force game variant")
+        replyMM("<white> /orbit map <dark_gray>- Map list / scan / convert")
         replyMM("<white> /orbit reload <dark_gray>- Reload configuration")
     }
 }

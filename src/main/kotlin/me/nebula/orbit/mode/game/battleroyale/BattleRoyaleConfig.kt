@@ -16,6 +16,7 @@ data class BorderPhaseConfig(
     val targetDiameter: Double,
     val shrinkDurationSeconds: Int,
     val damagePerSecond: Float = 1f,
+    val announceLeadSeconds: Int = 0,
 )
 
 data class StarterKitConfig(
@@ -47,6 +48,18 @@ data class DeathmatchConfig(
     val borderDiameter: Double = 50.0,
     val borderShrinkSeconds: Int = 60,
     val checkDelaySeconds: Int = 600,
+)
+
+data class BattleRoyaleTeamConfig(
+    val enabled: Boolean = false,
+    val teamSize: Int = 1,
+    val friendlyFire: Boolean = false,
+    val reviveEnabled: Boolean = true,
+    val reviveTimeSeconds: Int = 8,
+    val bleedoutSeconds: Int = 30,
+    val bleedoutHp: Int = 20,
+    val reviveInteractRangeBlocks: Double = 2.5,
+    val respawnBeaconEnabled: Boolean = true,
 )
 
 data class KitDefinitionConfig(

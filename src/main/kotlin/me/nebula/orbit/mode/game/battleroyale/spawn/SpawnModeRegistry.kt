@@ -1,6 +1,5 @@
 package me.nebula.orbit.mode.game.battleroyale.spawn
 
-import me.nebula.orbit.mode.game.battleroyale.SpawnMode
 import java.util.concurrent.ConcurrentHashMap
 
 object SpawnModeRegistry {
@@ -8,10 +7,13 @@ object SpawnModeRegistry {
     private val providers = ConcurrentHashMap<String, SpawnModeProvider>()
 
     init {
-        register(EnumBackedSpawnProvider("hunger_games", SpawnMode.HUNGER_GAMES))
-        register(EnumBackedSpawnProvider("extended_hunger_games", SpawnMode.EXTENDED_HUNGER_GAMES))
-        register(EnumBackedSpawnProvider("random", SpawnMode.RANDOM))
-        register(EnumBackedSpawnProvider("battle_royale_bus", SpawnMode.BATTLE_ROYALE))
+        register(HungerGamesProvider)
+        register(ExtendedHungerGamesProvider)
+        register(RandomSpawnProvider)
+        register(BattleBusProvider)
+        register(PodDropProvider)
+        register(TeamClusterProvider)
+        register(ThemedRingProvider)
     }
 
     fun register(provider: SpawnModeProvider) {

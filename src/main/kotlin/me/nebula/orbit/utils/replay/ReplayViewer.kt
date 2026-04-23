@@ -50,7 +50,7 @@ class ReplayViewer(
                     container
                 }
                 is ReplayWorldSource.Reference -> {
-                    val mapPath = Path.of("maps", "${source.mapName}.nebula")
+                    val mapPath = Path.of("worlds", "${source.mapName}.nebula")
                     NebulaWorldLoader.load("replay-${replayFile.header.matchId}", mapPath)
                 }
             }
@@ -58,7 +58,7 @@ class ReplayViewer(
 
             val world = when (val source = replayFile.worldSource) {
                 is ReplayWorldSource.Embedded -> source.world
-                is ReplayWorldSource.Reference -> NebulaWorldReader.read(Path.of("maps", "${source.mapName}.nebula"))
+                is ReplayWorldSource.Reference -> NebulaWorldReader.read(Path.of("worlds", "${source.mapName}.nebula"))
             }
             for (key in world.chunks.keys) {
                 val chunk = world.chunkAt(

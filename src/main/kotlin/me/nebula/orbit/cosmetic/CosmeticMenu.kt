@@ -9,6 +9,7 @@ import me.nebula.gravity.cosmetic.EquipCosmeticProcessor
 import me.nebula.gravity.cosmetic.UnlockCosmeticProcessor
 import me.nebula.gravity.economy.AddBalanceProcessor
 import me.nebula.gravity.economy.EconomyStore
+import me.nebula.orbit.perks.EconomyPerks
 import me.nebula.gravity.economy.PurchaseCosmeticProcessor
 import me.nebula.orbit.progression.mission.MissionTracker
 import me.nebula.orbit.translation.translate
@@ -116,7 +117,8 @@ object CosmeticMenu {
                 clean()
             },
             onConfirm = confirm@{ p ->
-                val purchased = EconomyStore.executeOnKey(p.uuid, PurchaseCosmeticProcessor("coins", cost.toDouble()))
+                val effectiveCost = EconomyPerks.costAfterCosmeticDiscount(p.uuid, cost.toDouble())
+                val purchased = EconomyStore.executeOnKey(p.uuid, PurchaseCosmeticProcessor("coins", effectiveCost))
                 if (!purchased) {
                     p.sendMessage(p.translate(Keys.Orbit.Cosmetic.InsufficientFunds))
                     openCosmeticList(p, category)
@@ -124,7 +126,7 @@ object CosmeticMenu {
                 }
                 val unlocked = CosmeticStore.executeOnKey(p.uuid, UnlockCosmeticProcessor(definition.id, definition.maxLevel))
                 if (!unlocked) {
-                    EconomyStore.executeOnKey(p.uuid, AddBalanceProcessor("coins", cost.toDouble()))
+                    EconomyStore.executeOnKey(p.uuid, AddBalanceProcessor("coins", effectiveCost))
                     openCosmeticList(p, category)
                     return@confirm
                 }

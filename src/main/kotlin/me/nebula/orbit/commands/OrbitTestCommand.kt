@@ -1,17 +1,15 @@
 package me.nebula.orbit.commands
 
 import me.nebula.orbit.utils.commandbuilder.CommandBuilderDsl
+import me.nebula.orbit.utils.commandbuilder.testIdArgument
+import me.nebula.orbit.utils.commandbuilder.testTagArgument
 import me.nebula.orbit.utils.gametest.GameTestRegistry
 import me.nebula.orbit.utils.gametest.GameTestRunner
 
 internal fun CommandBuilderDsl.installTestSubcommands() {
     subCommand("test") {
         subCommand("run") {
-            wordArgument("testId")
-            tabComplete { _, input ->
-                val prefix = input.substringAfterLast(" ")
-                GameTestRegistry.ids().filter { it.startsWith(prefix, ignoreCase = true) }
-            }
+            testIdArgument("testId")
             onPlayerExecute {
                 val testId = argOrNull("testId")
                 if (testId == null) {
@@ -29,11 +27,7 @@ internal fun CommandBuilderDsl.installTestSubcommands() {
         }
 
         subCommand("runtag") {
-            wordArgument("tag")
-            tabComplete { _, input ->
-                val prefix = input.substringAfterLast(" ")
-                GameTestRegistry.tags().filter { it.startsWith(prefix, ignoreCase = true) }.toList()
-            }
+            testTagArgument("tag")
             onPlayerExecute {
                 val tag = argOrNull("tag")
                 if (tag == null) {

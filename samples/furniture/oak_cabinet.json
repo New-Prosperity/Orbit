@@ -1,0 +1,19 @@
+{
+  "id": "oak_cabinet",
+  "item": "oak_cabinet_closed",
+  "placeSound": "block.wood.place",
+  "breakSound": "block.wood.break",
+  "scale": 1.0,
+  "visualRotationSnap": 90.0,
+  "collision": "solid",
+  "lightLevel": 12,
+  "lightOnlyWhenOpen": true,
+
+  "footprint": { "type": "bones", "prefix": "collider" },
+
+  "interaction": {
+    "type": "open_close",
+    "openItemId": "oak_cabinet_open",
+    "closedItemId": "oak_cabinet_closed"
+  }
+}

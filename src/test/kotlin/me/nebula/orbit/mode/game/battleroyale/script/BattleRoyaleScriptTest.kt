@@ -8,6 +8,7 @@ import me.nebula.orbit.mode.game.battleroyale.BorderConfig
 import me.nebula.orbit.mode.game.battleroyale.BorderPhaseConfig
 import me.nebula.orbit.mode.game.battleroyale.Season
 import me.nebula.orbit.mode.game.battleroyale.StarterKitConfig
+import me.nebula.orbit.mode.game.battleroyale.zone.ZoneShrinkController
 import me.nebula.orbit.script.GameContext
 import me.nebula.orbit.script.ScriptAction
 import me.nebula.orbit.script.ScriptTrigger
@@ -44,7 +45,7 @@ class BattleRoyaleScriptTest {
         assertEquals(3, first.actions.size)
         assertTrue(first.actions[0] is ScriptAction.Announce)
         assertEquals(SetBorderDamage(2.0), first.actions[1])
-        assertEquals(ShrinkBorder(100.0, 30.0), first.actions[2])
+        assertEquals(ShrinkBorder(100.0, 30.0, 0.0), first.actions[2])
     }
 
     @Test
@@ -52,7 +53,31 @@ class BattleRoyaleScriptTest {
         val phases = listOf(BorderPhaseConfig(100, 50.0, 40, 1f))
         val steps = buildBorderSteps(season(phases = phases), speedMultiplier = 2.0)
         assertEquals(ScriptTrigger.AtTime(200.seconds), steps.single().trigger)
-        assertEquals(ShrinkBorder(50.0, 80.0), steps.single().actions[2])
+        assertEquals(ShrinkBorder(50.0, 80.0, 0.0), steps.single().actions[2])
+    }
+
+    @Test
+    fun `buildBorderSteps fires earlier by announceLead and passes it to the action`() {
+        val phases = listOf(BorderPhaseConfig(
+            startAfterSeconds = 120,
+            targetDiameter = 100.0,
+            shrinkDurationSeconds = 60,
+            damagePerSecond = 2f,
+            announceLeadSeconds = 45,
+        ))
+        val steps = buildBorderSteps(season(phases = phases))
+        val step = steps.single()
+        assertEquals(ScriptTrigger.AtTime(75.seconds), step.trigger)
+        assertEquals(ShrinkBorder(100.0, 60.0, 45.0), step.actions.last())
+    }
+
+    @Test
+    fun `buildBorderSteps speed multiplier scales announceLead and shrink together`() {
+        val phases = listOf(BorderPhaseConfig(120, 100.0, 60, 2f, announceLeadSeconds = 40))
+        val steps = buildBorderSteps(season(phases = phases), speedMultiplier = 1.5)
+        val step = steps.single()
+        assertEquals(ScriptTrigger.AtTime(120.seconds), step.trigger)
+        assertEquals(ShrinkBorder(100.0, 90.0, 60.0), step.actions.last())
     }
 
     @Test
@@ -75,10 +100,25 @@ class BattleRoyaleScriptTest {
     }
 
     @Test
-    fun `ShrinkBorder delegates to BorderController on the game mode`() {
+    fun `ShrinkBorder with no lead delegates to BorderController`() {
         val controller = mockk<BrControllerMode>(relaxed = true)
         ShrinkBorder(75.0, 20.0).execute(ctx(controller))
         verify { controller.shrinkBorderTo(75.0, 20.0) }
+    }
+
+    @Test
+    fun `ShrinkBorder with announceLead routes to ZoneShrinkController planZoneShrink`() {
+        val controller = mockk<BrZoneMode>(relaxed = true)
+        ShrinkBorder(100.0, 30.0, announceLeadSeconds = 45.0).execute(ctx(controller))
+        verify { controller.planZoneShrink(100.0, 30.0, 45.0) }
+        verify(exactly = 0) { controller.shrinkBorderTo(any(), any()) }
+    }
+
+    @Test
+    fun `ShrinkBorder with announceLead falls back to shrinkBorderTo when mode lacks ZoneShrinkController`() {
+        val controller = mockk<BrControllerMode>(relaxed = true)
+        ShrinkBorder(100.0, 30.0, announceLeadSeconds = 45.0).execute(ctx(controller))
+        verify { controller.shrinkBorderTo(100.0, 30.0) }
     }
 
     @Test
@@ -104,6 +144,7 @@ class BattleRoyaleScriptTest {
     }
 
     private abstract class BrControllerMode : GameMode(), BorderController, DeathmatchController
+    private abstract class BrZoneMode : GameMode(), BorderController, DeathmatchController, ZoneShrinkController
 
     private fun ctx(mode: GameMode): GameContext {
         val ctx = mockk<GameContext>(relaxed = true)

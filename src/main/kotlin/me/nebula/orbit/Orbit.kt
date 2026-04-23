@@ -16,6 +16,9 @@ import me.nebula.ether.utils.storage.StorageClient
 import me.nebula.ether.utils.storage.storageClient
 import me.nebula.ether.utils.translation.TranslationRegistry
 import me.nebula.ether.utils.translation.translationRegistry
+import me.nebula.orbit.loadout.installBattleRoyaleLoadouts
+import me.nebula.orbit.loadout.loadoutCommand
+import me.nebula.orbit.perks.installDefaultPerks
 import me.nebula.orbit.utils.drain.PlayerTransfer
 import me.nebula.orbit.utils.drain.ServerDrainManager
 import me.nebula.orbit.utils.maploader.MapLoader
@@ -116,6 +119,8 @@ import me.nebula.gravity.guild.GuildLookupStore
 import me.nebula.gravity.guild.GuildStore
 import me.nebula.gravity.player.PreferenceData
 import me.nebula.gravity.leveling.LevelStore
+import me.nebula.gravity.loadout.LoadoutPreferenceStore
+import me.nebula.gravity.progression.ModeProgressStore
 import me.nebula.gravity.nick.NickData
 import me.nebula.gravity.nick.NickPoolManager
 import me.nebula.gravity.nick.NickPoolStore
@@ -330,6 +335,8 @@ object Orbit {
                         +BattlePassStore
                         +MissionStore
                         +LevelStore
+                        +ModeProgressStore
+                        +LoadoutPreferenceStore
                         +NickStore
                         +NickPoolStore
                         +RatingStore
@@ -354,6 +361,8 @@ object Orbit {
                     fallback(true)
                 }
                 OrbitNotifications.install()
+                installDefaultPerks()
+                installBattleRoyaleLoadouts()
             }
         }
 
@@ -390,20 +399,6 @@ object Orbit {
             ReplayStorage.initialize(client.scope("replays"))
         }
 
-        var resolvedWorldPath: String? = null
-        val activeGameMode = gameMode
-        if (activeGameMode != null) {
-            val targetMap = mapName
-                ?: PoolConfigStore.load(activeGameMode)?.maps?.randomOrNull()
-            if (targetMap != null) {
-                resolvedWorldPath = runCatching {
-                    MapLoader.resolve(targetMap).toString()
-                }.onFailure { e ->
-                    logger.error(e) { "Failed to resolve map '$targetMap', falling back to default world" }
-                }.getOrNull()
-            }
-        }
-
         val velocitySecret = env.all.getValue("VELOCITY_SECRET")
         val server = MinecraftServer.init(Auth.Velocity(velocitySecret))
 
@@ -414,6 +409,22 @@ object Orbit {
                 return@setExceptionHandler
             }
             logger.error(throwable) { "Unhandled exception" }
+        }
+
+        bootStep("MapLoader.scanAndIngest") { MapLoader.scanAndIngest() }
+
+        var resolvedWorldPath: String? = null
+        val activeGameMode = gameMode
+        if (activeGameMode != null) {
+            val targetMap = mapName
+                ?: PoolConfigStore.load(activeGameMode)?.maps?.randomOrNull()
+            if (targetMap != null) {
+                resolvedWorldPath = runCatching {
+                    MapLoader.resolve(targetMap).toString()
+                }.onFailure { e ->
+                    logger.error(e) { "Failed to resolve map '$targetMap', falling back to default world" }
+                }.getOrNull() // noqa: runCatching{}.getOrNull() as null check
+            }
         }
 
         registerVanillaModules()
@@ -511,6 +522,7 @@ object Orbit {
         commandManager.register(tradeCommand())
         commandManager.register(guildCommand())
         commandManager.register(statueCommand())
+        commandManager.register(loadoutCommand())
         commandManager.register(command("battlepass") {
             onPlayerExecute { BattlePassMenu.open(player) }
         })

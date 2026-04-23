@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.replay
 
 import me.nebula.ether.utils.logging.logger
+import me.nebula.orbit.utils.nebulaworld.LightContent
 import me.nebula.orbit.utils.nebulaworld.LightData
 import me.nebula.orbit.utils.nebulaworld.NebulaBlockEntity
 import me.nebula.orbit.utils.nebulaworld.NebulaChunk
@@ -115,10 +116,14 @@ object ReplayWorldCapture {
             blockData = blockData,
             biomePalette = biomePaletteEntries.toTypedArray(),
             biomeData = biomeData,
-            blockLight = LightData.EMPTY,
-            skyLight = LightData.EMPTY,
+            blockLight = captureLight(section.blockLight().array()),
+            skyLight = captureLight(section.skyLight().array()),
         )
     }
+
+    private fun captureLight(array: ByteArray): LightData =
+        if (array.isEmpty() || array.all { it == 0.toByte() }) LightData.EMPTY
+        else LightData(LightContent.PRESENT, array.copyOf())
 
     private fun blockToString(block: Block): String {
         val props = block.properties()

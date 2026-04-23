@@ -9,6 +9,7 @@ import me.nebula.gravity.cosmetic.RemoveCosmeticProcessor
 import me.nebula.gravity.cosmetic.TransferCosmeticProcessor
 import me.nebula.gravity.economy.AddBalanceProcessor
 import me.nebula.gravity.economy.EconomyStore
+import me.nebula.orbit.perks.EconomyPerks
 import me.nebula.gravity.economy.EconomyTransactionStore
 import me.nebula.gravity.economy.PurchaseCosmeticProcessor
 import me.nebula.gravity.economy.TransactionType
@@ -171,7 +172,8 @@ object MarketplaceMenu {
             return
         }
 
-        val paid = EconomyStore.executeOnKey(player.uuid, PurchaseCosmeticProcessor("coins", claimed.price.toDouble()))
+        val buyerPrice = EconomyPerks.costAfterShopDiscount(player.uuid, claimed.price.toDouble())
+        val paid = EconomyStore.executeOnKey(player.uuid, PurchaseCosmeticProcessor("coins", buyerPrice))
         if (!paid) {
             MarketplaceListingStore.save(claimed.id, claimed)
             player.sendMessage(player.translate(Keys.Orbit.Marketplace.InsufficientFunds))
@@ -181,7 +183,7 @@ object MarketplaceMenu {
 
         val received = CosmeticStore.executeOnKey(player.uuid, TransferCosmeticProcessor(claimed.cosmeticId, claimed.cosmeticLevel))
         if (!received) {
-            EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", claimed.price.toDouble()))
+            EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", buyerPrice))
             MarketplaceListingStore.save(claimed.id, claimed)
             player.sendMessage(player.translate(Keys.Orbit.Marketplace.AlreadyOwned))
             openBrowseCategories(player)

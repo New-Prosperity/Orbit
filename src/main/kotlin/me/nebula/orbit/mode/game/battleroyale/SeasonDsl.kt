@@ -12,6 +12,7 @@ import me.nebula.orbit.mode.config.TabListConfig
 import me.nebula.orbit.mode.game.TimingConfig
 import me.nebula.orbit.utils.chestloot.ChestLootBuilder
 import me.nebula.orbit.utils.chestloot.ChestLootTable
+import me.nebula.orbit.utils.supplydrop.SupplyDropScheduleConfig
 
 @DslMarker
 annotation class SeasonDslMarker
@@ -41,6 +42,11 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
     @PublishedApi internal var cosmetics = CosmeticConfig()
     @PublishedApi internal var mapPreset: String? = null
     @PublishedApi internal var lobbyWorld: LobbyWorldConfig? = null
+    @PublishedApi internal var airdropTable: String? = null
+    @PublishedApi internal var killstreakTable: String? = null
+    @PublishedApi internal var supplyDropSchedule: SupplyDropScheduleConfig = SupplyDropScheduleConfig(enabled = false)
+    @PublishedApi internal var killstreakAirdrop: KillstreakAirdropConfig = KillstreakAirdropConfig(enabled = false)
+    @PublishedApi internal var team: BattleRoyaleTeamConfig = BattleRoyaleTeamConfig()
 
     fun xp(vararg rewards: Pair<String, Long>) {
         xpRewards.putAll(rewards)
@@ -60,6 +66,10 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
 
     inline fun lootTable(name: String, block: ChestLootBuilder.() -> Unit) {
         lootTables += ChestLootBuilder(name).apply(block).build()
+    }
+
+    fun registerLootTable(table: ChestLootTable) {
+        lootTables += table
     }
 
     fun world(path: String, preload: Int = 8) {
@@ -87,8 +97,14 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
         border = BorderConfig(initialDiameter, finalDiameter, centerX, centerZ, shrinkStart, shrinkDuration)
     }
 
-    fun borderPhase(startAfter: Int, targetDiameter: Double, shrinkDuration: Int, damage: Float = 1f) {
-        borderPhases += BorderPhaseConfig(startAfter, targetDiameter, shrinkDuration, damage)
+    fun borderPhase(
+        startAfter: Int,
+        targetDiameter: Double,
+        shrinkDuration: Int,
+        damage: Float = 1f,
+        announceLead: Int = 0,
+    ) {
+        borderPhases += BorderPhaseConfig(startAfter, targetDiameter, shrinkDuration, damage, announceLead)
     }
 
     fun borderDamage(damage: Float) { borderDamagePerSecond = damage }
@@ -106,6 +122,12 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
     fun lobbyWorld(path: String, preload: Int = 4, spawnConfig: SpawnConfig = SpawnConfig(0.5, 65.0, 0.5, 0f, 0f)) {
         lobbyWorld = LobbyWorldConfig(path, preload, spawnConfig)
     }
+
+    fun airdropTable(name: String) { airdropTable = name }
+    fun killstreakTable(name: String) { killstreakTable = name }
+    fun supplyDropSchedule(config: SupplyDropScheduleConfig) { supplyDropSchedule = config }
+    fun killstreakAirdrop(config: KillstreakAirdropConfig) { killstreakAirdrop = config }
+    fun team(config: BattleRoyaleTeamConfig) { team = config }
 
     @PublishedApi internal fun build() = Season(
         id = id,
@@ -131,6 +153,11 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
         cosmetics = cosmetics,
         mapPreset = mapPreset,
         lobbyWorld = lobbyWorld,
+        airdropTable = airdropTable,
+        killstreakTable = killstreakTable,
+        supplyDropSchedule = supplyDropSchedule,
+        killstreakAirdrop = killstreakAirdrop,
+        team = team,
     )
 }
 

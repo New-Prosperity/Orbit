@@ -1,0 +1,11 @@
+{
+  "id": "wall_painting",
+  "item": "wall_painting",
+  "placeSound": "block.wool.place",
+  "breakSound": "block.wool.break",
+  "scale": 1.0,
+  "visualRotationSnap": 22.5,
+  "collision": "nonsolid",
+
+  "footprint": [[0, 0, 0], [0, 1, 0]]
+}

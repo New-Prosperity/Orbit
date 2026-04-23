@@ -15,6 +15,9 @@ import me.nebula.gravity.economy.EconomyStore
 import me.nebula.gravity.economy.PurchaseCosmeticProcessor
 import me.nebula.gravity.messaging.BattlePassTierUpMessage
 import me.nebula.gravity.messaging.NetworkMessenger
+import me.nebula.gravity.perks.PerkResolver
+import me.nebula.gravity.perks.Perks
+import me.nebula.orbit.perks.EconomyPerks
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.translation.translate
 import net.minestom.server.entity.Player
@@ -22,6 +25,12 @@ import kotlin.math.roundToLong
 import me.nebula.gravity.translation.Keys
 
 object BattlePassManager {
+
+    private fun perkMultiplied(player: Player, amount: Long): Long {
+        val multiplier = PerkResolver.resolve(player.uuid, Perks.XP_MULTIPLIER)
+        if (multiplier == 1.0) return amount
+        return (amount * multiplier).roundToLong()
+    }
 
     private fun boostedAmount(player: Player, passId: String, amount: Long): Long {
         val definition = BattlePassRegistry[passId] ?: return amount
@@ -33,7 +42,8 @@ object BattlePassManager {
 
     fun addXp(player: Player, passId: String, amount: Long) {
         val definition = BattlePassRegistry[passId] ?: return
-        val effective = boostedAmount(player, passId, amount)
+        val perkAdjusted = perkMultiplied(player, amount)
+        val effective = boostedAmount(player, passId, perkAdjusted)
         val result = BattlePassStore.executeOnKey(
             player.uuid,
             AddBattlePassXpProcessor(passId, effective, definition.xpPerTier),
@@ -60,15 +70,16 @@ object BattlePassManager {
     fun addXpToAll(player: Player, amount: Long, activePasses: List<BattlePassDefinition>? = null) {
         val active = activePasses ?: BattlePassRegistry.activePasses()
         if (active.isEmpty()) return
+        val perkAdjusted = perkMultiplied(player, amount)
         val data = BattlePassStore.load(player.uuid) ?: BattlePassData()
         val passConfigs = active.associate { def ->
             val progress = data.passes[def.id]
-            val effective = if (progress?.premium == true) (amount * def.xpBoostPremium).roundToLong() else amount
+            val effective = if (progress?.premium == true) (perkAdjusted * def.xpBoostPremium).roundToLong() else perkAdjusted
             def.id to (effective to def.xpPerTier)
         }
         val boostedConfigs = passConfigs.mapValues { (_, pair) -> pair.second }
         val boostedAmounts = passConfigs.mapValues { (_, pair) -> pair.first }
-        val maxAmount = boostedAmounts.values.maxOrNull() ?: amount
+        val maxAmount = boostedAmounts.values.maxOrNull() ?: perkAdjusted
 
         val results = BattlePassStore.executeOnKey(
             player.uuid,
@@ -162,7 +173,7 @@ object BattlePassManager {
         val reward = rewards[tier] ?: return true
 
         when (reward.type) {
-            "coins" -> EconomyStore.executeOnKey(player.uuid, AddBalanceProcessor("coins", reward.amount.toDouble()))
+            "coins" -> EconomyPerks.grantCoins(player.uuid, reward.amount.toDouble())
             "cosmetic" -> CosmeticStore.executeOnKey(player.uuid, UnlockCosmeticProcessor(reward.value))
         }
 

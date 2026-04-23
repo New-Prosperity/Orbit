@@ -6,6 +6,8 @@ import me.nebula.gravity.player.PlayerData
 import me.nebula.gravity.player.PlayerStore
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.orbit.utils.commandbuilder.statueAnimationArgument
+import me.nebula.orbit.utils.commandbuilder.statueArgument
 import net.minestom.server.command.builder.Command
 import net.minestom.server.coordinate.Pos
 import java.util.UUID
@@ -54,7 +56,7 @@ fun statueCommand(): Command = command("statue") {
 
     subCommand("remove") {
         permission("orbit.statue")
-        wordArgument("id")
+        statueArgument("id")
 
         onPlayerExecute {
             val id = arg("id")
@@ -99,7 +101,7 @@ fun statueCommand(): Command = command("statue") {
 
     subCommand("move") {
         permission("orbit.statue")
-        wordArgument("id")
+        statueArgument("id")
         doubleArgument("x")
         doubleArgument("y")
         doubleArgument("z")
@@ -120,19 +122,23 @@ fun statueCommand(): Command = command("statue") {
 
     subCommand("pose") {
         permission("orbit.statue")
-        wordArgument("id")
-        wordArgument("animation")
+        statueArgument("id")
+        statueAnimationArgument("animation", "id")
 
         onPlayerExecute {
             val id = arg("id")
             val animation = arg("animation")
-            val validAnimations = setOf("idle", "wave", "crossed_arms", "celebrate", "salute", "look_around", "sit")
-
-            if (animation !in validAnimations) {
-                replyMM("<red>Valid poses: ${validAnimations.joinToString(", ")}")
+            val statue = StatueManager.all().firstOrNull { it.id == id }
+            if (statue == null) {
+                reply("orbit.statue.not_found", "id" to id)
                 return@onPlayerExecute
             }
-
+            val availableAnimations = statue.modelOwner?.modeledEntity?.models?.values
+                ?.firstOrNull()?.blueprint?.animations?.keys.orEmpty()
+            if (animation !in availableAnimations) {
+                replyMM("<red>Unknown animation '<white>$animation</white>'. Available: <gray>${availableAnimations.sorted().joinToString(", ")}")
+                return@onPlayerExecute
+            }
             if (StatueManager.setAnimation(id, animation)) {
                 reply("orbit.statue.pose_set", "id" to id, "pose" to animation)
             } else {
@@ -143,8 +149,8 @@ fun statueCommand(): Command = command("statue") {
 
     subCommand("leaderboard") {
         permission("orbit.statue")
-        wordArgument("source")
-        wordArgument("period")
+        enumArgument("source", "rating:battleroyale", "kills:battleroyale", "wins:battleroyale")
+        enumArgument("period", "ALL_TIME", "SEASON", "MONTH", "WEEK", "DAY")
 
         onPlayerExecute {
             val source = arg("source")

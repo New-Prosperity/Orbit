@@ -35,7 +35,7 @@ import me.nebula.orbit.progression.mission.MissionMenu
 import me.nebula.orbit.utils.scheduler.delay
 import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.scheduler.runAsync
-import me.nebula.orbit.utils.anvilloader.AnvilWorldLoader
+import me.nebula.orbit.utils.nebulaworld.NebulaWorldLoader
 import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.hotbar.hotbar
 import me.nebula.orbit.utils.itembuilder.itemStack
@@ -141,11 +141,11 @@ class HubMode : ServerMode {
         logger.info { "Loading hub world from $worldPath" }
         val centerChunkX = spawnPoint.blockX() shr 4
         val centerChunkZ = spawnPoint.blockZ() shr 4
-        val (instance, future) = AnvilWorldLoader.loadAndPreload(
+        val (instance, future) = NebulaWorldLoader.loadAndPreload(
             "hub", worldPath, centerChunkX, centerChunkZ, config.preloadRadius
         )
         future.join()
-        if (!AnvilWorldLoader.verifyLoaded(instance, spawnPoint)) {
+        if (!NebulaWorldLoader.verifyLoaded(instance, spawnPoint)) {
             logger.warn { "Hub world loaded but no blocks found at spawn $spawnPoint — world may be empty or built at different coordinates" }
         }
         return instance

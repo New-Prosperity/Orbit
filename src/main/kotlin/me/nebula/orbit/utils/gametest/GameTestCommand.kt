@@ -1,17 +1,14 @@
 package me.nebula.orbit.utils.gametest
 
 import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.orbit.utils.commandbuilder.testIdArgument
 import net.minestom.server.command.builder.Command
 
 fun gameTestCommand(): Command = command("gametest") {
     permission("nebula.gametest")
 
     subCommand("run") {
-        wordArgument("testId")
-        tabComplete { _, input ->
-            val prefix = input.substringAfterLast(" ")
-            GameTestRegistry.ids().filter { it.startsWith(prefix, ignoreCase = true) }
-        }
+        testIdArgument("testId")
         onPlayerExecute {
             val testId = argOrNull("testId")
             if (testId == null) {

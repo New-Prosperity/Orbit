@@ -25,6 +25,12 @@ class BattleRoyaleKillPipeline(
 
     fun handleLethal(victim: Player, attacker: Player?, amount: Float, event: EntityDamageEvent): Boolean {
         event.isCancelled = true
+        if (mode.tryKnock(victim, attacker)) {
+            if (attacker != null && attacker.uuid != victim.uuid) {
+                MissionTracker.onDamageDealt(attacker, amount.toInt())
+            }
+            return false
+        }
         victim.health = victim.getAttributeValue(Attribute.MAX_HEALTH).toFloat()
         if (attacker != null && attacker.uuid != victim.uuid) {
             MissionTracker.onDamageDealt(attacker, amount.toInt())

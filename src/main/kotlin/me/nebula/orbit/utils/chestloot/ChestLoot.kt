@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.chestloot
 
+import me.nebula.orbit.utils.customcontent.furniture.FurnitureRegistry
+import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.itemresolver.ItemResolver
 import me.nebula.orbit.utils.region.CuboidRegion
 import me.nebula.orbit.utils.region.CylinderRegion
@@ -36,6 +38,7 @@ class LootTier @PublishedApi internal constructor(
     val name: String,
     val items: List<LootItem>,
     val totalWeight: Int,
+    val rarity: LootRarity = LootRarity.inferFromName(name),
 ) {
 
     fun rollItem(): ItemStack {
@@ -66,9 +69,14 @@ class LootTier @PublishedApi internal constructor(
     }
 }
 
-class LootTierBuilder @PublishedApi internal constructor(private val name: String) {
+class LootTierBuilder @PublishedApi internal constructor(
+    private val name: String,
+    @PublishedApi internal var rarity: LootRarity = LootRarity.inferFromName(name),
+) {
 
     @PublishedApi internal val items = mutableListOf<LootItem>()
+
+    fun rarity(value: LootRarity) { rarity = value }
 
     fun item(material: Material, amount: IntRange = 1..1, weight: Int = 1, maxPerChest: Int = Int.MAX_VALUE) {
         require(weight > 0) { "Weight must be positive" }
@@ -93,7 +101,24 @@ class LootTierBuilder @PublishedApi internal constructor(private val name: Strin
         item(key, amount..amount, weight, maxPerChest)
     }
 
-    @PublishedApi internal fun build(): LootTier = LootTier(name, items.toList(), items.sumOf { it.weight })
+    fun customItem(id: String, amount: IntRange = 1..1, weight: Int = 1, maxPerChest: Int = Int.MAX_VALUE) {
+        require(weight > 0) { "Weight must be positive" }
+        val custom = CustomItemRegistry[id]
+            ?: error("Unknown custom item / furniture id in loot table: $id")
+        items += LootItem(custom.createStack(1), amount, weight, maxPerChest)
+    }
+
+    fun furniture(id: String, amount: IntRange = 1..1, weight: Int = 1, maxPerChest: Int = Int.MAX_VALUE) {
+        require(weight > 0) { "Weight must be positive" }
+        val def = FurnitureRegistry[id]
+            ?: error("Unknown furniture id in loot table: $id")
+        val custom = CustomItemRegistry[def.itemId]
+            ?: error("Furniture '$id' item '${def.itemId}' not in CustomItemRegistry — load CustomContentRegistry before building loot tables")
+        items += LootItem(custom.createStack(1), amount, weight, maxPerChest)
+    }
+
+    @PublishedApi internal fun build(): LootTier =
+        LootTier(name, items.toList(), items.sumOf { it.weight }, rarity)
 }
 
 data class TierDistribution(
@@ -106,6 +131,7 @@ data class ChestLootTable(
     val tiers: Map<String, LootTier>,
     val distribution: List<TierDistribution>,
     val itemsPerChest: IntRange,
+    val biomeHints: Map<String, Map<String, Int>> = emptyMap(),
 ) {
 
     private val totalDistWeight = distribution.sumOf { it.weight }
@@ -150,6 +176,22 @@ data class ChestLootTable(
     private fun rollAmount(item: LootItem): Int =
         if (item.amountRange.first == item.amountRange.last) item.amountRange.first
         else Random.nextInt(item.amountRange.first, item.amountRange.last + 1)
+
+    fun tierByRarity(rarity: LootRarity): LootTier? =
+        tiers.values.firstOrNull { it.rarity == rarity }
+
+    fun rarityOf(tierName: String): LootRarity? = tiers[tierName]?.rarity
+
+    fun hasLegendary(): Boolean = tiers.values.any { it.rarity == LootRarity.LEGENDARY }
+
+    fun weightsFromRarity(map: Map<LootRarity, Int>): Map<String, Int> {
+        val out = mutableMapOf<String, Int>()
+        for ((name, tier) in tiers) {
+            val weight = map[tier.rarity] ?: continue
+            out[name] = weight
+        }
+        return out
+    }
 }
 
 object ChestLootManager {
@@ -162,6 +204,14 @@ object ChestLootManager {
     private val playerChests = ConcurrentHashMap<Long, ConcurrentHashMap<UUID, Inventory>>()
     private val zones = mutableListOf<LootZone>()
     private val chestZoneWeights = ConcurrentHashMap<Long, Map<String, Int>>()
+    private val legendaryChests = ConcurrentHashMap.newKeySet<Long>()
+    private var biomeLookup: ((Int, Int) -> String?)? = null
+
+    fun configureBiomeLookup(lookup: (Int, Int) -> String?) {
+        biomeLookup = lookup
+    }
+
+    fun clearBiomeLookup() { biomeLookup = null }
 
     fun register(table: ChestLootTable) {
         require(!tables.containsKey(table.name)) { "Loot table '${table.name}' already exists" }
@@ -185,12 +235,21 @@ object ChestLootManager {
         chestZoneWeights.clear()
     }
 
+    @Volatile
+    private var stackDecorator: ((ItemStack) -> ItemStack)? = null
+
+    fun configureStackDecorator(decorator: ((ItemStack) -> ItemStack)?) {
+        stackDecorator = decorator
+    }
+
     fun populateChest(table: ChestLootTable, inventory: Inventory, tierWeightOverrides: Map<String, Int>? = null) {
         val items = table.generateItems(tierWeightOverrides)
+        val decorator = stackDecorator
         val slots = (0 until inventory.size).shuffled().take(items.size)
         items.forEachIndexed { index, item ->
             if (index < slots.size) {
-                inventory.setItemStack(slots[index], item)
+                val decorated = decorator?.invoke(item) ?: item
+                inventory.setItemStack(slots[index], decorated)
             }
         }
     }
@@ -242,12 +301,34 @@ object ChestLootManager {
     fun fillChestAt(table: ChestLootTable, x: Int, y: Int, z: Int) {
         val key = packPosition(x, y, z)
         chestTables[key] = table
-        val zoneWeights = findZoneWeights(x, y, z)
-        if (zoneWeights != null) chestZoneWeights[key] = zoneWeights
+        val effectiveWeights = resolveWeights(table, x, y, z)
+        if (effectiveWeights != null) chestZoneWeights[key] = effectiveWeights
         if (mode == LootMode.GLOBAL) {
             val inventory = Inventory(InventoryType.CHEST_3_ROW, "Loot")
-            populateChest(table, inventory, zoneWeights)
+            populateChest(table, inventory, effectiveWeights)
             globalChests[key] = inventory
+        }
+        if (containsLegendaryDrop(table, effectiveWeights)) legendaryChests += key
+    }
+
+    fun isLegendaryChest(x: Int, y: Int, z: Int): Boolean =
+        packPosition(x, y, z) in legendaryChests
+
+    fun legendaryChestPositions(): Sequence<Triple<Int, Int, Int>> =
+        legendaryChests.asSequence().map { unpackPosition(it) }
+
+    private fun resolveWeights(table: ChestLootTable, x: Int, y: Int, z: Int): Map<String, Int>? {
+        val zoneWeights = findZoneWeights(x, y, z)
+        if (zoneWeights != null) return zoneWeights
+        val biomeId = biomeLookup?.invoke(x, z) ?: return null
+        return table.biomeHints[biomeId]
+    }
+
+    private fun containsLegendaryDrop(table: ChestLootTable, weights: Map<String, Int>?): Boolean {
+        if (!table.hasLegendary()) return false
+        if (weights == null) return table.tiers.values.any { it.rarity == LootRarity.LEGENDARY }
+        return weights.entries.any { (name, weight) ->
+            weight > 0 && table.tiers[name]?.rarity == LootRarity.LEGENDARY
         }
     }
 
@@ -275,6 +356,7 @@ object ChestLootManager {
         globalChests.clear()
         playerChests.clear()
         chestZoneWeights.clear()
+        legendaryChests.clear()
     }
 
     fun clear() {
@@ -284,6 +366,8 @@ object ChestLootManager {
         playerChests.clear()
         zones.clear()
         chestZoneWeights.clear()
+        legendaryChests.clear()
+        biomeLookup = null
     }
 
     private fun findZoneWeights(x: Int, y: Int, z: Int): Map<String, Int>? =
@@ -291,6 +375,13 @@ object ChestLootManager {
 
     private fun packPosition(x: Int, y: Int, z: Int): Long =
         (x.toLong() and 0x3FFFFFF shl 38) or (z.toLong() and 0x3FFFFFF shl 12) or (y.toLong() and 0xFFF)
+
+    private fun unpackPosition(key: Long): Triple<Int, Int, Int> {
+        val x = (key shr 38).toInt()
+        val z = ((key shr 12) and 0x3FFFFFF).toInt()
+        val y = (key and 0xFFF).toInt()
+        return Triple(x, y, z)
+    }
 }
 
 class LootZoneBuilder @PublishedApi internal constructor(private val name: String) {
@@ -329,19 +420,13 @@ class ChestLootBuilder @PublishedApi internal constructor(private val name: Stri
     @PublishedApi internal val tiers = mutableMapOf<String, LootTier>()
     @PublishedApi internal val distribution = mutableListOf<TierDistribution>()
     @PublishedApi internal var itemsPerChest: IntRange = 3..7
+    @PublishedApi internal val biomeHints = mutableMapOf<String, MutableMap<String, Int>>()
 
-    inline fun tier(name: String, block: LootTierBuilder.() -> Unit) {
-        val tier = LootTierBuilder(name).apply(block).build()
+    inline fun tier(name: String, rarity: LootRarity = LootRarity.inferFromName(name), block: LootTierBuilder.() -> Unit) {
+        val tier = LootTierBuilder(name, rarity).apply(block).build()
         tiers[name] = tier
         if (distribution.none { it.tierName == name }) {
-            val defaultWeight = when (name.lowercase()) {
-                "common" -> 50
-                "uncommon" -> 30
-                "rare" -> 15
-                "epic" -> 5
-                else -> 10
-            }
-            distribution.add(TierDistribution(name, defaultWeight))
+            distribution.add(TierDistribution(name, tier.rarity.defaultTierWeight))
         }
     }
 
@@ -352,6 +437,20 @@ class ChestLootBuilder @PublishedApi internal constructor(private val name: Stri
 
     fun itemsPerChest(range: IntRange) { itemsPerChest = range }
     fun itemsPerChest(count: Int) { itemsPerChest = count..count }
+
+    fun biomeHint(biomeId: String, block: BiomeHintBuilder.() -> Unit) {
+        val builder = BiomeHintBuilder().apply(block)
+        biomeHints.getOrPut(biomeId) { mutableMapOf() }.putAll(builder.weights)
+    }
+
+    fun biomeHintByRarity(biomeId: String, block: BiomeHintRarityBuilder.() -> Unit) {
+        val builder = BiomeHintRarityBuilder().apply(block)
+        val entries = tiers.mapNotNull { (name, tier) ->
+            val weight = builder.rarityWeights[tier.rarity] ?: return@mapNotNull null
+            name to weight
+        }.toMap()
+        biomeHints.getOrPut(biomeId) { mutableMapOf() }.putAll(entries)
+    }
 
     fun fillChestsInRegion(region: Region, instance: Instance) {
         val table = build()
@@ -364,7 +463,23 @@ class ChestLootBuilder @PublishedApi internal constructor(private val name: Stri
         tiers = tiers.toMap(),
         distribution = distribution.toList(),
         itemsPerChest = itemsPerChest,
+        biomeHints = biomeHints.mapValues { (_, v) -> v.toMap() },
     )
+}
+
+class BiomeHintBuilder @PublishedApi internal constructor() {
+    @PublishedApi internal val weights = mutableMapOf<String, Int>()
+    fun tier(name: String, weight: Int) { weights[name] = weight }
+}
+
+class BiomeHintRarityBuilder @PublishedApi internal constructor() {
+    @PublishedApi internal val rarityWeights = mutableMapOf<LootRarity, Int>()
+    fun rarity(value: LootRarity, weight: Int) { rarityWeights[value] = weight }
+    fun common(weight: Int) { rarity(LootRarity.COMMON, weight) }
+    fun uncommon(weight: Int) { rarity(LootRarity.UNCOMMON, weight) }
+    fun rare(weight: Int) { rarity(LootRarity.RARE, weight) }
+    fun epic(weight: Int) { rarity(LootRarity.EPIC, weight) }
+    fun legendary(weight: Int) { rarity(LootRarity.LEGENDARY, weight) }
 }
 
 inline fun chestLoot(name: String, block: ChestLootBuilder.() -> Unit): ChestLootTable {

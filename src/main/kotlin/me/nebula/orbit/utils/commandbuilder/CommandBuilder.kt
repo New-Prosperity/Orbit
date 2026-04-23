@@ -22,6 +22,14 @@ import net.minestom.server.entity.Player
 import java.time.Duration
 import java.util.UUID
 
+data class SuggestionScope(
+    val player: Player,
+    val context: CommandContext,
+    val partial: String,
+) {
+    fun priorArg(name: String): String? = if (context.has(name)) context.getRaw(name) else null
+}
+
 data class CommandExecutionContext(
     val player: Player,
     val args: CommandContext,
@@ -113,15 +121,29 @@ class CommandBuilderDsl @PublishedApi internal constructor(
     fun wordArgument(name: String) { arguments += ArgumentType.Word(name) }
     fun stringArrayArgument(name: String) { arguments += ArgumentType.StringArray(name) }
 
-    fun playerArgument(name: String = "player") {
-        val arg = ArgumentType.Word(name)
-        arg.setSuggestionCallback { sender, _, suggestion ->
+    fun suggestArgument(name: String, provider: SuggestionScope.() -> Collection<String>) {
+        val arg = arguments.firstOrNull { it.id == name }
+            ?: error("No argument named '$name' — add it before calling suggestArgument")
+        arg.setSuggestionCallback { sender, context, suggestion ->
             if (sender !is Player) return@setSuggestionCallback
-            suggestPlayers(suggestion.input.substringAfterLast(" "), sender).forEach {
-                suggestion.addEntry(SuggestionEntry(it))
-            }
+            val partial = suggestion.input.substringAfterLast(" ")
+            val scope = SuggestionScope(sender, context, partial)
+            provider(scope).forEach { suggestion.addEntry(SuggestionEntry(it)) }
         }
-        arguments += arg
+    }
+
+    fun wordArgument(name: String, provider: SuggestionScope.() -> Collection<String>) {
+        wordArgument(name)
+        suggestArgument(name, provider)
+    }
+
+    fun stringArgument(name: String, provider: SuggestionScope.() -> Collection<String>) {
+        stringArgument(name)
+        suggestArgument(name, provider)
+    }
+
+    fun playerArgument(name: String = "player") {
+        wordArgument(name) { suggestPlayers(partial, player) }
     }
 
     fun enumArgument(name: String, values: Collection<String>) {
@@ -165,7 +187,8 @@ class CommandBuilderDsl @PublishedApi internal constructor(
             tabCompleteHandler?.let { handler ->
                 arguments.last().setSuggestionCallback { sender, _, suggestion ->
                     if (sender !is Player) return@setSuggestionCallback
-                    handler(sender, suggestion.input).forEach { suggestion.addEntry(SuggestionEntry(it)) }
+                    val partial = suggestion.input.substringAfterLast(" ")
+                    handler(sender, partial).forEach { suggestion.addEntry(SuggestionEntry(it)) }
                 }
             }
 

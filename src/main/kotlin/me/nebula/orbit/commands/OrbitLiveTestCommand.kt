@@ -3,6 +3,9 @@ package me.nebula.orbit.commands
 import me.nebula.ether.utils.parse.enumValueOfOrNull
 import me.nebula.orbit.mode.game.GamePhase
 import me.nebula.orbit.utils.commandbuilder.CommandBuilderDsl
+import me.nebula.orbit.utils.commandbuilder.gamePhaseArgument
+import me.nebula.orbit.utils.commandbuilder.liveSessionBotArgument
+import me.nebula.orbit.utils.commandbuilder.liveSessionPlayerArgument
 import me.nebula.orbit.utils.gametest.GameTestRunner
 import me.nebula.orbit.utils.matchresult.matchResult
 import net.minestom.server.MinecraftServer
@@ -93,12 +96,7 @@ private fun CommandBuilderDsl.installLiveControlSubcommands() {
     }
 
     subCommand("kill") {
-        wordArgument("target")
-        tabComplete { sender, input ->
-            val prefix = input.substringAfterLast(" ")
-            val session = GameTestRunner.getLiveSession(sender) ?: return@tabComplete emptyList()
-            session.instance.players.map { it.username }.filter { it.startsWith(prefix, ignoreCase = true) }
-        }
+        liveSessionPlayerArgument("target")
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {
@@ -121,13 +119,8 @@ private fun CommandBuilderDsl.installLiveControlSubcommands() {
     }
 
     subCommand("damage") {
-        wordArgument("target")
+        liveSessionPlayerArgument("target")
         floatArgument("amount")
-        tabComplete { sender, input ->
-            val prefix = input.substringAfterLast(" ")
-            val session = GameTestRunner.getLiveSession(sender) ?: return@tabComplete emptyList()
-            session.instance.players.map { it.username }.filter { it.startsWith(prefix, ignoreCase = true) }
-        }
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {
@@ -190,12 +183,7 @@ private fun CommandBuilderDsl.installLiveAssertSubcommands() {
         }
 
         subCommand("phase") {
-            wordArgument("phase")
-            tabComplete { _, input ->
-                val prefix = input.substringAfterLast(" ")
-                GamePhase.entries.map { it.name }
-                    .filter { it.startsWith(prefix, ignoreCase = true) }
-            }
+            gamePhaseArgument("phase")
             onPlayerExecute {
                 val session = GameTestRunner.getLiveSession(player)
                 if (session == null) {
@@ -231,12 +219,7 @@ private fun CommandBuilderDsl.installLiveAssertSubcommands() {
 
 private fun CommandBuilderDsl.installLiveConnectionSubcommands() {
     subCommand("disconnect") {
-        wordArgument("target")
-        tabComplete { sender, input ->
-            val prefix = input.substringAfterLast(" ")
-            val session = GameTestRunner.getLiveSession(sender) ?: return@tabComplete emptyList()
-            session.botPlayers.map { it.username }.filter { it.startsWith(prefix, ignoreCase = true) }
-        }
+        liveSessionBotArgument("target")
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {
@@ -260,12 +243,7 @@ private fun CommandBuilderDsl.installLiveConnectionSubcommands() {
     }
 
     subCommand("reconnect") {
-        wordArgument("target")
-        tabComplete { sender, input ->
-            val prefix = input.substringAfterLast(" ")
-            val session = GameTestRunner.getLiveSession(sender) ?: return@tabComplete emptyList()
-            session.botPlayers.map { it.username }.filter { it.startsWith(prefix, ignoreCase = true) }
-        }
+        liveSessionBotArgument("target")
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {
@@ -295,13 +273,8 @@ private fun CommandBuilderDsl.installLiveConnectionSubcommands() {
     }
 
     subCommand("mutualkill") {
-        wordArgument("player1")
-        wordArgument("player2")
-        tabComplete { sender, input ->
-            val prefix = input.substringAfterLast(" ")
-            val session = GameTestRunner.getLiveSession(sender) ?: return@tabComplete emptyList()
-            session.instance.players.map { it.username }.filter { it.startsWith(prefix, ignoreCase = true) }
-        }
+        liveSessionPlayerArgument("player1")
+        liveSessionPlayerArgument("player2")
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {
@@ -371,11 +344,7 @@ private fun CommandBuilderDsl.installLiveForceSubcommands() {
     }
 
     subCommand("forcephase") {
-        wordArgument("phase")
-        tabComplete { _, input ->
-            val prefix = input.substringAfterLast(" ")
-            GamePhase.entries.map { it.name }.filter { it.startsWith(prefix, ignoreCase = true) }
-        }
+        gamePhaseArgument("phase")
         onPlayerExecute {
             val session = GameTestRunner.getLiveSession(player)
             if (session == null) {

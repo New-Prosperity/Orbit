@@ -3,6 +3,7 @@ package me.nebula.orbit.commands
 import me.nebula.orbit.Orbit
 import me.nebula.orbit.mode.game.GameMode
 import me.nebula.orbit.utils.commandbuilder.CommandBuilderDsl
+import me.nebula.orbit.utils.commandbuilder.variantArgument
 
 internal fun CommandBuilderDsl.installVariantSubcommands() {
     subCommand("variant") {
@@ -44,12 +45,7 @@ internal fun CommandBuilderDsl.installVariantSubcommands() {
         }
 
         subCommand("force") {
-            wordArgument("variantId")
-            tabComplete { _, input ->
-                val prefix = input.substringAfterLast(" ")
-                val pool = (Orbit.mode as? GameMode)?.variantPool() ?: return@tabComplete emptyList()
-                pool.all().map { it.id }.filter { it.startsWith(prefix, ignoreCase = true) }
-            }
+            variantArgument("variantId")
             onPlayerExecute {
                 val mode = Orbit.mode as? GameMode
                 val pool = mode?.variantPool()
