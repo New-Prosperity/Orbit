@@ -12,23 +12,39 @@ class MemoryKey<T>(val name: String) {
 }
 
 object MemoryKeys {
-    val MOVE_TARGET = MemoryKey<Point>("move_target")
-    val LOOK_TARGET = MemoryKey<Point>("look_target")
-    val ATTACK_TARGET = MemoryKey<Entity>("attack_target")
-    val NEAREST_PLAYER = MemoryKey<Player>("nearest_player")
-    val PANIC_TICKS = MemoryKey<Int>("panic_ticks")
-    val HOME_POSITION = MemoryKey<Point>("home_position")
-    val SPAWN_POSITION = MemoryKey<Point>("spawn_position")
-    val LAST_DAMAGE_TIME = MemoryKey<Long>("last_damage_time")
-    val LAST_ATTACKER = MemoryKey<Entity>("last_attacker")
-    val STRAFE_DIRECTION = MemoryKey<Int>("strafe_direction")
-    val LEAP_COOLDOWN = MemoryKey<Int>("leap_cooldown")
-    val ABILITY_COOLDOWN = MemoryKey<Int>("ability_cooldown")
-    val PHASE = MemoryKey<Int>("phase")
-    val SUMMON_COOLDOWN = MemoryKey<Int>("summon_cooldown")
-    val SHIELD_ACTIVE = MemoryKey<Boolean>("shield_active")
-    val COMBO_COUNT = MemoryKey<Int>("combo_count")
-    val CHARGE_TICKS = MemoryKey<Int>("charge_ticks")
+    private val byName = ConcurrentHashMap<String, MemoryKey<*>>()
+
+    val MOVE_TARGET = register(MemoryKey<Point>("move_target"))
+    val LOOK_TARGET = register(MemoryKey<Point>("look_target"))
+    val ATTACK_TARGET = register(MemoryKey<Entity>("attack_target"))
+    val NEAREST_PLAYER = register(MemoryKey<Player>("nearest_player"))
+    val PANIC_TICKS = register(MemoryKey<Int>("panic_ticks"))
+    val HOME_POSITION = register(MemoryKey<Point>("home_position"))
+    val SPAWN_POSITION = register(MemoryKey<Point>("spawn_position"))
+    val LAST_DAMAGE_TIME = register(MemoryKey<Long>("last_damage_time"))
+    val LAST_DAMAGE_DEALT_TIME = register(MemoryKey<Long>("last_damage_dealt_time"))
+    val LAST_ATTACKER = register(MemoryKey<Entity>("last_attacker"))
+    val STRAFE_DIRECTION = register(MemoryKey<Int>("strafe_direction"))
+    val LEAP_COOLDOWN = register(MemoryKey<Int>("leap_cooldown"))
+    val ABILITY_COOLDOWN = register(MemoryKey<Int>("ability_cooldown"))
+    val PHASE = register(MemoryKey<Int>("phase"))
+    val SUMMON_COOLDOWN = register(MemoryKey<Int>("summon_cooldown"))
+    val SHIELD_ACTIVE = register(MemoryKey<Boolean>("shield_active"))
+    val COMBO_COUNT = register(MemoryKey<Int>("combo_count"))
+    val CHARGE_TICKS = register(MemoryKey<Int>("charge_ticks"))
+    val LAST_KNOWN_POSITION = register(MemoryKey<Point>("last_known_position"))
+    val NEARBY_PLAYER_COUNT = register(MemoryKey<Int>("nearby_player_count"))
+    val NEARBY_ENTITY_COUNT = register(MemoryKey<Int>("nearby_entity_count"))
+    val LAST_TARGET_KILLED = register(MemoryKey<Entity>("last_target_killed"))
+    val OWNER = register(MemoryKey<Entity>("owner"))
+    val BURST_COUNT = register(MemoryKey<Int>("burst_count"))
+
+    private fun <T> register(key: MemoryKey<T>): MemoryKey<T> {
+        byName[key.name] = key
+        return key
+    }
+
+    fun byName(name: String): MemoryKey<*>? = byName[name]
 }
 
 class MemoryStorage {
@@ -51,7 +67,13 @@ class MemoryStorage {
 
     fun <T> has(key: MemoryKey<T>): Boolean = data.containsKey(key.name)
 
+    fun hasName(name: String): Boolean = data.containsKey(name)
+
     fun clear(key: MemoryKey<*>) { data.remove(key.name) }
 
     fun clearAll() { data.clear() }
+
+    fun snapshot(): Map<String, Any> = data.toMap()
+
+    fun size(): Int = data.size
 }

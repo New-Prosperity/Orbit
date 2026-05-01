@@ -1,0 +1,678 @@
+{
+  "$comment": "Catalog of every type registered in Orbit's behavior file factories. Keep in sync with ExecutorFactories, SensorFactories, EvaluatorFactories, ScorerFactories, Triggers, MemoryKeys, DamageElements.",
+  "version": 1,
+
+  "executors": {
+    "idle": {
+      "description": "Stand still for a random duration.",
+      "params": {
+        "min_ticks": { "type": "integer", "default": 40 },
+        "max_ticks": { "type": "integer", "default": 100 }
+      }
+    },
+    "flat_roam": {
+      "description": "Wander to random nearby positions on flat terrain.",
+      "params": {
+        "range": { "type": "number", "default": 10.0 },
+        "run_ticks": { "type": "integer", "default": 100 },
+        "max_retries": { "type": "integer", "default": 10 }
+      }
+    },
+    "look_around": {
+      "description": "Glance in a random direction for a random duration.",
+      "params": {
+        "min_ticks": { "type": "integer", "default": 20 },
+        "max_ticks": { "type": "integer", "default": 60 }
+      }
+    },
+    "look_at_target": {
+      "description": "Track a memory-key entity with the look direction.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "nearest_player" },
+        "min_ticks": { "type": "integer", "default": 40 },
+        "max_ticks": { "type": "integer", "default": 80 }
+      }
+    },
+    "follow_entity": {
+      "description": "Pursue a memory-key entity until within min_range.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "nearest_player" },
+        "min_range": { "type": "number", "default": 2.0 },
+        "max_range": { "type": "number", "default": 32.0 }
+      }
+    },
+    "flee_entity": {
+      "description": "Move radially away from a memory-key entity until safe_distance.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "flee_range": { "type": "number", "default": 12.0 },
+        "safe_distance": { "type": "number", "default": 16.0 }
+      }
+    },
+    "retreat_toward": {
+      "description": "When threat is too close, move toward a safe entity (e.g. owner). Falls back to radial flee if no safe entity is bound.",
+      "params": {
+        "threat_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "safe_memory_key": { "type": "memory_key", "default": "owner" },
+        "trigger_distance": { "type": "number", "default": 6.0 },
+        "arrived_distance": { "type": "number", "default": 3.0 },
+        "fallback_flee_range": { "type": "number", "default": 6.0 }
+      }
+    },
+    "panic": {
+      "description": "Frantic random movement while PANIC_TICKS memory key is set.",
+      "params": {
+        "range": { "type": "number", "default": 8.0 }
+      }
+    },
+    "return_home": {
+      "description": "Walk toward HOME_POSITION until arrived_distance.",
+      "params": {
+        "max_distance": { "type": "number", "default": 30.0 },
+        "arrived_distance": { "type": "number", "default": 2.0 }
+      }
+    },
+    "wait": {
+      "description": "Pure delay primitive. Returns false after `ticks`.",
+      "params": {
+        "ticks": { "type": "integer", "default": 20 }
+      }
+    },
+
+    "melee_attack": {
+      "description": "Strike a target in melee range. Reads ATTACK_TARGET memory key.",
+      "params": {
+        "attack_range": { "type": "number", "default": 2.5 },
+        "cooldown_ticks": { "type": "integer", "default": 20 },
+        "damage": { "type": "number", "default": 4.0 },
+        "cooldown_name": { "type": "string", "default": "melee_attack" },
+        "knockback_horizontal": { "type": "number", "default": 0 },
+        "knockback_vertical": { "type": "number", "default": 0 },
+        "effects": { "type": "array", "items": "$effect_application" }
+      }
+    },
+    "ranged_attack": {
+      "description": "Fire projectiles. Kites away when target is within min_range.",
+      "params": {
+        "projectile_type": { "type": "entity_type", "default": "arrow" },
+        "attack_range": { "type": "number", "default": 16.0 },
+        "min_range": { "type": "number", "default": 4.0 },
+        "cooldown_ticks": { "type": "integer", "default": 40 },
+        "projectile_speed": { "type": "number", "default": 1.5 },
+        "projectile_damage": { "type": "number", "default": 4.0 },
+        "cooldown_name": { "type": "string", "default": "ranged_attack" }
+      }
+    },
+    "leap_attack": {
+      "description": "Jump at the target dealing damage on land.",
+      "params": {
+        "leap_range": { "type": "number", "default": 6.0 },
+        "min_range": { "type": "number", "default": 3.0 },
+        "horizontal_force": { "type": "number", "default": 1.2 },
+        "vertical_force": { "type": "number", "default": 0.5 },
+        "damage": { "type": "number", "default": 6.0 },
+        "cooldown_ticks": { "type": "integer", "default": 60 },
+        "cooldown_name": { "type": "string", "default": "leap_attack" },
+        "knockback_horizontal": { "type": "number", "default": 0 },
+        "knockback_vertical": { "type": "number", "default": 0 },
+        "effects": { "type": "array", "items": "$effect_application" }
+      }
+    },
+    "charge_attack": {
+      "description": "Wind up, then dash forward damaging entities in path.",
+      "params": {
+        "charge_up_ticks": { "type": "integer", "default": 40 },
+        "charge_speed": { "type": "number", "default": 2.0 },
+        "damage": { "type": "number", "default": 10.0 },
+        "hit_radius": { "type": "number", "default": 1.5 },
+        "cooldown_ticks": { "type": "integer", "default": 100 },
+        "cooldown_name": { "type": "string", "default": "charge_attack" },
+        "knockback_horizontal": { "type": "number", "default": 0 },
+        "knockback_vertical": { "type": "number", "default": 0 },
+        "effects": { "type": "array", "items": "$effect_application" }
+      }
+    },
+    "area_damage": {
+      "description": "Damage all living entities within radius.",
+      "params": {
+        "radius": { "type": "number", "default": 5.0 },
+        "damage": { "type": "number", "default": 6.0 },
+        "cooldown_ticks": { "type": "integer", "default": 60 },
+        "cooldown_name": { "type": "string", "default": "area_damage" },
+        "knockback_horizontal": { "type": "number", "default": 0 },
+        "knockback_vertical": { "type": "number", "default": 0 },
+        "effects": { "type": "array", "items": "$effect_application" }
+      }
+    },
+    "cone_damage": {
+      "description": "Damage entities within a forward-facing cone.",
+      "params": {
+        "length": { "type": "number", "default": 6.0 },
+        "angle_degrees": { "type": "number", "default": 90.0 },
+        "damage": { "type": "number", "default": 6.0 },
+        "cooldown_ticks": { "type": "integer", "default": 60 },
+        "cooldown_name": { "type": "string", "default": "cone_damage" },
+        "knockback_horizontal": { "type": "number", "default": 0 },
+        "knockback_vertical": { "type": "number", "default": 0 },
+        "effects": { "type": "array", "items": "$effect_application" }
+      }
+    },
+    "ring_damage": {
+      "description": "Damage entities in an annulus (donut) around the entity.",
+      "params": {
+        "inner_radius": { "type": "number", "default": 2.0 },
+        "outer_radius": { "type": "number", "default": 6.0 },
+        "damage": { "type": "number", "default": 6.0 },
+        "cooldown_ticks": { "type": "integer", "default": 60 },
+        "cooldown_name": { "type": "string", "default": "ring_damage" },
+        "knockback_horizontal": { "type": "number", "default": 0 },
+        "knockback_vertical": { "type": "number", "default": 0 },
+        "effects": { "type": "array", "items": "$effect_application" }
+      }
+    },
+    "teleport_behind": {
+      "description": "Teleport behind the attack target.",
+      "params": {
+        "cooldown_ticks": { "type": "integer", "default": 80 },
+        "distance": { "type": "number", "default": 3.0 },
+        "cooldown_name": { "type": "string", "default": "teleport_behind" }
+      }
+    },
+    "summon_minions": {
+      "description": "Spawn N minions in a circle around self.",
+      "params": {
+        "minion_type": { "type": "entity_type", "required": true },
+        "count": { "type": "integer", "default": 3 },
+        "radius": { "type": "number", "default": 4.0 },
+        "cooldown_ticks": { "type": "integer", "default": 200 },
+        "cooldown_name": { "type": "string", "default": "summon_minions" }
+      }
+    },
+    "shield": {
+      "description": "Activate a damage-reducing shield for a duration.",
+      "params": {
+        "duration_ticks": { "type": "integer", "default": 60 },
+        "cooldown_ticks": { "type": "integer", "default": 200 },
+        "damage_reduction": { "type": "number", "default": 0.5 },
+        "cooldown_name": { "type": "string", "default": "shield" }
+      }
+    },
+    "heal": {
+      "description": "Restore HP to self.",
+      "params": {
+        "heal_amount": { "type": "number", "default": 4.0 },
+        "cooldown_ticks": { "type": "integer", "default": 100 },
+        "cooldown_name": { "type": "string", "default": "heal" }
+      }
+    },
+    "strafe": {
+      "description": "Strafe perpendicular to the attack target.",
+      "params": {
+        "strafe_range": { "type": "number", "default": 8.0 },
+        "strafe_speed": { "type": "number", "default": 0.1 },
+        "change_dir_ticks": { "type": "integer", "default": 40 }
+      }
+    },
+    "circle_target": {
+      "description": "Orbit the attack target at radius.",
+      "params": {
+        "radius": { "type": "number", "default": 5.0 },
+        "speed": { "type": "number", "default": 0.08 }
+      }
+    },
+
+    "telegraph": {
+      "description": "Render a particle warning shape at the entity's position for duration_ticks. Composable with sequence() for windup-then-attack.",
+      "params": {
+        "particle": { "type": "particle_id", "default": "flame" },
+        "duration_ticks": { "type": "integer", "default": 30 },
+        "y_offset": { "type": "number", "default": 0.1 },
+        "shape": { "type": "$telegraph_shape", "required": true }
+      }
+    },
+
+    "sequence": {
+      "description": "Run children in order, advancing when a child returns false.",
+      "params": { "children": { "type": "array", "items": "$executor" } }
+    },
+    "selector": {
+      "description": "Try children in order; stick with whichever is currently running.",
+      "params": { "children": { "type": "array", "items": "$executor" } }
+    },
+    "parallel": {
+      "description": "Run multiple children at once.",
+      "params": {
+        "children": { "type": "array", "items": "$executor" },
+        "policy": { "type": "string", "enum": ["all", "any"], "default": "all" }
+      }
+    },
+    "with_cooldown": {
+      "description": "Gate a child executor behind a named cooldown.",
+      "params": {
+        "name": { "type": "string", "required": true },
+        "ticks": { "type": "integer", "default": 100 },
+        "child": { "type": "$executor", "required": true }
+      }
+    },
+    "with_timeout": {
+      "description": "Force-stop a child after ticks.",
+      "params": {
+        "ticks": { "type": "integer", "default": 100 },
+        "child": { "type": "$executor", "required": true }
+      }
+    },
+    "loop": {
+      "description": "Run a child N times sequentially.",
+      "params": {
+        "times": { "type": "integer", "default": 1 },
+        "child": { "type": "$executor", "required": true }
+      }
+    },
+    "with_chance": {
+      "description": "On start, roll the dice — child runs only if chance check passes.",
+      "params": {
+        "chance": { "type": "number", "default": 0.5 },
+        "child":  { "type": "$executor", "required": true }
+      }
+    },
+    "fallback": {
+      "description": "Run primary; if it fails (returns false on first execute), run alternative instead.",
+      "params": {
+        "primary":     { "type": "$executor", "required": true },
+        "alternative": { "type": "$executor", "required": true }
+      }
+    },
+    "repeat_forever": {
+      "description": "Restart child whenever it finishes. Pair with with_timeout/cooldown to bound runtime.",
+      "params": { "child": { "type": "$executor", "required": true } }
+    },
+    "invert": {
+      "description": "Flip the child's return value — child returning true makes this return false and vice versa.",
+      "params": { "child": { "type": "$executor", "required": true } }
+    },
+
+    "set_memory_int": {
+      "description": "Write an int value to a memory key once, then return false (one-shot).",
+      "params": {
+        "key":   { "type": "memory_key", "required": true },
+        "value": { "type": "integer", "default": 0 }
+      }
+    },
+    "increment_memory_int": {
+      "description": "Add delta to an int memory key (default 0 if unset). Useful for combo counters.",
+      "params": {
+        "key":     { "type": "memory_key", "required": true },
+        "delta":   { "type": "integer", "default": 1 },
+        "default": { "type": "integer", "default": 0 }
+      }
+    },
+    "clear_memory": {
+      "description": "Remove a memory key once, then return false.",
+      "params": { "key": { "type": "memory_key", "required": true } }
+    },
+    "play_sound": {
+      "description": "Emit a sound at the entity's position. Returns false (one-shot).",
+      "params": {
+        "sound":  { "type": "string", "required": true, "description": "Vanilla sound key, e.g. 'entity.skeleton.shoot'." },
+        "volume": { "type": "number", "default": 1.0 },
+        "pitch":  { "type": "number", "default": 1.0 }
+      }
+    },
+    "apply_potion": {
+      "description": "Apply a potion effect to self (e.g. self-buff strength before attacking). Returns false.",
+      "params": {
+        "type":           { "type": "potion_effect", "required": true },
+        "duration_ticks": { "type": "integer", "default": 60 },
+        "amplifier":      { "type": "integer", "default": 0 }
+      }
+    },
+    "broadcast_message": {
+      "description": "Send a chat message to all players within range. Supports MiniMessage formatting. Returns false.",
+      "params": {
+        "message": { "type": "string", "required": true, "description": "MiniMessage-formatted text." },
+        "range":   { "type": "number", "default": 32.0 }
+      }
+    }
+  },
+
+  "telegraph_shapes": {
+    "ring": {
+      "description": "Single ring outline at radius.",
+      "params": {
+        "radius": { "type": "number", "default": 5.0 },
+        "points": { "type": "integer", "default": 24 }
+      }
+    },
+    "filled_circle": {
+      "description": "Concentric rings filling a disc.",
+      "params": {
+        "radius": { "type": "number", "default": 5.0 },
+        "rings": { "type": "integer", "default": 4 },
+        "points_per_ring": { "type": "integer", "default": 16 }
+      }
+    },
+    "annulus": {
+      "description": "Donut (matches ring_damage shape).",
+      "params": {
+        "inner_radius": { "type": "number", "default": 2.0 },
+        "outer_radius": { "type": "number", "default": 6.0 },
+        "rings": { "type": "integer", "default": 3 },
+        "points": { "type": "integer", "default": 24 }
+      }
+    },
+    "cone": {
+      "description": "Wedge oriented along entity facing (matches cone_damage shape).",
+      "params": {
+        "length": { "type": "number", "default": 6.0 },
+        "angle_degrees": { "type": "number", "default": 90.0 },
+        "rings": { "type": "integer", "default": 5 },
+        "arc_points": { "type": "integer", "default": 12 }
+      }
+    },
+    "line_forward": {
+      "description": "Line projected from entity in facing direction.",
+      "params": {
+        "length": { "type": "number", "default": 8.0 },
+        "density": { "type": "number", "default": 0.4 }
+      }
+    }
+  },
+
+  "sensors": {
+    "nearest_player": {
+      "description": "Find closest Player; sets MemoryKeys.NEAREST_PLAYER.",
+      "params": {
+        "range": { "type": "number", "default": 32.0 },
+        "min_range": { "type": "number", "default": 0.0 },
+        "period": { "type": "integer", "default": 20 }
+      }
+    },
+    "low_health": {
+      "description": "When HP percent <= threshold and PANIC_TICKS isn't set, sets PANIC_TICKS.",
+      "params": {
+        "threshold": { "type": "number", "default": 0.3 },
+        "panic_ticks": { "type": "integer", "default": 60 },
+        "period": { "type": "integer", "default": 10 }
+      }
+    },
+    "damage": {
+      "description": "When LAST_ATTACKER is set, copy to ATTACK_TARGET.",
+      "params": {
+        "retarget_on_damage": { "type": "boolean", "default": true },
+        "period": { "type": "integer", "default": 1 }
+      }
+    },
+    "nearest_entity": {
+      "description": "Find closest entity in range (optionally players-only).",
+      "params": {
+        "range": { "type": "number", "default": 16.0 },
+        "target_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "players_only": { "type": "boolean", "default": false },
+        "period": { "type": "integer", "default": 10 }
+      }
+    },
+    "nearest_non_owner": {
+      "description": "Closest entity excluding the OWNER memory entry.",
+      "params": {
+        "range": { "type": "number", "default": 24.0 },
+        "target_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "owner_memory_key": { "type": "memory_key", "default": "owner" },
+        "players_only": { "type": "boolean", "default": true },
+        "period": { "type": "integer", "default": 10 }
+      }
+    },
+    "line_of_sight": {
+      "description": "Verify LOS to target memory entity; clears target after grace_period_ticks of LOS loss.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "last_position_key": { "type": "memory_key", "default": "last_known_position" },
+        "range": { "type": "number", "default": 32.0 },
+        "grace_period_ticks": { "type": "integer", "default": 60 },
+        "period": { "type": "integer", "default": 5 }
+      }
+    },
+    "last_known_position": {
+      "description": "Always copy target's position to output_key while target is alive.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "output_key": { "type": "memory_key", "default": "last_known_position" },
+        "period": { "type": "integer", "default": 5 }
+      }
+    },
+    "threat_target": {
+      "description": "Pick the highest-threat attacker; falls back to nearest player when threat empty.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "fallback_range": { "type": "number", "default": 32.0 },
+        "players_only_fallback": { "type": "boolean", "default": true },
+        "period": { "type": "integer", "default": 10 }
+      }
+    },
+    "visible_nearest_player": {
+      "description": "Closest non-sneaking player within LOS.",
+      "params": {
+        "range": { "type": "number", "default": 32.0 },
+        "ignore_sneaking": { "type": "boolean", "default": true },
+        "require_line_of_sight": { "type": "boolean", "default": true },
+        "period": { "type": "integer", "default": 20 }
+      }
+    },
+    "cluster_count": {
+      "description": "Count nearby entities; writes the count to memory.",
+      "params": {
+        "output_key": { "type": "memory_key", "default": "nearby_player_count" },
+        "range": { "type": "number", "default": 24.0 },
+        "players_only": { "type": "boolean", "default": true },
+        "period": { "type": "integer", "default": 40 }
+      }
+    }
+  },
+
+  "evaluators": {
+    "always":         { "description": "Always passes." },
+    "never":          { "description": "Never passes." },
+    "has":            { "description": "Memory key is set.", "params": { "key": { "type": "memory_key", "required": true } } },
+    "not":            { "description": "Inverts a child evaluator.", "params": { "of": { "type": "$evaluator", "required": true } } },
+    "all":            { "description": "All children pass.", "params": { "of": { "type": "array", "items": "$evaluator", "required": true } } },
+    "any":            { "description": "Any child passes.", "params": { "of": { "type": "array", "items": "$evaluator", "required": true } } },
+    "phase":          { "description": "Current phase equals value.", "params": { "value": { "type": "integer", "default": 0 } } },
+    "phase_at_least": { "description": "Current phase >= value.", "params": { "value": { "type": "integer", "default": 0 } } },
+    "hp_below":       { "description": "Health percent < value (0..1).", "params": { "value": { "type": "number", "default": 0.5 } } },
+    "hp_above":       { "description": "Health percent > value (0..1).", "params": { "value": { "type": "number", "default": 0.5 } } },
+
+    "random": {
+      "description": "Probabilistic gate. Re-rolled on every check.",
+      "params": { "chance": { "type": "number", "default": 0.5, "description": "0..1 probability of passing." } }
+    },
+    "compare_int": {
+      "description": "Compare an int memory key against a fixed value (e.g. combo_count >= 3).",
+      "params": {
+        "key": { "type": "memory_key", "required": true },
+        "op":  { "type": "string", "enum": [">", "<", ">=", "<=", "==", "!="], "default": ">=" },
+        "value": { "type": "integer", "default": 0 }
+      }
+    },
+    "distance_below": {
+      "description": "Distance to the entity in target_memory_key is less than value.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "value": { "type": "number", "default": 8.0 }
+      }
+    },
+    "distance_above": {
+      "description": "Distance to the entity in target_memory_key is greater than value.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "owner" },
+        "value": { "type": "number", "default": 8.0 }
+      }
+    },
+    "time_since_below": {
+      "description": "Milliseconds since a long-typed memory key (e.g. last_damage_time) is below max_ms — i.e. the event happened recently.",
+      "params": {
+        "time_key": { "type": "memory_key", "required": true },
+        "max_ms":   { "type": "integer", "default": 5000 }
+      }
+    },
+    "cooldown_ready": {
+      "description": "Named cooldown is OFF (i.e. the action is ready to fire).",
+      "params": { "name": { "type": "string", "required": true } }
+    },
+    "in_combat": {
+      "description": "Entity has dealt or taken damage within in_combat_timeout_ms."
+    }
+  },
+
+  "scorers": {
+    "constant": {
+      "description": "Returns a fixed score.",
+      "params": { "value": { "type": "number", "default": 0 } }
+    },
+    "linear_health": {
+      "description": "Score = base + slope * healthPercent. Use slope < 0 to favor when low HP.",
+      "params": {
+        "base": { "type": "number", "default": 0 },
+        "slope": { "type": "number", "default": 0 }
+      }
+    },
+    "phase_priority": {
+      "description": "Score from a per-phase map.",
+      "params": {
+        "priorities": { "type": "object", "items": "number", "description": "Map of phase index → score." },
+        "default": { "type": "number", "default": 0 }
+      }
+    },
+    "inverse_distance": {
+      "description": "Closer target = higher score.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "multiplier": { "type": "number", "default": 1.0 },
+        "max_score": { "type": "number", "default": 100.0 }
+      }
+    },
+    "hp_below_priority": {
+      "description": "Score `below` when HP% < threshold, else `above`.",
+      "params": {
+        "threshold": { "type": "number", "default": 0.5 },
+        "above": { "type": "number", "default": 0 },
+        "below": { "type": "number", "default": 10 }
+      }
+    },
+    "sum": {
+      "description": "Sum of children scores.",
+      "params": { "of": { "type": "array", "items": "$scorer", "required": true } }
+    },
+    "max": {
+      "description": "Maximum of children scores.",
+      "params": { "of": { "type": "array", "items": "$scorer", "required": true } }
+    },
+    "distance": {
+      "description": "Further target = higher score (opposite of inverse_distance). Use to favor following far things.",
+      "params": {
+        "target_memory_key": { "type": "memory_key", "default": "attack_target" },
+        "multiplier": { "type": "number", "default": 1.0 },
+        "max_score":  { "type": "number", "default": 100.0 }
+      }
+    },
+    "memory_int": {
+      "description": "Score from an int memory key. value × multiplier, capped at max_score.",
+      "params": {
+        "key":        { "type": "memory_key", "required": true },
+        "multiplier": { "type": "number", "default": 1.0 },
+        "max_score":  { "type": "number", "default": 1000000 },
+        "default":    { "type": "integer", "default": 0 }
+      }
+    },
+    "scaled": {
+      "description": "Multiply a child scorer by a constant.",
+      "params": {
+        "of":         { "type": "$scorer", "required": true },
+        "multiplier": { "type": "number", "default": 1.0 }
+      }
+    },
+    "if": {
+      "description": "Conditional scorer: returns `then` if evaluator passes, else `else` (or 0 if no else).",
+      "params": {
+        "evaluator": { "type": "$evaluator", "required": true },
+        "then":      { "type": "$scorer",    "required": true },
+        "else":      { "type": "$scorer" }
+      }
+    }
+  },
+
+  "triggers": [
+    "on_damaged",
+    "on_target_spotted",
+    "on_target_lost",
+    "on_phase_changed",
+    "on_low_health",
+    "on_ally_damaged",
+    "on_shield_broken",
+    "on_combat_enter",
+    "on_combat_exit",
+    "on_killed_target"
+  ],
+
+  "memory_keys": [
+    "move_target",
+    "look_target",
+    "attack_target",
+    "nearest_player",
+    "panic_ticks",
+    "home_position",
+    "spawn_position",
+    "last_damage_time",
+    "last_damage_dealt_time",
+    "last_attacker",
+    "strafe_direction",
+    "leap_cooldown",
+    "ability_cooldown",
+    "phase",
+    "summon_cooldown",
+    "shield_active",
+    "combo_count",
+    "charge_ticks",
+    "last_known_position",
+    "nearby_player_count",
+    "nearby_entity_count",
+    "last_target_killed",
+    "owner",
+    "burst_count"
+  ],
+
+  "damage_elements": [
+    "generic",
+    "physical",
+    "projectile",
+    "fall",
+    "fire",
+    "explosion",
+    "magic",
+    "wither",
+    "lightning",
+    "cold",
+    "drown",
+    "starve",
+    "suffocate",
+    "thorns",
+    "sonic",
+    "dragon_breath",
+    "void",
+    "poison",
+    "holy"
+  ],
+
+  "controllers": ["walk", "look"],
+
+  "$schemas": {
+    "executor": "Any object whose `type` matches a key in executors.",
+    "evaluator": "Any object whose `type` matches a key in evaluators.",
+    "scorer": "Any object whose `type` matches a key in scorers.",
+    "telegraph_shape": "Any object whose `type` matches a key in telegraph_shapes.",
+    "effect_application": {
+      "type": { "type": "potion_effect", "required": true },
+      "duration_ticks": { "type": "integer", "default": 60 },
+      "amplifier": { "type": "integer", "default": 0 },
+      "chance": { "type": "number", "default": 1.0 }
+    }
+  }
+}

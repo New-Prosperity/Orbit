@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nebula.example.com/schemas/nebula_blocks.schema.json",
+  "title": "Nebula Custom Block",
+  "description": "Schema for the nebula.json file that lives next to a custom block's model.json under customcontent/blocks/<id>/.",
+  "type": "object",
+  "required": ["hitbox", "item", "drops"],
+  "additionalProperties": false,
+  "properties": {
+    "hitbox": {
+      "description": "Collision shape and pool the block is allocated from.",
+      "type": "string",
+      "enum": ["full", "slab", "stair", "thin", "transparent", "wall", "fence", "trapdoor"]
+    },
+    "item": {
+      "description": "ID of the custom item that places this block. Must exist under customcontent/items/.",
+      "type": "string",
+      "minLength": 1
+    },
+    "hardness": {
+      "description": "Mining time at base speed: time_seconds = hardness * 1.5 / tool_speed (with correct tool) or hardness * 5.0 (without). Defaults to 1.5.",
+      "type": "number",
+      "minimum": 0,
+      "default": 1.5
+    },
+    "place_sound": {
+      "description": "Vanilla sound key to play when placed (e.g. block.grass.place). Defaults to block.stone.place.",
+      "type": "string",
+      "default": "block.stone.place"
+    },
+    "break_sound": {
+      "description": "Vanilla sound key to play when broken. Defaults to block.stone.break.",
+      "type": "string",
+      "default": "block.stone.break"
+    },
+    "mining_block": {
+      "description": "Vanilla block whose mining rules to mimic (drives Tool.getSpeed and Tool.isCorrectForDrops). Use a key like 'stone' or 'minecraft:diamond_ore'. Omit to mine at the carrier's speed (no tier bonus).",
+      "type": "string"
+    },
+    "drops": {
+      "description": "What drops on break.",
+      "oneOf": [
+        {
+          "title": "Self-drop",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "self": { "type": "boolean", "const": true }
+          }
+        },
+        {
+          "title": "Loot table",
+          "type": "object",
+          "required": ["self", "loot_table"],
+          "additionalProperties": false,
+          "properties": {
+            "self": { "type": "boolean", "const": false },
+            "loot_table": {
+              "type": "object",
+              "required": ["entries"],
+              "additionalProperties": false,
+              "properties": {
+                "rolls": { "type": "integer", "minimum": 0, "default": 1 },
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["material"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "material": { "type": "string" },
+                      "weight": { "type": "integer", "minimum": 1, "default": 1 },
+                      "min_count": { "type": "integer", "minimum": 0, "default": 1 },
+                      "max_count": { "type": "integer", "minimum": 0, "default": 1 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

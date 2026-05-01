@@ -8,10 +8,13 @@ import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.LivingEntity
 import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.entity.damage.Damage
+import java.time.Duration
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
+
+private fun ticksToDuration(ticks: Int): Duration = Duration.ofMillis(ticks * 50L)
 
 class IdleExecutor(
     private val minTicks: Int = 40,
@@ -110,9 +113,11 @@ class MeleeAttackExecutor(
     private val attackRange: Double = 2.5,
     private val cooldownTicks: Int = 20,
     private val damage: Float = 4f,
+    private val cooldownName: String = "melee_attack",
+    private val hitOptions: HitOptions = HitOptions.NONE,
     private val onHit: ((SmartEntity, LivingEntity) -> Unit)? = null,
 ) : BehaviorExecutor {
-    private var cooldown = 0
+    private val cooldown = ticksToDuration(cooldownTicks)
 
     override fun execute(entity: SmartEntity): Boolean {
         val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) as? LivingEntity ?: return false
@@ -120,11 +125,12 @@ class MeleeAttackExecutor(
         entity.memory.set(MemoryKeys.LOOK_TARGET, target.position.add(0.0, 1.5, 0.0))
         entity.memory.set(MemoryKeys.MOVE_TARGET, target.position)
 
-        if (cooldown > 0) { cooldown--; return true }
+        if (entity.isOnCooldown(cooldownName)) return true
         if (entity.position.distance(target.position) <= attackRange) {
-            target.damage(Damage.fromEntity(entity, damage))
-            onHit?.invoke(entity, target)
-            cooldown = cooldownTicks
+            if (applyHit(entity, target, damage, hitOptions)) {
+                onHit?.invoke(entity, target)
+            }
+            entity.useCooldown(cooldownName, cooldown)
         }
         return true
     }
@@ -169,9 +175,10 @@ class RangedAttackExecutor(
     private val cooldownTicks: Int = 40,
     private val projectileSpeed: Double = 1.5,
     private val projectileDamage: Float = 4f,
+    private val cooldownName: String = "ranged_attack",
     private val onShoot: ((SmartEntity, Entity) -> Unit)? = null,
 ) : BehaviorExecutor {
-    private var cooldown = 0
+    private val cooldown = ticksToDuration(cooldownTicks)
 
     override fun execute(entity: SmartEntity): Boolean {
         val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) as? LivingEntity ?: return false
@@ -187,8 +194,8 @@ class RangedAttackExecutor(
             entity.memory.clear(MemoryKeys.MOVE_TARGET)
         }
 
-        if (cooldown > 0) { cooldown--; return true }
-        cooldown = cooldownTicks
+        if (entity.isOnCooldown(cooldownName)) return true
+        entity.useCooldown(cooldownName, cooldown)
 
         val instance = entity.instance ?: return false
         val projectile = EntityProjectile(entity, projectileType)
@@ -213,9 +220,11 @@ class LeapAttackExecutor(
     private val verticalForce: Double = 0.5,
     private val damage: Float = 6f,
     private val cooldownTicks: Int = 60,
+    private val cooldownName: String = "leap_attack",
+    private val hitOptions: HitOptions = HitOptions.NONE,
     private val onLeap: ((SmartEntity) -> Unit)? = null,
 ) : BehaviorExecutor {
-    private var cooldown = 0
+    private val cooldown = ticksToDuration(cooldownTicks)
     private var leaping = false
 
     override fun execute(entity: SmartEntity): Boolean {
@@ -224,8 +233,7 @@ class LeapAttackExecutor(
         val dist = entity.position.distance(target.position)
         entity.memory.set(MemoryKeys.LOOK_TARGET, target.position.add(0.0, 1.5, 0.0))
 
-        if (cooldown > 0) {
-            cooldown--
+        if (entity.isOnCooldown(cooldownName)) {
             entity.memory.set(MemoryKeys.MOVE_TARGET, target.position)
             return true
         }
@@ -234,9 +242,9 @@ class LeapAttackExecutor(
             if (entity.isOnGround) {
                 leaping = false
                 if (dist <= 2.5) {
-                    target.damage(Damage.fromEntity(entity, damage))
+                    applyHit(entity, target, damage, hitOptions)
                 }
-                cooldown = cooldownTicks
+                entity.useCooldown(cooldownName, cooldown)
             }
             return true
         }
@@ -340,25 +348,63 @@ class FleeEntityExecutor(
     }
 }
 
+class RetreatTowardExecutor(
+    private val threatKey: MemoryKey<*> = MemoryKeys.ATTACK_TARGET,
+    private val safeKey: MemoryKey<Entity> = MemoryKeys.OWNER,
+    private val triggerDistance: Double = 6.0,
+    private val arrivedDistance: Double = 3.0,
+    private val fallbackFleeRange: Double = 6.0,
+) : BehaviorExecutor {
+    override fun execute(entity: SmartEntity): Boolean {
+        val threat = entity.memory.get(threatKey) as? Entity ?: return false
+        if (threat.isRemoved) return false
+        val threatDist = entity.position.distance(threat.position)
+        if (threatDist > triggerDistance) return false
+
+        entity.memory.set(MemoryKeys.LOOK_TARGET, threat.position.add(0.0, 1.5, 0.0))
+
+        val safe = entity.memory.get(safeKey)
+        if (safe == null || safe.isRemoved) {
+            val away = entity.position.sub(threat.position).asVec().normalize().mul(fallbackFleeRange)
+            entity.memory.set(MemoryKeys.MOVE_TARGET, entity.position.add(away))
+            return true
+        }
+
+        if (entity.position.distance(safe.position) > arrivedDistance) {
+            entity.memory.set(MemoryKeys.MOVE_TARGET, safe.position)
+        } else {
+            val away = entity.position.sub(threat.position).asVec().normalize().mul(fallbackFleeRange)
+            entity.memory.set(MemoryKeys.MOVE_TARGET, entity.position.add(away))
+        }
+        return true
+    }
+
+    override fun onStop(entity: SmartEntity) {
+        entity.memory.clear(MemoryKeys.MOVE_TARGET)
+        entity.memory.clear(MemoryKeys.LOOK_TARGET)
+    }
+}
+
 class ChargeAttackExecutor(
     private val chargeUpTicks: Int = 40,
     private val chargeSpeed: Double = 2.0,
     private val damage: Float = 10f,
     private val hitRadius: Double = 1.5,
     private val cooldownTicks: Int = 100,
+    private val cooldownName: String = "charge_attack",
+    private val hitOptions: HitOptions = HitOptions.NONE,
     private val onChargeStart: ((SmartEntity) -> Unit)? = null,
     private val onChargeRelease: ((SmartEntity) -> Unit)? = null,
     private val onHit: ((SmartEntity, LivingEntity) -> Unit)? = null,
 ) : BehaviorExecutor {
+    private val cooldown = ticksToDuration(cooldownTicks)
     private var phase = 0
     private var chargeTicks = 0
     private var dashDirection: Vec = Vec.ZERO
     private var dashTicks = 0
-    private var cooldown = 0
 
     override fun onStart(entity: SmartEntity) {
         phase = 0
-        cooldown = 0
     }
 
     override fun execute(entity: SmartEntity): Boolean {
@@ -366,8 +412,7 @@ class ChargeAttackExecutor(
         if (target.isRemoved || target.isDead) return false
         entity.memory.set(MemoryKeys.LOOK_TARGET, target.position.add(0.0, 1.5, 0.0))
 
-        if (cooldown > 0) {
-            cooldown--
+        if (entity.isOnCooldown(cooldownName)) {
             entity.memory.set(MemoryKeys.MOVE_TARGET, target.position)
             return true
         }
@@ -394,11 +439,12 @@ class ChargeAttackExecutor(
                     .filterIsInstance<LivingEntity>()
                     .filter { it !== entity && !it.isDead }
                     .forEach { hit ->
-                        hit.damage(Damage.fromEntity(entity, damage))
-                        onHit?.invoke(entity, hit)
+                        if (applyHit(entity, hit, damage, hitOptions)) {
+                            onHit?.invoke(entity, hit)
+                        }
                     }
                 if (--dashTicks <= 0) {
-                    cooldown = cooldownTicks
+                    entity.useCooldown(cooldownName, cooldown)
                     phase = 0
                 }
             }
@@ -416,21 +462,22 @@ class ChargeAttackExecutor(
 class TeleportBehindExecutor(
     private val cooldownTicks: Int = 80,
     private val distance: Double = 3.0,
+    private val cooldownName: String = "teleport_behind",
     private val onTeleport: ((SmartEntity) -> Unit)? = null,
 ) : BehaviorExecutor {
-    private var cooldown = 0
+    private val cooldown = ticksToDuration(cooldownTicks)
 
     override fun execute(entity: SmartEntity): Boolean {
         val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) ?: return false
         if (target.isRemoved) return false
-        if (cooldown > 0) { cooldown--; return false }
+        if (entity.isOnCooldown(cooldownName)) return false
 
         val behind = target.position.direction().mul(-distance)
         val dest = target.position.add(behind.x(), 0.0, behind.z())
         entity.teleport(dest)
         entity.memory.set(MemoryKeys.LOOK_TARGET, target.position.add(0.0, 1.5, 0.0))
         onTeleport?.invoke(entity)
-        cooldown = cooldownTicks
+        entity.useCooldown(cooldownName, cooldown)
         return false
     }
 }
@@ -440,13 +487,14 @@ class SummonMinionsExecutor(
     private val count: Int = 3,
     private val radius: Double = 4.0,
     private val cooldownTicks: Int = 200,
+    private val cooldownName: String = "summon_minions",
     private val onSummon: ((SmartEntity, SmartEntity) -> Unit)? = null,
     private val minionSetup: ((EntityBuilder) -> Unit)? = null,
 ) : BehaviorExecutor {
-    private var cooldown = 0
+    private val cooldown = ticksToDuration(cooldownTicks)
 
     override fun execute(entity: SmartEntity): Boolean {
-        if (cooldown > 0) { cooldown--; return false }
+        if (entity.isOnCooldown(cooldownName)) return false
         val instance = entity.instance ?: return false
         val pos = entity.position
 
@@ -461,7 +509,7 @@ class SummonMinionsExecutor(
             onSummon?.invoke(entity, minion)
         }
 
-        cooldown = cooldownTicks
+        entity.useCooldown(cooldownName, cooldown)
         return false
     }
 }
@@ -470,21 +518,97 @@ class AreaDamageExecutor(
     private val radius: Double = 5.0,
     private val damage: Float = 6f,
     private val cooldownTicks: Int = 60,
+    private val cooldownName: String = "area_damage",
+    private val hitOptions: HitOptions = HitOptions.NONE,
     private val onActivate: ((SmartEntity) -> Unit)? = null,
 ) : BehaviorExecutor {
-    private var cooldown = 0
+    private val cooldown = ticksToDuration(cooldownTicks)
 
     override fun execute(entity: SmartEntity): Boolean {
-        if (cooldown > 0) { cooldown--; return false }
+        if (entity.isOnCooldown(cooldownName)) return false
         val instance = entity.instance ?: return false
         onActivate?.invoke(entity)
 
         instance.getNearbyEntities(entity.position, radius)
             .filterIsInstance<LivingEntity>()
             .filter { it !== entity && !it.isDead }
-            .forEach { it.damage(Damage.fromEntity(entity, damage)) }
+            .forEach { applyHit(entity, it, damage, hitOptions) }
 
-        cooldown = cooldownTicks
+        entity.useCooldown(cooldownName, cooldown)
+        return false
+    }
+}
+
+class ConeAreaDamageExecutor(
+    private val length: Double = 6.0,
+    private val angleDegrees: Double = 90.0,
+    private val damage: Float = 6f,
+    private val cooldownTicks: Int = 60,
+    private val cooldownName: String = "cone_damage",
+    private val hitOptions: HitOptions = HitOptions.NONE,
+    private val onActivate: ((SmartEntity) -> Unit)? = null,
+) : BehaviorExecutor {
+    private val cooldown = ticksToDuration(cooldownTicks)
+    private val cosHalfAngle = cos(Math.toRadians(angleDegrees / 2.0))
+
+    override fun execute(entity: SmartEntity): Boolean {
+        if (entity.isOnCooldown(cooldownName)) return false
+        val instance = entity.instance ?: return false
+        onActivate?.invoke(entity)
+
+        val facing = entity.position.direction()
+        val origin = entity.position
+        instance.getNearbyEntities(origin, length)
+            .asSequence()
+            .filterIsInstance<LivingEntity>()
+            .filter { it !== entity && !it.isDead }
+            .forEach { hit ->
+                val toTarget = hit.position.sub(origin).asVec()
+                val len = toTarget.length()
+                if (len > length || len < 0.01) return@forEach
+                val nx = toTarget.x() / len
+                val ny = toTarget.y() / len
+                val nz = toTarget.z() / len
+                val dot = nx * facing.x() + ny * facing.y() + nz * facing.z()
+                if (dot >= cosHalfAngle) {
+                    applyHit(entity, hit, damage, hitOptions)
+                }
+            }
+
+        entity.useCooldown(cooldownName, cooldown)
+        return false
+    }
+}
+
+class RingAreaDamageExecutor(
+    private val innerRadius: Double = 2.0,
+    private val outerRadius: Double = 6.0,
+    private val damage: Float = 6f,
+    private val cooldownTicks: Int = 60,
+    private val cooldownName: String = "ring_damage",
+    private val hitOptions: HitOptions = HitOptions.NONE,
+    private val onActivate: ((SmartEntity) -> Unit)? = null,
+) : BehaviorExecutor {
+    private val cooldown = ticksToDuration(cooldownTicks)
+    private val innerSq = innerRadius * innerRadius
+    private val outerSq = outerRadius * outerRadius
+
+    override fun execute(entity: SmartEntity): Boolean {
+        if (entity.isOnCooldown(cooldownName)) return false
+        val instance = entity.instance ?: return false
+        onActivate?.invoke(entity)
+
+        instance.getNearbyEntities(entity.position, outerRadius)
+            .filterIsInstance<LivingEntity>()
+            .filter { it !== entity && !it.isDead }
+            .forEach { hit ->
+                val distSq = hit.position.distanceSquared(entity.position)
+                if (distSq in innerSq..outerSq) {
+                    applyHit(entity, hit, damage, hitOptions)
+                }
+            }
+
+        entity.useCooldown(cooldownName, cooldown)
         return false
     }
 }
@@ -493,14 +617,15 @@ class ShieldExecutor(
     private val durationTicks: Int = 60,
     private val cooldownTicks: Int = 200,
     private val damageReduction: Float = 0.5f,
+    private val cooldownName: String = "shield",
     private val onActivate: ((SmartEntity) -> Unit)? = null,
     private val onDeactivate: ((SmartEntity) -> Unit)? = null,
 ) : BehaviorExecutor {
+    private val cooldown = ticksToDuration(cooldownTicks)
     private var remaining = 0
-    private var cooldown = 0
 
     override fun execute(entity: SmartEntity): Boolean {
-        if (cooldown > 0) { cooldown--; return false }
+        if (entity.isOnCooldown(cooldownName)) return false
         if (remaining <= 0) {
             remaining = durationTicks
             entity.memory.set(MemoryKeys.SHIELD_ACTIVE, true)
@@ -509,7 +634,7 @@ class ShieldExecutor(
         if (--remaining <= 0) {
             entity.memory.set(MemoryKeys.SHIELD_ACTIVE, false)
             onDeactivate?.invoke(entity)
-            cooldown = cooldownTicks
+            entity.useCooldown(cooldownName, cooldown)
             return false
         }
         return true
@@ -630,17 +755,18 @@ class CircleTargetExecutor(
 class HealExecutor(
     private val healAmount: Float = 4f,
     private val cooldownTicks: Int = 100,
+    private val cooldownName: String = "heal",
     private val onHeal: ((SmartEntity) -> Unit)? = null,
 ) : BehaviorExecutor {
-    private var cooldown = 0
+    private val cooldown = ticksToDuration(cooldownTicks)
 
     override fun execute(entity: SmartEntity): Boolean {
-        if (cooldown > 0) { cooldown--; return false }
+        if (entity.isOnCooldown(cooldownName)) return false
         val maxHp = entity.getAttribute(Attribute.MAX_HEALTH).value.toFloat()
         if (entity.health >= maxHp) return false
         entity.health = min(entity.health + healAmount, maxHp)
         onHeal?.invoke(entity)
-        cooldown = cooldownTicks
+        entity.useCooldown(cooldownName, cooldown)
         return false
     }
 }
@@ -686,5 +812,79 @@ class TimedActionExecutor(
             return false
         }
         return true
+    }
+}
+
+class SetMemoryIntExecutor(
+    private val key: MemoryKey<Int>,
+    private val value: Int,
+) : BehaviorExecutor {
+    override fun execute(entity: SmartEntity): Boolean {
+        entity.memory.set(key, value)
+        return false
+    }
+}
+
+class IncrementMemoryIntExecutor(
+    private val key: MemoryKey<Int>,
+    private val delta: Int,
+    private val default: Int = 0,
+) : BehaviorExecutor {
+    override fun execute(entity: SmartEntity): Boolean {
+        val current = entity.memory.get(key) ?: default
+        entity.memory.set(key, current + delta)
+        return false
+    }
+}
+
+class ClearMemoryExecutor(
+    private val key: MemoryKey<*>,
+) : BehaviorExecutor {
+    override fun execute(entity: SmartEntity): Boolean {
+        entity.memory.clear(key)
+        return false
+    }
+}
+
+class PlaySoundExecutor(
+    private val soundEvent: net.minestom.server.sound.SoundEvent,
+    private val volume: Float = 1f,
+    private val pitch: Float = 1f,
+) : BehaviorExecutor {
+    override fun execute(entity: SmartEntity): Boolean {
+        entity.instance?.playSound(
+            net.kyori.adventure.sound.Sound.sound(
+                soundEvent.key(),
+                net.kyori.adventure.sound.Sound.Source.HOSTILE,
+                volume,
+                pitch,
+            ),
+            entity.position.x(), entity.position.y(), entity.position.z(),
+        )
+        return false
+    }
+}
+
+class ApplyPotionExecutor(
+    private val effect: net.minestom.server.potion.PotionEffect,
+    private val durationTicks: Int = 60,
+    private val amplifier: Int = 0,
+) : BehaviorExecutor {
+    override fun execute(entity: SmartEntity): Boolean {
+        entity.addEffect(net.minestom.server.potion.Potion(effect, amplifier, durationTicks))
+        return false
+    }
+}
+
+class BroadcastMessageExecutor(
+    private val message: net.kyori.adventure.text.Component,
+    private val range: Double = 32.0,
+) : BehaviorExecutor {
+    override fun execute(entity: SmartEntity): Boolean {
+        val instance = entity.instance ?: return false
+        instance.getNearbyEntities(entity.position, range)
+            .filterIsInstance<net.minestom.server.entity.Player>()
+            .forEach { it.sendMessage(message) }
+        return false
     }
 }

@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.customcontent.pack
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
@@ -13,8 +14,6 @@ import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.modelengine.generator.BbDisplaySlot
 import me.nebula.orbit.utils.modelengine.generator.BlockbenchParser
 import me.nebula.orbit.utils.modelengine.generator.GeneratedBoneModel
-import me.nebula.orbit.utils.modelengine.generator.GeneratedElement
-import me.nebula.orbit.utils.modelengine.generator.GeneratedFace
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.generator.RawGenerationResult
 import net.minestom.server.item.Material
@@ -47,6 +46,7 @@ object PackMerger {
     fun merge(
         resources: ResourceManager,
         modelsDirectory: String,
+        blocksDirectory: String,
         modelEngineRawResults: List<RawGenerationResult>,
         armorShaderEntries: Map<String, ByteArray> = emptyMap(),
         packFormat: Int = 84,
@@ -86,12 +86,8 @@ object PackMerger {
             processFurnitureModel(resources, def.id, furnitureModels, furnitureTextures)
         }
 
-        val customBlockModels = mutableMapOf<String, GeneratedBoneModel>()
-        val customBlockTextures = mutableMapOf<String, ByteArray>()
-
         CustomBlockRegistry.all().forEach { block ->
-            processTextureBlock(resources, block.id, block.texturePath, modelsDirectory,
-                customBlockModels, customBlockTextures)
+            processBlockSubfolder(resources, block.id, blocksDirectory, entries)
         }
 
         customItemTextures.forEach { (path, bytes) ->
@@ -99,13 +95,6 @@ object PackMerger {
         }
         customItemModels.forEach { (id, model) ->
             entries["assets/minecraft/models/customcontent/items/$id.json"] = buildModelJson(model)
-        }
-
-        customBlockTextures.forEach { (path, bytes) ->
-            entries["assets/minecraft/textures/customcontent/$path"] = bytes
-        }
-        customBlockModels.forEach { (id, model) ->
-            entries["assets/minecraft/models/customcontent/blocks/$id.json"] = buildModelJson(model)
         }
 
         furnitureTextures.forEach { (path, bytes) ->
@@ -128,7 +117,7 @@ object PackMerger {
             entries[path] = bytes
         }
 
-
+        dedupeTextures(entries)
 
         val customTextures = entries.keys
             .filter {
@@ -152,6 +141,8 @@ object PackMerger {
             entries["assets/minecraft/atlases/blocks.json"] = GsonProvider.pretty.toJson(atlasJson).toByteArray(Charsets.UTF_8)
         }
 
+        entries["assets/minecraft/sounds.json"] = buildBlockSoundSilencer()
+
         val textures = entries.keys.count { it.endsWith(".png") }
         val models = entries.keys.count { it.contains("/models/") }
         val shaders = entries.keys.count { it.contains("/shaders/") }
@@ -162,39 +153,47 @@ object PackMerger {
         return MergeResult(packBytes, sha1)
     }
 
-    private fun processTextureBlock(
+    private fun processBlockSubfolder(
         resources: ResourceManager,
         id: String,
-        texturePath: String,
-        modelsDirectory: String,
-        modelOutput: MutableMap<String, GeneratedBoneModel>,
-        textureOutput: MutableMap<String, ByteArray>,
+        blocksDirectory: String,
+        entries: MutableMap<String, ByteArray>,
     ) {
-        val filePath = "$modelsDirectory/$texturePath"
-        if (!resources.exists(filePath)) return
+        val subdir = "$blocksDirectory/$id"
+        val modelPath = "$subdir/model.json"
+        check(resources.exists(modelPath)) {
+            "Custom block '$id' missing model.json at $modelPath"
+        }
 
-        val textureBytes = resources.readBytes(filePath)
-        val textureKey = "${id}_tex.png"
-        textureOutput[textureKey] = textureBytes
+        val pngs = resources.list(subdir, "png", recursive = false)
+        val textureBaseNames = pngs.map { it.substringAfterLast('/').removeSuffix(".png") }.toSet()
+        check(textureBaseNames.isNotEmpty()) {
+            "Custom block '$id' has no .png textures in $subdir"
+        }
 
-        val texRef = "customcontent/${textureKey.removeSuffix(".png")}"
-        val cube = GeneratedElement(
-            from = floatArrayOf(0f, 0f, 0f),
-            to = floatArrayOf(16f, 16f, 16f),
-            rotation = null,
-            faces = mapOf(
-                "north" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
-                "south" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
-                "east" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
-                "west" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
-                "up" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
-                "down" to GeneratedFace(floatArrayOf(0f, 0f, 16f, 16f), 0),
-            ),
-        )
-        modelOutput[id] = GeneratedBoneModel(
-            textures = listOf(texRef),
-            elements = listOf(cube),
-        )
+        pngs.forEach { png ->
+            val baseName = png.substringAfterLast('/').removeSuffix(".png")
+            entries["assets/minecraft/textures/customcontent/blocks/$id/$baseName.png"] = resources.readBytes(png)
+        }
+
+        val rewritten = rewriteBlockModelTextures(resources.readText(modelPath), id, textureBaseNames)
+        entries["assets/minecraft/models/customcontent/blocks/$id.json"] = rewritten.toByteArray(Charsets.UTF_8)
+    }
+
+    private fun rewriteBlockModelTextures(modelJson: String, id: String, available: Set<String>): String {
+        val root = JsonParser.parseString(modelJson).asJsonObject
+        val textures = root.getAsJsonObject("textures") ?: return modelJson
+        val rewritten = JsonObject()
+        textures.entrySet().forEach { (key, value) ->
+            val ref = value.asString
+            val baseName = ref.substringAfterLast('/').substringAfterLast(':')
+            check(baseName in available) {
+                "Custom block '$id' model.json references texture '$ref' but no '$baseName.png' exists in subfolder"
+            }
+            rewritten.addProperty(key, "customcontent/blocks/$id/$baseName")
+        }
+        root.add("textures", rewritten)
+        return gson.toJson(root)
     }
 
     private fun processFurnitureModel(
@@ -237,21 +236,23 @@ object PackMerger {
     private fun collectItemOverrides(): Map<Material, List<ItemModelOverrideWriter.OverrideEntry>> {
         val overrides = mutableMapOf<Material, MutableList<ItemModelOverrideWriter.OverrideEntry>>()
         val furnitureItemIds = FurnitureRegistry.all().associateBy { it.itemId }
+        val blocksByItemId = CustomBlockRegistry.all().associateBy { it.itemId }
 
         CustomItemRegistry.all().forEach { item ->
             val furniture = furnitureItemIds[item.id]
-            val modelPath = if (furniture != null) {
-                "customcontent/furniture/${furniture.id}"
-            } else {
-                "customcontent/items/${item.id}"
+            val block = blocksByItemId[item.id]
+            val modelPath = when {
+                furniture != null -> "customcontent/furniture/${furniture.id}"
+                block != null -> "customcontent/blocks/${block.id}"
+                else -> "customcontent/items/${item.id}"
             }
             overrides.getOrPut(item.baseMaterial) { mutableListOf() }
                 .add(ItemModelOverrideWriter.OverrideEntry(item.customModelDataId, modelPath))
         }
 
         CustomBlockRegistry.all().forEach { block ->
-            val item = CustomItemRegistry[block.itemId] ?: return@forEach
-            overrides.getOrPut(item.baseMaterial) { mutableListOf() }
+            if (CustomItemRegistry[block.itemId] != null) return@forEach
+            overrides.getOrPut(Material.PAPER) { mutableListOf() }
                 .add(ItemModelOverrideWriter.OverrideEntry(
                     block.customModelDataId,
                     "customcontent/blocks/${block.id}",
@@ -259,6 +260,22 @@ object PackMerger {
         }
 
         return overrides
+    }
+
+    private val SILENCED_SOUND_NAMESPACES = listOf<String>()
+    private val SILENCED_SOUND_EVENTS = listOf("break", "place", "hit", "step", "fall")
+
+    private fun buildBlockSoundSilencer(): ByteArray {
+        val root = JsonObject()
+        for (ns in SILENCED_SOUND_NAMESPACES) {
+            for (event in SILENCED_SOUND_EVENTS) {
+                root.add("block.$ns.$event", JsonObject().apply {
+                    addProperty("replace", true)
+                    add("sounds", JsonArray())
+                })
+            }
+        }
+        return gson.toJson(root).toByteArray(Charsets.UTF_8)
     }
 
     private fun buildItemDefinition(modelPath: String): ByteArray {
@@ -343,7 +360,7 @@ object PackMerger {
 
     private fun buildAtlasDefinition(entries: Map<String, ByteArray>): ByteArray {
         val json = JsonObject().apply {
-            add("sources", com.google.gson.JsonArray().apply {
+            add("sources", JsonArray().apply {
                 entries.keys
                     .filter { it.startsWith("assets/minecraft/textures/") && it.endsWith(".png") }
                     .map { it.removePrefix("assets/minecraft/textures/").removeSuffix(".png") }
@@ -361,8 +378,8 @@ object PackMerger {
     private fun buildDisplayJson(display: Map<String, BbDisplaySlot>): JsonObject = JsonObject().apply {
         if (display.isEmpty()) {
             add("thirdperson_righthand", JsonObject().apply {
-                add("translation", com.google.gson.JsonArray().apply { add(0); add(0); add(0) })
-                add("scale", com.google.gson.JsonArray().apply { add(1); add(1); add(1) })
+                add("translation", JsonArray().apply { add(0); add(0); add(0) })
+                add("scale", JsonArray().apply { add(1); add(1); add(1) })
             })
             return@apply
         }
@@ -422,6 +439,72 @@ object PackMerger {
         entries["assets/minecraft/items/me_debug_cube.json"] = buildItemDefinition("minecraft:me_debug_cube")
     }
 
-    private fun FloatArray.toJsonArray(): com.google.gson.JsonArray =
-        com.google.gson.JsonArray().also { arr -> forEach { arr.add(it) } }
+    private fun FloatArray.toJsonArray(): JsonArray =
+        JsonArray().also { arr -> forEach { arr.add(it) } }
+
+    private fun dedupeTextures(entries: MutableMap<String, ByteArray>) {
+        val byHash = mutableMapOf<String, MutableList<String>>()
+        for ((path, bytes) in entries) {
+            if (!path.endsWith(".png")) continue
+            if (!path.startsWith("assets/minecraft/textures/customcontent/") &&
+                !path.startsWith("assets/minecraft/textures/me_")) continue
+            val hash = sha1Hex(bytes)
+            byHash.getOrPut(hash) { mutableListOf() }.add(path)
+        }
+
+        val rewrites = mutableMapOf<String, String>()
+        var savedBytes = 0
+        for ((_, paths) in byHash) {
+            if (paths.size <= 1) continue
+            val canonical = paths.min()
+            val canonicalRef = canonical
+                .removePrefix("assets/minecraft/textures/")
+                .removeSuffix(".png")
+            for (path in paths) {
+                if (path == canonical) continue
+                val ref = path.removePrefix("assets/minecraft/textures/").removeSuffix(".png")
+                rewrites[ref] = canonicalRef
+                savedBytes += entries[path]?.size ?: 0
+                entries.remove(path)
+            }
+        }
+
+        if (rewrites.isEmpty()) return
+
+        val updated = mutableMapOf<String, ByteArray>()
+        for ((path, bytes) in entries) {
+            if (!path.endsWith(".json")) continue
+            if (!path.contains("/models/")) continue
+            val text = String(bytes, Charsets.UTF_8)
+            if (rewrites.keys.none { text.contains("\"$it\"") }) continue
+            val root = try { JsonParser.parseString(text).asJsonObject } catch (_: Exception) { continue }
+            val textures = root.getAsJsonObject("textures") ?: continue
+            val newTextures = JsonObject()
+            var changed = false
+            for ((key, value) in textures.entrySet()) {
+                if (!value.isJsonPrimitive) {
+                    newTextures.add(key, value)
+                    continue
+                }
+                val ref = value.asString
+                val canonical = rewrites[ref]
+                if (canonical != null) {
+                    newTextures.addProperty(key, canonical)
+                    changed = true
+                } else {
+                    newTextures.add(key, value)
+                }
+            }
+            if (changed) {
+                root.add("textures", newTextures)
+                updated[path] = gson.toJson(root).toByteArray(Charsets.UTF_8)
+            }
+        }
+        updated.forEach { (path, bytes) -> entries[path] = bytes }
+
+        logger.info {
+            "Texture dedup: removed ${rewrites.size} duplicate textures, " +
+                "saved ${savedBytes / 1024}KB, rewrote ${updated.size} model refs"
+        }
+    }
 }
