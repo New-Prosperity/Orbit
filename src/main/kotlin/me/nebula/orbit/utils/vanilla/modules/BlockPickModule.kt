@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.vanilla.modules
 
+import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
+import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
 import me.nebula.orbit.utils.vanilla.ModuleConfig
 import me.nebula.orbit.utils.vanilla.VanillaModule
 import net.minestom.server.entity.GameMode
@@ -21,6 +23,17 @@ object BlockPickModule : VanillaModule {
         node.addListener(PlayerPickBlockEvent::class.java) { event ->
             if (event.player.gameMode != GameMode.CREATIVE) return@addListener
             val block = event.block
+
+            val customId = BlockStateAllocator.fromVanillaBlock(block)
+            if (customId != null) {
+                val custom = CustomBlockRegistry[customId]
+                val item = custom?.item()
+                if (item != null) {
+                    event.player.setItemInMainHand(item.createStack())
+                    return@addListener
+                }
+            }
+
             val material = Material.fromKey(block.name()) ?: return@addListener
             event.player.setItemInMainHand(ItemStack.of(material))
         }
