@@ -4,6 +4,7 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.mode.ServerMode
 import me.nebula.orbit.mode.config.CosmeticConfig
+import me.nebula.orbit.utils.mapgen.GeneratorRegistry
 import me.nebula.orbit.utils.maploader.MapLoader
 import me.nebula.orbit.utils.nebulaworld.NebulaWorldLoader
 import me.nebula.orbit.utils.nebulaworld.NebulaWorldWriter
@@ -29,7 +30,6 @@ import net.minestom.server.event.player.PlayerBlockPlaceEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.instance.LightingChunk
-import net.minestom.server.instance.block.Block
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import net.minestom.server.timer.Task
@@ -41,7 +41,11 @@ import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import me.nebula.gravity.translation.Keys
 
-class BuildMode(private val worldPathOverride: String? = null) : ServerMode {
+class BuildMode(
+    private val worldPathOverride: String? = null,
+    private val generatorName: String = "superflat",
+    private val generatorParams: Map<String, String> = emptyMap(),
+) : ServerMode {
 
     private val logger = logger("BuildMode")
 
@@ -62,35 +66,37 @@ class BuildMode(private val worldPathOverride: String? = null) : ServerMode {
             val path = Path.of(override)
             if (MapLoader.isNebulaFile(path)) {
                 logger.info { "Loading build world from override: $path" }
-                return NebulaWorldLoader.load("build", path)
+                return configureInstance(NebulaWorldLoader.load("build", path))
             }
-            val resolved = runCatching { MapLoader.resolve(override) }.getOrNull() // noqa: runCatching{}.getOrNull() as null check
+            val resolved = try { MapLoader.resolve(override) } catch (_: Exception) { null }
             if (resolved != null) {
                 logger.info { "Loading build world via MapLoader: $resolved" }
-                return NebulaWorldLoader.load("build", resolved)
+                return configureInstance(NebulaWorldLoader.load("build", resolved))
             }
-            logger.warn { "Override '$override' did not resolve to a .nebula — falling back to saved session or superflat" }
+            logger.warn { "Override '$override' did not resolve to a .nebula — falling back to saved session or fresh generator" }
         }
 
         val defaultPath = Path.of(WORLDS_DIR, "$DEFAULT_SESSION_NAME.nebula")
         if (Files.isRegularFile(defaultPath)) {
             logger.info { "Loading previous build session: $defaultPath" }
-            return NebulaWorldLoader.load("build", defaultPath)
+            return configureInstance(NebulaWorldLoader.load("build", defaultPath))
         }
 
-        return createSuperflat()
+        return configureInstance(MinecraftServer.getInstanceManager().createInstanceContainer())
     }
 
-    private fun createSuperflat(): InstanceContainer {
-        logger.info { "No world found, generating superflat" }
-        val instance = MinecraftServer.getInstanceManager().createInstanceContainer()
+    private fun configureInstance(instance: InstanceContainer): InstanceContainer {
         instance.setChunkSupplier { inst, cx, cz -> LightingChunk(inst, cx, cz) }
-        instance.setGenerator { unit ->
-            val minY = unit.absoluteStart().blockY()
-            val maxY = unit.absoluteEnd().blockY()
-            if (minY < 1) unit.modifier().fillHeight(minY, minOf(1, maxY), Block.BEDROCK)
-            if (minY < 4 && maxY > 1) unit.modifier().fillHeight(maxOf(1, minY), minOf(4, maxY), Block.DIRT)
-            if (minY < 5 && maxY > 4) unit.modifier().fillHeight(maxOf(4, minY), minOf(5, maxY), Block.GRASS_BLOCK)
+        val generator = GeneratorRegistry.create(generatorName, generatorParams)
+        if (generator == null) {
+            logger.warn {
+                "Unknown generator '$generatorName' — falling back to superflat. " +
+                    "Available: ${GeneratorRegistry.names().sorted().joinToString(", ")}"
+            }
+            instance.setGenerator(GeneratorRegistry.create("superflat", emptyMap())!!)
+        } else {
+            logger.info { "Build mode generator: $generatorName ${if (generatorParams.isEmpty()) "" else generatorParams}" }
+            instance.setGenerator(generator)
         }
         instance.time = 6000
         return instance
