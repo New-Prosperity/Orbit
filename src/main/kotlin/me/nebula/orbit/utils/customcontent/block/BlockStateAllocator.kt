@@ -118,21 +118,6 @@ object BlockStateAllocator {
     }
 
     private fun buildFullPool(): List<Block> = buildList {
-        val instruments = listOf(
-            "banjo", "bass", "basedrum", "bell", "bit", "chime", "cow_bell",
-            "didgeridoo", "flute", "guitar", "harp", "hat", "iron_xylophone",
-            "pling", "snare", "xylophone",
-        )
-        for (instrument in instruments) {
-            for (note in 0..24) {
-                add(
-                    Block.NOTE_BLOCK
-                        .withProperty("instrument", instrument)
-                        .withProperty("note", note.toString())
-                        .withProperty("powered", "false")
-                )
-            }
-        }
         val mushroomBases = listOf(Block.BROWN_MUSHROOM_BLOCK, Block.RED_MUSHROOM_BLOCK, Block.MUSHROOM_STEM)
         val faces = listOf("up", "down", "north", "south", "east", "west")
         for (base in mushroomBases) {
@@ -148,7 +133,9 @@ object BlockStateAllocator {
 
     private fun buildTransparentPool(): List<Block> = buildList {
         val keys = listOf("attached", "disarmed", "east", "north", "powered", "south", "west")
+        val reservedMask = (1 shl 0) or (1 shl 1) or (1 shl 4)
         for (combo in 0 until 128) {
+            if (combo and reservedMask == 0) continue
             var state = Block.TRIPWIRE
             keys.forEachIndexed { bit, key ->
                 state = state.withProperty(key, ((combo shr bit) and 1 == 1).toString())
