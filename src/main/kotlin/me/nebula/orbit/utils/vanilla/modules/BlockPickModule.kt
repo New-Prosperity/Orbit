@@ -27,9 +27,8 @@ object BlockPickModule : VanillaModule {
             val customId = BlockStateAllocator.fromVanillaBlock(block)
             if (customId != null) {
                 val custom = CustomBlockRegistry[customId]
-                val item = custom?.item()
-                if (item != null) {
-                    event.player.setItemInMainHand(item.createStack())
+                if (custom != null) {
+                    event.player.setItemInMainHand(custom.givenStack())
                     return@addListener
                 }
             }

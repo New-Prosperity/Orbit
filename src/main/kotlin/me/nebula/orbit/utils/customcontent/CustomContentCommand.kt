@@ -5,11 +5,24 @@ import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.orbit.utils.commandbuilder.customArmorArgument
 import me.nebula.orbit.utils.commandbuilder.customContentArgument
+import me.nebula.orbit.utils.commandbuilder.heldItemArgument
+import me.nebula.orbit.utils.customcontent.armor.ArmorPart
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
+import me.nebula.orbit.utils.customcontent.armor.createItem
+import me.nebula.orbit.utils.customcontent.armor.equipFullSet
 import me.nebula.orbit.utils.customcontent.block.BlockHitbox
+import me.nebula.orbit.utils.customcontent.helditem.HeldItemAnimationRegistry
+import me.nebula.orbit.utils.customcontent.helditem.createItem
+import net.kyori.adventure.text.Component
+import net.minestom.server.command.builder.arguments.ArgumentType
 import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
+import me.nebula.orbit.utils.customcontent.block.CustomBlock
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
+import me.nebula.orbit.utils.itembuilder.itemStack
+import net.minestom.server.item.ItemStack
+import net.minestom.server.item.Material
 import me.nebula.orbit.utils.customcontent.furniture.installFurnitureSubcommands
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.customcontent.pack.PackUploader
@@ -19,10 +32,103 @@ import java.util.zip.ZipInputStream
 import me.nebula.gravity.translation.Keys
 import me.nebula.ether.utils.translation.asTranslationKey
 
+private val CC_ARMOR_ID = ArgumentType.String("armor_id")
+private val CC_ARMOR_SLOT = ArgumentType.String("slot")
+private val CC_ARMOR_ENCHANTED = ArgumentType.Boolean("enchanted")
+private val CC_HELDITEM_ID = ArgumentType.String("helditem_id")
+
+private fun blockFallbackStack(block: CustomBlock, amount: Int): ItemStack =
+    block.givenStack(amount)
+
 fun customContentCommand(resources: ResourceManager): Command = command("cc") {
     permission("orbit.customcontent")
 
     installFurnitureSubcommands()
+
+    subCommand("armors") {
+        onPlayerExecute {
+            val armors = CustomArmorRegistry.all()
+            if (armors.isEmpty()) {
+                player.sendMessage(Component.text("No armors registered."))
+                return@onPlayerExecute
+            }
+            player.sendMessage(Component.text("Registered armors (${armors.size}):"))
+            armors.forEach { armor ->
+                val parts = armor.parsed.pieces.joinToString(", ") { it.part.id }
+                player.sendMessage(Component.text("  ${armor.id} (colorId=${armor.colorId}) parts=[$parts]"))
+            }
+        }
+    }
+
+    subCommand("equiparmor") {
+        customArmorArgument("armor_id")
+        booleanArgument("enchanted")
+        onPlayerExecute {
+            val id = args.get(CC_ARMOR_ID)
+            val enchanted = args.get(CC_ARMOR_ENCHANTED)
+            val armor = CustomArmorRegistry[id]
+            if (armor == null) {
+                player.sendMessage(Component.text("Unknown armor: $id"))
+                return@onPlayerExecute
+            }
+            armor.equipFullSet(player, enchanted)
+            player.sendMessage(Component.text("Equipped armor: ${armor.id}${if (enchanted) " (enchanted)" else ""}"))
+        }
+    }
+
+    subCommand("givearmor") {
+        customArmorArgument("armor_id")
+        enumArgument("slot", ArmorPart.all.map { it.id })
+        booleanArgument("enchanted")
+        onPlayerExecute {
+            val id = args.get(CC_ARMOR_ID)
+            val slotName = args.get(CC_ARMOR_SLOT)
+            val enchanted = args.get(CC_ARMOR_ENCHANTED)
+            val armor = CustomArmorRegistry[id]
+            if (armor == null) {
+                player.sendMessage(Component.text("Unknown armor: $id"))
+                return@onPlayerExecute
+            }
+            val part = ArmorPart.all.firstOrNull { it.id == slotName }
+            if (part == null) {
+                player.sendMessage(Component.text("Unknown slot: $slotName (valid: ${ArmorPart.all.joinToString(", ") { it.id }})"))
+                return@onPlayerExecute
+            }
+            player.inventory.addItemStack(armor.createItem(part, enchanted))
+            player.sendMessage(Component.text("Gave armor piece: ${armor.id}/${part.id}${if (enchanted) " (enchanted)" else ""}"))
+        }
+    }
+
+    subCommand("helditems") {
+        onPlayerExecute {
+            val items = HeldItemAnimationRegistry.all()
+            if (items.isEmpty()) {
+                player.sendMessage(Component.text("No held-items registered."))
+                return@onPlayerExecute
+            }
+            player.sendMessage(Component.text("Registered held-items (${items.size}):"))
+            items.forEach { entry ->
+                val anims = entry.parsed.animations.joinToString(", ") { "${it.trigger}:${it.name}" }
+                player.sendMessage(
+                    Component.text("  ${entry.id} (colorId=${entry.colorId}, bones=${entry.parsed.bones.size}) anims=[$anims]")
+                )
+            }
+        }
+    }
+
+    subCommand("givehelditem") {
+        heldItemArgument("helditem_id")
+        onPlayerExecute {
+            val id = args.get(CC_HELDITEM_ID)
+            val entry = HeldItemAnimationRegistry[id]
+            if (entry == null) {
+                player.sendMessage(Component.text("Unknown held-item: $id"))
+                return@onPlayerExecute
+            }
+            player.inventory.addItemStack(entry.createItem())
+            player.sendMessage(Component.text("Gave held-item: ${entry.id}"))
+        }
+    }
 
     subCommand("items") {
         onPlayerExecute {
@@ -64,25 +170,33 @@ fun customContentCommand(resources: ResourceManager): Command = command("cc") {
     subCommand("give") {
         stringArrayArgument("args")
         tabComplete { _, partial ->
-            CustomItemRegistry.all().map { it.id }.filter { it.startsWith(partial, ignoreCase = true) }
+            (CustomItemRegistry.all().map { it.id } + CustomBlockRegistry.all().map { it.id })
+                .filter { it.startsWith(partial, ignoreCase = true) }
         }
         onPlayerExecute {
             @Suppress("UNCHECKED_CAST")
             val cmdArgs = args.get("args") as? Array<String>
-            val itemId = cmdArgs?.getOrNull(0)
-            if (itemId.isNullOrEmpty()) {
+            val id = cmdArgs?.getOrNull(0)
+            if (id.isNullOrEmpty()) {
                 player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Give.Usage))
                 return@onPlayerExecute
             }
-            val item = CustomItemRegistry[itemId]
-            if (item == null) {
-                player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Give.Unknown, "id" to itemId))
+            val amount = cmdArgs.getOrNull(1)?.toIntOrNull() ?: 1
+            val item = CustomItemRegistry[id]
+            if (item != null) {
+                player.inventory.addItemStack(item.createStack(amount))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Give.Success,
+                    "amount" to amount.toString(), "id" to item.id))
                 return@onPlayerExecute
             }
-            val amount = cmdArgs.getOrNull(1)?.toIntOrNull() ?: 1
-            player.inventory.addItemStack(item.createStack(amount))
-            player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Give.Success,
-                "amount" to amount.toString(), "id" to item.id))
+            val block = CustomBlockRegistry[id]
+            if (block != null) {
+                player.inventory.addItemStack(blockFallbackStack(block, amount))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Give.Success,
+                    "amount" to amount.toString(), "id" to block.id))
+                return@onPlayerExecute
+            }
+            player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Give.Unknown, "id" to id))
         }
     }
 
@@ -120,7 +234,7 @@ fun customContentCommand(resources: ResourceManager): Command = command("cc") {
                 player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Info.Block.State, "value" to block.allocatedState.name()))
                 player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Info.Block.PlaceSound, "value" to block.placeSound))
                 player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Info.Block.BreakSound, "value" to block.breakSound))
-                player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Info.Block.Model, "value" to block.texturePath))
+                player.sendMessage(player.translate(Keys.Orbit.Command.Cc.Info.Block.Model, "value" to "customcontent/blocks/${block.id}/model.json"))
             }
         }
     }
