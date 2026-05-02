@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.customcontent.pack
 
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.orbit.utils.customcontent.block.BlockHitbox
@@ -101,21 +102,72 @@ object BlockStateWriter {
     }
 
     private fun buildTripwireVariants(byStateId: Map<Int, CustomBlock>): ByteArray {
-        val variants = JsonObject()
+        val multipart = JsonArray()
+
+        for (entry in vanillaTripwireParts()) {
+            multipart.add(entry)
+        }
+
         for (combo in 0 until 128) {
             var state = Block.TRIPWIRE
-            val props = mutableListOf<String>()
+            val whenObj = JsonObject()
             TRIPWIRE_KEYS.forEachIndexed { bit, key ->
                 val value = ((combo shr bit) and 1 == 1).toString()
                 state = state.withProperty(key, value)
-                props += "$key=$value"
+                whenObj.addProperty(key, value)
             }
-            val key = props.joinToString(",")
-            val custom = byStateId[state.stateId()]
-            val model = custom?.let { "customcontent/blocks/${it.id}" } ?: "block/tripwire"
-            variants.add(key, JsonObject().apply { addProperty("model", model) })
+            val custom = byStateId[state.stateId()] ?: continue
+            multipart.add(JsonObject().apply {
+                add("when", whenObj)
+                add("apply", JsonObject().apply { addProperty("model", "customcontent/blocks/${custom.id}") })
+            })
         }
-        return toBytes(JsonObject().apply { add("variants", variants) })
+
+        return toBytes(JsonObject().apply { add("multipart", multipart) })
+    }
+
+    private fun vanillaTripwireParts(): List<JsonObject> {
+        val out = mutableListOf<JsonObject>()
+        for (attached in listOf("false", "true")) {
+            val prefix = if (attached == "true") "block/tripwire_attached" else "block/tripwire"
+            data class Entry(val model: String, val rotation: Int?, val e: String, val n: String, val s: String, val w: String)
+            val entries = listOf(
+                Entry("${prefix}_ns", null, "false", "false", "false", "false"),
+                Entry("${prefix}_ns", 90,   "true",  "false", "false", "true"),
+                Entry("${prefix}_ns", null, "false", "true",  "true",  "false"),
+                Entry("${prefix}_ne", null, "true",  "true",  "false", "false"),
+                Entry("${prefix}_ne", 270,  "false", "true",  "false", "true"),
+                Entry("${prefix}_ne", 180,  "false", "false", "true",  "true"),
+                Entry("${prefix}_ne", 90,   "true",  "false", "true",  "false"),
+                Entry("${prefix}_nse", null, "true",  "true",  "true",  "false"),
+                Entry("${prefix}_nse", 270, "false", "true",  "true",  "true"),
+                Entry("${prefix}_nse", 180, "true",  "false", "true",  "true"),
+                Entry("${prefix}_nse", 90,  "true",  "true",  "false", "true"),
+                Entry("${prefix}_nsew", null,"true", "true",  "true",  "true"),
+                Entry("${prefix}_n", 90,   "true",  "false", "false", "false"),
+                Entry("${prefix}_n", null, "false", "true",  "false", "false"),
+                Entry("${prefix}_n", 180,  "false", "false", "true",  "false"),
+                Entry("${prefix}_n", 270,  "false", "false", "false", "true"),
+            )
+            for (e in entries) {
+                val whenObj = JsonObject().apply {
+                    addProperty("attached", attached)
+                    addProperty("east", e.e)
+                    addProperty("north", e.n)
+                    addProperty("south", e.s)
+                    addProperty("west", e.w)
+                }
+                val applyObj = JsonObject().apply {
+                    addProperty("model", e.model)
+                    if (e.rotation != null) addProperty("y", e.rotation)
+                }
+                out += JsonObject().apply {
+                    add("when", whenObj)
+                    add("apply", applyObj)
+                }
+            }
+        }
+        return out
     }
 
     private fun buildSingleVariant(modelPath: String): ByteArray =
