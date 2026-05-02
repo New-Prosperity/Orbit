@@ -25,6 +25,8 @@ object BlockStateWriter {
         "minecraft:mushroom_stem" to "block/mushroom_stem",
     )
 
+    private val TRIPWIRE_KEYS = listOf("attached", "disarmed", "east", "north", "powered", "south", "west")
+
     fun generate(): Map<String, ByteArray> {
         val allBlocks = CustomBlockRegistry.all()
         if (allBlocks.isEmpty()) return emptyMap()
@@ -42,6 +44,10 @@ object BlockStateWriter {
                 val name = blockName.removePrefix("minecraft:")
                 result["assets/minecraft/blockstates/$name.json"] = buildMushroomVariants(blockName, vanillaModel, byStateId)
             }
+        }
+
+        if ("minecraft:tripwire" in usedBaseBlocks) {
+            result["assets/minecraft/blockstates/tripwire.json"] = buildTripwireVariants(byStateId)
         }
 
         allBlocks.filter { it.hitbox == BlockHitbox.Thin }.forEach { customBlock ->
@@ -89,6 +95,24 @@ object BlockStateWriter {
             val key = props.joinToString(",")
             val custom = byStateId[state.stateId()]
             val model = custom?.let { "customcontent/blocks/${it.id}" } ?: vanillaModel
+            variants.add(key, JsonObject().apply { addProperty("model", model) })
+        }
+        return toBytes(JsonObject().apply { add("variants", variants) })
+    }
+
+    private fun buildTripwireVariants(byStateId: Map<Int, CustomBlock>): ByteArray {
+        val variants = JsonObject()
+        for (combo in 0 until 128) {
+            var state = Block.TRIPWIRE
+            val props = mutableListOf<String>()
+            TRIPWIRE_KEYS.forEachIndexed { bit, key ->
+                val value = ((combo shr bit) and 1 == 1).toString()
+                state = state.withProperty(key, value)
+                props += "$key=$value"
+            }
+            val key = props.joinToString(",")
+            val custom = byStateId[state.stateId()]
+            val model = custom?.let { "customcontent/blocks/${it.id}" } ?: "block/tripwire"
             variants.add(key, JsonObject().apply { addProperty("model", model) })
         }
         return toBytes(JsonObject().apply { add("variants", variants) })
