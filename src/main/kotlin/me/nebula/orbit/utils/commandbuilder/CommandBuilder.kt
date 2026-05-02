@@ -173,7 +173,11 @@ class CommandBuilderDsl @PublishedApi internal constructor(
         val perm = permission
         if (perm != null) {
             cmd.setCondition { sender, _ ->
-                sender is Player && RankManager.hasPermission(sender.uuid, perm)
+                when {
+                    sender is Player -> RankManager.hasPermission(sender.uuid, perm)
+                    playerOnly -> false
+                    else -> true
+                }
             }
         } else if (playerOnly) {
             cmd.setCondition { sender, _ -> sender is Player }
@@ -204,10 +208,6 @@ class CommandBuilderDsl @PublishedApi internal constructor(
         resolvedHandler?.let { handler ->
             cmd.setDefaultExecutor { sender, _ ->
                 if (playerOnly && sender !is Player) return@setDefaultExecutor
-                if (usageKeyValue != null && sender is Player && arguments.isNotEmpty()) {
-                    sender.sendMessage(sender.translate(usageKeyValue))
-                    return@setDefaultExecutor
-                }
                 handler(sender, CommandContext(""))
             }
         } ?: run {
