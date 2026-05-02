@@ -267,6 +267,7 @@ class SmartEntity(
         val modeled = ModelEngine.createModeledEntity(this)
         modeled.addModel(name, blueprint)
         modeledEntity = modeled
+        viewers.forEach { modeled.show(it) }
         return modeled
     }
 
