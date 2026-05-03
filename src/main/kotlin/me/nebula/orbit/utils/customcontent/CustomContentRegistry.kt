@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.customcontent
 
+import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
 import java.awt.image.BufferedImage
@@ -8,7 +9,16 @@ import java.security.MessageDigest
 import javax.imageio.ImageIO
 import me.nebula.orbit.utils.customcontent.armor.ArmorShaderPack
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
+import me.nebula.orbit.utils.customcontent.biome.CustomBiomeLoader
+import me.nebula.orbit.utils.customcontent.decoration.CustomOreClusterLoader
+import me.nebula.orbit.utils.customcontent.decoration.CustomTreeShapeLoader
+import me.nebula.orbit.utils.mapgen.BiomeRegistry
+import me.nebula.orbit.utils.mapgen.planet.OreClusterShapeRegistry
+import me.nebula.orbit.utils.mapgen.planet.StructureLibrary
+import me.nebula.orbit.utils.mapgen.planet.decoration.TreeShapeRegistry
 import me.nebula.orbit.utils.customcontent.effects.EffectsShaderPack
+import me.nebula.orbit.utils.customcontent.helditem.HeldItemAnimationRegistry
+import me.nebula.orbit.utils.customcontent.helditem.HeldItemPack
 import me.nebula.orbit.utils.statue.PlayerSkinPack
 import me.nebula.orbit.utils.tooltip.TooltipStylePack
 import me.nebula.orbit.utils.hud.font.HudFontProvider
@@ -22,7 +32,9 @@ import me.nebula.orbit.utils.customcontent.block.CustomBlockLoader
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
 import me.nebula.orbit.utils.customcontent.event.CustomBlockBreakHandler
 import me.nebula.orbit.utils.customcontent.event.CustomBlockInteractHandler
+import me.nebula.orbit.utils.customcontent.event.CustomBlockMiningGate
 import me.nebula.orbit.utils.customcontent.event.CustomBlockPlaceHandler
+import me.nebula.orbit.utils.customcontent.event.CustomBlockSoundTicker
 import me.nebula.orbit.utils.customcontent.furniture.BlockbenchColliderParser
 import me.nebula.orbit.utils.customcontent.furniture.Furniture
 import me.nebula.orbit.utils.customcontent.furniture.FurnitureCollisionPack
@@ -33,8 +45,11 @@ import me.nebula.orbit.utils.customcontent.item.CustomItemDefinition
 import me.nebula.orbit.utils.customcontent.item.CustomItemDsl
 import me.nebula.orbit.utils.customcontent.item.CustomItemLoader
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
+import me.nebula.orbit.utils.customcontent.pack.ObfuscationCodec
 import me.nebula.orbit.utils.customcontent.pack.PackMerger
 import me.nebula.orbit.utils.customcontent.pack.SpriteItemPack
+import me.nebula.orbit.utils.entitybuilder.file.BehaviorFile
+import me.nebula.orbit.utils.entitybuilder.file.BehaviorFileRegistry
 import net.minestom.server.item.Material
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.tablist.NegativeSpaceFont
@@ -56,8 +71,14 @@ object CustomContentRegistry {
     private const val ITEMS_DIR = "$BASE_DIR/items"
     private const val BLOCKS_DIR = "$BASE_DIR/blocks"
     private const val ARMORS_DIR = "$BASE_DIR/armors"
+    private const val HELDITEMS_DIR = "$BASE_DIR/helditems"
     private const val SPRITES_DIR = "$BASE_DIR/sprites"
     private const val FURNITURE_DIR = "$BASE_DIR/furniture"
+    private const val BEHAVIORS_DIR = "$BASE_DIR/behaviors"
+    private const val BIOMES_DIR = "$BASE_DIR/biomes"
+    private const val TREES_DIR = "$BASE_DIR/trees"
+    private const val ORE_CLUSTERS_DIR = "$BASE_DIR/ore_clusters"
+    private const val STRUCTURES_DIR = "$BASE_DIR/structures"
 
     val packBytes: ByteArray? get() = mergeResult?.packBytes
     val packSha1: String? get() = mergeResult?.sha1
@@ -70,8 +91,14 @@ object CustomContentRegistry {
         resources.ensureDirectory(ITEMS_DIR)
         resources.ensureDirectory(BLOCKS_DIR)
         resources.ensureDirectory(ARMORS_DIR)
+        resources.ensureDirectory(HELDITEMS_DIR)
         resources.ensureDirectory(SPRITES_DIR)
         resources.ensureDirectory(FURNITURE_DIR)
+        resources.ensureDirectory(BEHAVIORS_DIR)
+        resources.ensureDirectory(BIOMES_DIR)
+        resources.ensureDirectory(TREES_DIR)
+        resources.ensureDirectory(ORE_CLUSTERS_DIR)
+        resources.ensureDirectory(STRUCTURES_DIR)
 
         loadSprites()
 
@@ -85,23 +112,69 @@ object CustomContentRegistry {
         blockDefs.forEach { def -> registerBlock(def) }
 
         CustomArmorRegistry.loadFromResources(resources, ARMORS_DIR)
+        HeldItemAnimationRegistry.loadFromResources(resources, HELDITEMS_DIR)
         loadFurniture()
+        loadBehaviors()
+        loadBiomes()
+        loadDecorationShapes()
+        loadStructures()
 
         if (!CustomItemRegistry.isEmpty() || !CustomBlockRegistry.isEmpty() || !CustomArmorRegistry.isEmpty() || !FurnitureRegistry.isEmpty()) {
+            CustomBlockMiningGate.install(eventNode)
             CustomBlockPlaceHandler.install(eventNode)
             CustomBlockBreakHandler.install(eventNode)
             CustomBlockInteractHandler.install(eventNode)
+            CustomBlockSoundTicker.install(eventNode)
 
             logger.info {
                 "Registered ${CustomItemRegistry.all().size} custom items, " +
                     "${CustomBlockRegistry.all().size} custom blocks, " +
                     "${CustomArmorRegistry.all().size} custom armors, " +
-                    "${FurnitureRegistry.all().size} furniture definitions"
+                    "${HeldItemAnimationRegistry.all().size} animated held-items, " +
+                    "${FurnitureRegistry.all().size} furniture definitions, " +
+                    "${BehaviorFileRegistry.all().size} behavior files"
             }
         }
 
         if (!FurnitureRegistry.isEmpty()) {
             Furniture.install()
+        }
+    }
+
+    private fun loadBiomes() {
+        BiomeRegistry.registerDefaults()
+        val custom = CustomBiomeLoader.loadAll(resources, BIOMES_DIR)
+        BiomeRegistry.registerMinestomBiomes()
+        logger.info { "Biome registry: ${BiomeRegistry.all().size} total (${custom} custom)" }
+    }
+
+    private fun loadDecorationShapes() {
+        TreeShapeRegistry.clear()
+        TreeShapeRegistry.registerBuiltins()
+        val customTrees = CustomTreeShapeLoader.loadAll(resources, TREES_DIR)
+
+        OreClusterShapeRegistry.clear()
+        OreClusterShapeRegistry.registerBuiltins()
+        val customClusters = CustomOreClusterLoader.loadAll(resources, ORE_CLUSTERS_DIR)
+
+        logger.info { "Decoration shapes: ${TreeShapeRegistry.all().size} trees ($customTrees custom), ${OreClusterShapeRegistry.all().size} ore clusters ($customClusters custom)" }
+    }
+
+    private fun loadStructures() {
+        StructureLibrary.clear()
+        val count = StructureLibrary.loadFromResources(resources, STRUCTURES_DIR)
+        logger.info { "Loaded $count structures from $STRUCTURES_DIR" }
+    }
+
+    private fun loadBehaviors() {
+        BehaviorFileRegistry.clear()
+        val files = runCatching { BehaviorFile.loadAll(resources, BEHAVIORS_DIR) }
+            .onFailure { logger.warn { "Failed to enumerate behavior files: ${it.message}" } }
+            .getOrDefault(emptyList())
+        for (file in files) {
+            runCatching { BehaviorFileRegistry.register(file) }
+                .onFailure { logger.warn { "Failed to register behavior '${file.id}': ${it.message}" } }
+                .onSuccess { logger.info { "Registered behavior file: ${file.id} (carrier=${file.carrierType.name()})" } }
         }
     }
 
@@ -159,6 +232,14 @@ object CustomContentRegistry {
     }
 
     fun registerBlock(def: CustomBlockDefinition): CustomBlock {
+        val subdir = "$BLOCKS_DIR/${def.id}"
+        val modelPath = "$subdir/${CustomBlockLoader.MODEL_FILE}"
+        require(resources.exists(modelPath)) {
+            "Custom block '${def.id}' missing ${CustomBlockLoader.MODEL_FILE} at $modelPath"
+        }
+        require(resources.list(subdir, "png", recursive = false).isNotEmpty()) {
+            "Custom block '${def.id}' has no .png textures in $subdir"
+        }
         val cmdId = ModelIdRegistry.assignId("cc:block:${def.id}")
         val allocatedState = BlockStateAllocator.allocate(def.id, def.hitbox)
         val block = CustomBlock(
@@ -168,10 +249,10 @@ object CustomContentRegistry {
             customModelDataId = cmdId,
             hardness = def.hardness,
             drops = def.drops,
-            texturePath = def.texturePath,
             placeSound = def.placeSound,
             breakSound = def.breakSound,
             allocatedState = allocatedState,
+            miningBlock = def.miningBlock,
         )
         CustomBlockRegistry.register(block)
         logger.info {
@@ -181,10 +262,32 @@ object CustomContentRegistry {
         return block
     }
 
-    fun reload() {
+    fun loadResourcesOnly(resources: ResourceManager) {
+        this.resources = resources
+
+        resources.ensureDirectory(BASE_DIR)
+        resources.ensureDirectory(MODELS_DIR)
+        resources.ensureDirectory(ITEMS_DIR)
+        resources.ensureDirectory(BLOCKS_DIR)
+        resources.ensureDirectory(ARMORS_DIR)
+        resources.ensureDirectory(HELDITEMS_DIR)
+        resources.ensureDirectory(SPRITES_DIR)
+        resources.ensureDirectory(FURNITURE_DIR)
+        resources.ensureDirectory(BEHAVIORS_DIR)
+        resources.ensureDirectory(BIOMES_DIR)
+        resources.ensureDirectory(TREES_DIR)
+        resources.ensureDirectory(ORE_CLUSTERS_DIR)
+        resources.ensureDirectory(STRUCTURES_DIR)
+
+        loadSprites()
+
+        ModelIdRegistry.init(resources, "$BASE_DIR/model_ids.dat")
+        BlockStateAllocator.init(resources, "$BASE_DIR/allocations.dat")
+
         CustomItemRegistry.clear()
         CustomBlockRegistry.clear()
         CustomArmorRegistry.clear()
+        HeldItemAnimationRegistry.clear()
         FurnitureRegistry.clear()
 
         val itemDefs = CustomItemLoader.loadAll(resources, ITEMS_DIR)
@@ -194,16 +297,45 @@ object CustomContentRegistry {
         blockDefs.forEach { def -> registerBlock(def) }
 
         CustomArmorRegistry.loadFromResources(resources, ARMORS_DIR)
+        HeldItemAnimationRegistry.loadFromResources(resources, HELDITEMS_DIR)
         loadFurniture()
+        loadBehaviors()
+        loadBiomes()
+        loadDecorationShapes()
+        loadStructures()
+    }
+
+    fun reload() {
+        CustomItemRegistry.clear()
+        CustomBlockRegistry.clear()
+        CustomArmorRegistry.clear()
+        HeldItemAnimationRegistry.clear()
+        FurnitureRegistry.clear()
+
+        val itemDefs = CustomItemLoader.loadAll(resources, ITEMS_DIR)
+        val blockDefs = CustomBlockLoader.loadAll(resources, BLOCKS_DIR)
+
+        itemDefs.forEach { def -> registerItem(def) }
+        blockDefs.forEach { def -> registerBlock(def) }
+
+        CustomArmorRegistry.loadFromResources(resources, ARMORS_DIR)
+        HeldItemAnimationRegistry.loadFromResources(resources, HELDITEMS_DIR)
+        loadFurniture()
+        loadBehaviors()
+        loadBiomes()
+        loadDecorationShapes()
+        loadStructures()
 
         logger.info {
             "Reloaded ${CustomItemRegistry.all().size} custom items, " +
                 "${CustomBlockRegistry.all().size} custom blocks, " +
                 "${CustomArmorRegistry.all().size} custom armors, " +
-                "${FurnitureRegistry.all().size} furniture definitions"
+                "${HeldItemAnimationRegistry.all().size} animated held-items, " +
+                "${FurnitureRegistry.all().size} furniture definitions, " +
+                "${BehaviorFileRegistry.all().size} behavior files"
         }
 
-        mergePack()
+        mergePack(forceRegenerate = true)
     }
 
     fun mergePack(forceRegenerate: Boolean = false): PackMerger.MergeResult {
@@ -245,6 +377,14 @@ object CustomContentRegistry {
             emptyMap()
         }
 
+        val heldItemEntries = if (!HeldItemAnimationRegistry.isEmpty()) {
+            val heldItems = HeldItemAnimationRegistry.all().toList()
+            logger.info { "Generating held-item animation pack for ${heldItems.size} items" }
+            HeldItemPack.generate(heldItems)
+        } else {
+            emptyMap()
+        }
+
         val hudShaderEntries = HudShaderPack.generate()
         logger.info { "Generated HUD shader pack: ${hudShaderEntries.size} entries" }
 
@@ -269,23 +409,36 @@ object CustomContentRegistry {
             logger.info { "Generated furniture collision pack: ${furnitureCollisionEntries.size} entries" }
         }
 
-        val allShaderEntries = armorEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries + tabListOverrides + spriteItemEntries + playerSkinEntries + furnitureCollisionEntries
-        val result = PackMerger.merge(resources, MODELS_DIR, allRaw, allShaderEntries)
+        val allShaderEntries = armorEntries + heldItemEntries + hudShaderEntries + hudFontEntries + effectsEntries + tooltipEntries + tabListOverrides + spriteItemEntries + playerSkinEntries + furnitureCollisionEntries
+        val result = PackMerger.merge(resources, MODELS_DIR, BLOCKS_DIR, allRaw, allShaderEntries)
         mergeResult = result
 
         resources.writeBytes(cachePackPath, result.packBytes)
         resources.writeText(cacheHashPath, inputHash)
 
+        val manifest = ObfuscationCodec.manifest()
+        if (manifest.isNotEmpty()) {
+            val manifestJson = GsonProvider.pretty.toJson(
+                manifest.entries.sortedBy { it.value }.associate { it.value to it.key }
+            )
+            resources.writeText("$BASE_DIR/_obf_manifest.json", manifestJson)
+        }
+
         logger.info {
             "Pack merged: ${result.packBytes.size / 1024}KB, SHA-1=${result.sha1}, hash=$inputHash, " +
                 "models=${allRaw.size}, items=${CustomItemRegistry.all().size}, " +
-                "blocks=${CustomBlockRegistry.all().size}, armors=${CustomArmorRegistry.all().size}"
+                "blocks=${CustomBlockRegistry.all().size}, armors=${CustomArmorRegistry.all().size}, " +
+                "helditems=${HeldItemAnimationRegistry.all().size}"
         }
         return result
     }
 
+    private const val PACK_CODE_VERSION = "v4"
+
     private fun computeInputHash(modelFiles: List<String>): String {
         val digest = MessageDigest.getInstance("SHA-256")
+        digest.update("code:$PACK_CODE_VERSION".toByteArray())
+        digest.update(0)
         digest.update("models:".toByteArray())
         for (path in modelFiles.sorted()) {
             digest.update(path.toByteArray())
@@ -306,11 +459,37 @@ object CustomContentRegistry {
             digest.update(0)
             digest.update(block.customModelDataId.toString().toByteArray())
             digest.update(0)
+            val subdir = "$BLOCKS_DIR/${block.id}"
+            val files = (resources.list(subdir, "json", recursive = false) +
+                resources.list(subdir, "png", recursive = false)).sorted()
+            for (path in files) {
+                digest.update(path.toByteArray())
+                digest.update(0)
+                digest.update(resources.readBytes(path))
+                digest.update(0)
+            }
         }
         digest.update("armors:".toByteArray())
         for (armor in CustomArmorRegistry.all().sortedBy { it.id }) {
             digest.update(armor.id.toByteArray())
             digest.update(0)
+        }
+        digest.update("helditems:".toByteArray())
+        for (heldItem in HeldItemAnimationRegistry.all().sortedBy { it.id }) {
+            digest.update(heldItem.id.toByteArray())
+            digest.update(0)
+            digest.update(heldItem.colorId.toString().toByteArray())
+            digest.update(0)
+            val bbPath = "$HELDITEMS_DIR/${heldItem.id}.bbmodel"
+            if (resources.exists(bbPath)) {
+                digest.update(resources.readBytes(bbPath))
+                digest.update(0)
+            }
+            val animPath = "$HELDITEMS_DIR/${heldItem.id}.anim.bbmodel"
+            if (resources.exists(animPath)) {
+                digest.update(resources.readBytes(animPath))
+                digest.update(0)
+            }
         }
         digest.update("sprites:".toByteArray())
         for (path in resources.list(SPRITES_DIR, "png", recursive = true).sorted()) {

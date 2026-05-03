@@ -9,12 +9,21 @@ import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.Player
 
-class ActiveModel(val blueprint: ModelBlueprint, autoPlayIdle: Boolean = true) {
+class ActiveModel(
+    val blueprint: ModelBlueprint,
+    autoPlayIdle: Boolean = true,
+    val autoPlayWalk: Boolean = true,
+) {
 
     val bones: Map<String, ModelBone>
     val rootBones: List<ModelBone>
     val renderer = BoneRenderer()
     val animationHandler: PriorityHandler = PriorityHandler()
+
+    val idleAnimationName: String? =
+        blueprint.animations.keys.firstOrNull { "idle" in it.lowercase() }
+    val walkAnimationName: String? =
+        blueprint.animations.keys.firstOrNull { "walk" in it.lowercase() }
 
     var modelScale: Float = 1.0f
         set(value) {
@@ -52,9 +61,7 @@ class ActiveModel(val blueprint: ModelBlueprint, autoPlayIdle: Boolean = true) {
 
         animationHandler.boundModel = this
         if (autoPlayIdle) {
-            blueprint.animations.keys
-                .firstOrNull { "idle" in it.lowercase() }
-                ?.let { playAnimation(it) }
+            idleAnimationName?.let { playAnimation(it) }
         }
     }
 

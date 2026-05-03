@@ -2,7 +2,6 @@ package me.nebula.orbit.mode.game.battleroyale.team
 
 import me.nebula.gravity.translation.Keys
 import me.nebula.orbit.displayUsername
-import me.nebula.orbit.mode.game.GameMode
 import me.nebula.orbit.mode.game.PlayerTracker
 import me.nebula.orbit.mode.game.battleroyale.BattleRoyaleTeamConfig
 import me.nebula.orbit.translation.translate

@@ -49,7 +49,7 @@ class ReplayRecorder {
     @Volatile private var recording = false
     private val playerNames = ConcurrentHashMap<UUID, String>()
     private val playerSkins = ConcurrentHashMap<UUID, Pair<String?, String?>>()
-    @Volatile var worldSnapshot: me.nebula.orbit.utils.nebulaworld.NebulaWorld? = null
+    @Volatile var worldSnapshotBytes: ByteArray? = null
         private set
 
     fun start(instance: net.minestom.server.instance.Instance? = null) {
@@ -59,7 +59,8 @@ class ReplayRecorder {
         playerSkins.clear()
         if (instance != null) {
             Thread.startVirtualThread {
-                worldSnapshot = ReplayWorldCapture.capture(instance)
+                val captured = ReplayWorldCapture.capture(instance)
+                worldSnapshotBytes = me.nebula.orbit.utils.nebulaworld.NebulaWorldWriter.write(captured)
             }
         }
         recording = true
@@ -81,7 +82,7 @@ class ReplayRecorder {
             ReplayPlayerEntry(uuid, name, skinValue, skinSig)
         }
         val header = ReplayFileHeader(matchId, gameMode, mapName, System.currentTimeMillis(), data.durationTicks, players)
-        val worldSource = worldSnapshot?.let { ReplayWorldSource.Embedded(it) }
+        val worldSource = worldSnapshotBytes?.let { ReplayWorldSource.Embedded(it) }
             ?: ReplayWorldSource.Reference(mapName)
         return ReplayFile(header, worldSource, data)
     }

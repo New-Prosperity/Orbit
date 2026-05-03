@@ -34,18 +34,33 @@ class FlatRoamExecutor(
     private val range: Double = 10.0,
     private val runTicks: Int = 100,
     private val maxRetries: Int = 10,
+    private val chainTargets: Boolean = true,
+    private val avoidKey: MemoryKey<Entity>? = null,
+    private val avoidDistance: Double = 0.0,
 ) : BehaviorExecutor {
     private var ticksLeft = 0
+    private var arrived = false
 
     override fun onStart(entity: SmartEntity) {
         ticksLeft = runTicks
-        pickTarget(entity)
+        arrived = false
+        if (!pickTarget(entity)) arrived = true
     }
 
     override fun execute(entity: SmartEntity): Boolean {
         if (--ticksLeft <= 0) return false
+        if (arrived) return false
         val target = entity.memory.get(MemoryKeys.MOVE_TARGET)
-        if (target == null || entity.position.distance(target) < 1.5) pickTarget(entity)
+        if (target == null || entity.position.distance(target) < 1.5) {
+            if (!chainTargets) {
+                arrived = true
+                return false
+            }
+            if (!pickTarget(entity)) {
+                arrived = true
+                return false
+            }
+        }
         return true
     }
 
@@ -53,19 +68,33 @@ class FlatRoamExecutor(
         entity.memory.clear(MemoryKeys.MOVE_TARGET)
     }
 
-    private fun pickTarget(entity: SmartEntity) {
+    private fun pickTarget(entity: SmartEntity): Boolean {
         val pos = entity.position
-        val instance = entity.instance ?: return
+        val instance = entity.instance ?: return false
+        val avoidPos = avoidKey?.let { entity.memory.get(it)?.position }
+        val avoidSq = avoidDistance * avoidDistance
+        val awayX = if (avoidPos != null) pos.x() - avoidPos.x() else 0.0
+        val awayZ = if (avoidPos != null) pos.z() - avoidPos.z() else 0.0
         repeat(maxRetries) {
             val dx = Random.nextDouble(-range, range)
             val dz = Random.nextDouble(-range, range)
             val target = Pos(pos.x() + dx, pos.y(), pos.z() + dz)
-            val below = instance.getBlock(target.blockX(), target.blockY() - 1, target.blockZ())
-            if (below.isSolid) {
-                entity.memory.set(MemoryKeys.MOVE_TARGET, target)
-                return
+            if (avoidPos != null) {
+                if (target.distanceSquared(avoidPos) < avoidSq) return@repeat
+                if (awayX * dx + awayZ * dz < 0.0) return@repeat
             }
+            val bx = target.blockX()
+            val bz = target.blockZ()
+            val by = target.blockY()
+            val at = instance.getBlock(bx, by, bz)
+            val below = instance.getBlock(bx, by - 1, bz)
+            val standable = at.isSolid || below.isSolid
+            if (!standable) return@repeat
+            if (instance.getBlock(bx, by + 1, bz).isSolid) return@repeat
+            entity.memory.set(MemoryKeys.MOVE_TARGET, target)
+            return true
         }
+        return false
     }
 }
 
@@ -94,12 +123,9 @@ class FollowEntityExecutor(
         if (target.isRemoved) return false
         val dist = entity.position.distance(target.position)
         if (dist > maxRange) return false
+        if (dist <= minRange) return false
         entity.memory.set(MemoryKeys.LOOK_TARGET, target.position.add(0.0, 1.5, 0.0))
-        if (dist > minRange) {
-            entity.memory.set(MemoryKeys.MOVE_TARGET, target.position)
-        } else {
-            entity.memory.clear(MemoryKeys.MOVE_TARGET)
-        }
+        entity.memory.set(MemoryKeys.MOVE_TARGET, target.position)
         return true
     }
 
@@ -176,6 +202,7 @@ class RangedAttackExecutor(
     private val projectileSpeed: Double = 1.5,
     private val projectileDamage: Float = 4f,
     private val cooldownName: String = "ranged_attack",
+    private val originBone: String? = null,
     private val onShoot: ((SmartEntity, Entity) -> Unit)? = null,
 ) : BehaviorExecutor {
     private val cooldown = ticksToDuration(cooldownTicks)
@@ -199,17 +226,37 @@ class RangedAttackExecutor(
 
         val instance = entity.instance ?: return false
         val projectile = EntityProjectile(entity, projectileType)
-        val eyePos = entity.position.add(0.0, entity.eyeHeight, 0.0)
-        val direction = target.position.add(0.0, target.eyeHeight, 0.0).sub(eyePos).asVec().normalize()
-        projectile.setInstance(instance, eyePos)
+        val origin = projectileOrigin(entity)
+        val direction = target.position.add(0.0, target.eyeHeight, 0.0).sub(origin).asVec().normalize()
+        projectile.setInstance(instance, origin)
         projectile.velocity = direction.mul(projectileSpeed * 20.0)
         onShoot?.invoke(entity, projectile)
         return true
     }
 
+    private fun projectileOrigin(entity: SmartEntity): Pos {
+        val active = entity.modeledEntity?.models?.values?.firstOrNull()
+        if (active != null) {
+            val bone = if (originBone != null) active.bones[originBone]
+            else active.bones.entries.firstOrNull { isMuzzleBoneName(it.key) }?.value
+            if (bone != null) {
+                val world = bone.globalTransform.toWorldPosition(entity.position)
+                return Pos(world.x(), world.y(), world.z())
+            }
+        }
+        return entity.position.add(0.0, entity.eyeHeight, 0.0)
+    }
+
     override fun onStop(entity: SmartEntity) {
         entity.memory.clear(MemoryKeys.MOVE_TARGET)
         entity.memory.clear(MemoryKeys.LOOK_TARGET)
+    }
+
+    companion object {
+        fun isMuzzleBoneName(name: String): Boolean {
+            val lower = name.lowercase()
+            return lower == "muzzle" || lower.startsWith("muzzle_")
+        }
     }
 }
 

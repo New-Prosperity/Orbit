@@ -10,10 +10,12 @@ object ArmorParser {
 
     fun parse(model: BlockbenchModel): ParsedArmor {
         val elementsByUuid = model.elements.associateBy { it.uuid }
+        val textures = model.textures.map { ArmorTexture(it.width, it.height, it.source) }
+        val textureLayers = computeTextureLayers(textures)
         val pieces = mutableListOf<ParsedArmorPiece>()
 
         for (group in model.groups) {
-            collectPieces(group, elementsByUuid, pieces)
+            collectPieces(group, elementsByUuid, textureLayers, pieces)
         }
 
         val merged = mergePieces(pieces)
@@ -21,25 +23,39 @@ object ArmorParser {
         return ParsedArmor(
             id = model.name,
             pieces = merged,
-            textures = model.textures.map { ArmorTexture(it.width, it.height, it.source) },
+            textures = textures,
         )
+    }
+
+    private fun computeTextureLayers(textures: List<ArmorTexture>): IntArray {
+        if (textures.isEmpty()) return IntArray(0)
+        val maxHeight = textures.maxOf { it.height }
+        val anyShorter = textures.any { it.height < maxHeight }
+        return IntArray(textures.size) { i ->
+            when {
+                anyShorter -> if (textures[i].height < maxHeight) 2 else 1
+                i == 0 -> 1
+                else -> 2
+            }
+        }
     }
 
     private fun collectPieces(
         group: BbGroup,
         elementsByUuid: Map<String, BbElement>,
+        textureLayers: IntArray,
         output: MutableList<ParsedArmorPiece>,
     ) {
         val part = ArmorPart.fromBoneName(group.name)
         if (part != null && part.enabled) {
-            val cubes = collectCubes(group, elementsByUuid, group.origin, emptyList(), part, output)
-            splitByTextureLayer(part, cubes, output)
+            val cubes = collectCubes(group, elementsByUuid, group.origin, emptyList(), part, textureLayers, output)
+            splitByTextureLayer(part, cubes, textureLayers, output)
             return
         }
 
         for (child in group.children) {
             when (child) {
-                is BbGroupChild.SubGroup -> collectPieces(child.group, elementsByUuid, output)
+                is BbGroupChild.SubGroup -> collectPieces(child.group, elementsByUuid, textureLayers, output)
                 is BbGroupChild.ElementRef -> {}
             }
         }
@@ -48,25 +64,23 @@ object ArmorParser {
     private fun splitByTextureLayer(
         part: ArmorPart,
         cubes: List<ArmorCube>,
+        textureLayers: IntArray,
         output: MutableList<ParsedArmorPiece>,
     ) {
         if (cubes.isEmpty()) return
-
-        val expectedTexIndex = if (part.layer == 2) 1 else 0
-        val matching = cubes.filter { it.textureIndex == expectedTexIndex }
-        val mismatched = cubes.filter { it.textureIndex != expectedTexIndex }
-
-        if (matching.isNotEmpty()) {
-            output.add(ParsedArmorPiece(part, matching))
-        }
-
-        if (mismatched.isNotEmpty()) {
-            val altPart = part.alternateLayerPart()
-            if (altPart != null) {
-                val adjusted = adjustCubesForPart(mismatched, part, altPart)
-                output.add(ParsedArmorPiece(altPart, adjusted))
+        val grouped = cubes.groupBy { it.textureIndex }
+        for ((textureIndex, cubeGroup) in grouped) {
+            val texLayer = textureLayers.getOrNull(textureIndex) ?: part.layer
+            if (texLayer == part.layer) {
+                output.add(ParsedArmorPiece(part, cubeGroup, textureIndex))
             } else {
-                output.add(ParsedArmorPiece(part, mismatched))
+                val altPart = part.alternateLayerPart()
+                if (altPart != null) {
+                    val adjusted = adjustCubesForPart(cubeGroup, part, altPart)
+                    output.add(ParsedArmorPiece(altPart, adjusted, textureIndex))
+                } else {
+                    output.add(ParsedArmorPiece(part, cubeGroup, textureIndex))
+                }
             }
         }
     }
@@ -91,8 +105,10 @@ object ArmorParser {
     }
 
     private fun mergePieces(pieces: List<ParsedArmorPiece>): List<ParsedArmorPiece> =
-        pieces.groupBy { it.part }
-            .map { (part, grouped) -> ParsedArmorPiece(part, grouped.flatMap { it.cubes }) }
+        pieces.groupBy { it.part to it.textureIndex }
+            .map { (key, grouped) ->
+                ParsedArmorPiece(key.first, grouped.flatMap { it.cubes }, key.second)
+            }
 
     private data class GroupTransform(
         val origin: Vec,
@@ -105,6 +121,7 @@ object ArmorParser {
         boneOrigin: Vec,
         parentTransforms: List<GroupTransform>,
         part: ArmorPart,
+        textureLayers: IntArray,
         piecesOutput: MutableList<ParsedArmorPiece>,
     ): List<ArmorCube> {
         val cubes = mutableListOf<ArmorCube>()
@@ -119,8 +136,8 @@ object ArmorParser {
                 is BbGroupChild.SubGroup -> {
                     val subPart = ArmorPart.fromBoneName(child.group.name)
                     if (subPart != null) {
-                        val subCubes = collectCubes(child.group, elementsByUuid, child.group.origin, emptyList(), subPart, piecesOutput)
-                        splitByTextureLayer(subPart, subCubes, piecesOutput)
+                        val subCubes = collectCubes(child.group, elementsByUuid, child.group.origin, emptyList(), subPart, textureLayers, piecesOutput)
+                        splitByTextureLayer(subPart, subCubes, textureLayers, piecesOutput)
                     } else {
                         val subRot = child.group.rotation
                         val newTransforms = if (subRot.x() != 0.0 || subRot.y() != 0.0 || subRot.z() != 0.0) {
@@ -128,7 +145,7 @@ object ArmorParser {
                         } else {
                             parentTransforms
                         }
-                        cubes.addAll(collectCubes(child.group, elementsByUuid, boneOrigin, newTransforms, part, piecesOutput))
+                        cubes.addAll(collectCubes(child.group, elementsByUuid, boneOrigin, newTransforms, part, textureLayers, piecesOutput))
                     }
                 }
             }
@@ -157,7 +174,7 @@ object ArmorParser {
         val cz = centerBb.z() - boneOrigin.z()
         val center = part.convertCenter(cx, cy, cz)
 
-        val inflate = element.inflate.toDouble()
+        val inflate = element.inflate.toDouble() + if (part is ArmorPart.Helmet) 0.6 else 0.0
         val halfSize = Vec(
             (to.x() - from.x()) / 2.0 + inflate,
             (to.z() - from.z()) / 2.0 + inflate,

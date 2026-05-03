@@ -22,6 +22,7 @@ object MapLoader {
     internal fun resetWorldsDirForTest() { worldsDir = Path.of("worlds") }
 
     fun resolve(vararg parts: String): Path {
+        ingestNebulaIfPresent(*parts)
         ingestAnvilIfPresent(*parts)
         return resolveNebulaFile(*parts)
             ?: error("World '${parts.joinToString("/")}' not found — expected a .nebula file under ${worldsDir.toAbsolutePath()}")
@@ -29,6 +30,51 @@ object MapLoader {
 
     fun isNebulaFile(path: Path): Boolean =
         path.toString().endsWith(".nebula") && Files.isRegularFile(path)
+
+    fun ingestNebulaIfPresent(vararg parts: String): Path? {
+        val source = findNebulaInMount(*parts) ?: return null
+
+        Files.createDirectories(worldsDir)
+        val target = worldsDir.resolve("${parts.last()}.nebula")
+        if (Files.isRegularFile(target)) {
+            runCatching { verifyConverted(target) }.onFailure { ex ->
+                throw IllegalArgumentException(
+                    "Cannot ingest $source: a file already exists at $target but is not a valid .nebula — resolve manually",
+                    ex,
+                )
+            }
+            logger.info { "Skipping $source: already present at $target" }
+            return null
+        }
+
+        runCatching { verifyConverted(source) }.onFailure { ex ->
+            throw IllegalArgumentException(
+                "Cannot ingest $source: not a valid .nebula file",
+                ex,
+            )
+        }
+
+        val sourceBytes = Files.size(source)
+        logger.info { "Ingesting $source → $target (${sourceBytes / 1024}KB)" }
+        try {
+            Files.move(source, target)
+        } catch (ex: Throwable) {
+            Files.deleteIfExists(target)
+            throw IllegalStateException("Failed to ingest $source", ex)
+        }
+        return target
+    }
+
+    private fun findNebulaInMount(vararg parts: String): Path? {
+        val candidates = listOf(
+            mountDir.resolve("${parts.joinToString("/")}.nebula"),
+            mountDir.resolve("${parts.last()}.nebula"),
+        )
+        for (candidate in candidates) {
+            if (isNebulaFile(candidate)) return candidate
+        }
+        return null
+    }
 
     fun ingestAnvilIfPresent(vararg parts: String): Path? {
         val anvilDir = parts.fold(mountDir) { path, part -> path.resolve(part) }
@@ -97,12 +143,18 @@ object MapLoader {
         var ingested = 0
         Files.newDirectoryStream(mountDir).use { stream ->
             for (entry in stream) {
-                if (!Files.isDirectory(entry)) continue
-                if (!isAnvilWorld(entry)) continue
-                if (ingestAnvilIfPresent(entry.fileName.toString()) != null) ingested++
+                when {
+                    Files.isDirectory(entry) && isAnvilWorld(entry) -> {
+                        if (ingestAnvilIfPresent(entry.fileName.toString()) != null) ingested++
+                    }
+                    isNebulaFile(entry) -> {
+                        val name = entry.fileName.toString().removeSuffix(".nebula")
+                        if (ingestNebulaIfPresent(name) != null) ingested++
+                    }
+                }
             }
         }
-        if (ingested > 0) logger.info { "Boot scan ingested $ingested Anvil world(s) from ${mountDir.toAbsolutePath()}" }
+        if (ingested > 0) logger.info { "Boot scan ingested $ingested map(s) from ${mountDir.toAbsolutePath()}" }
         return ingested
     }
 

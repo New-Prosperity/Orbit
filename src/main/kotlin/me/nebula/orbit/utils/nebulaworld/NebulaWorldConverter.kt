@@ -20,17 +20,17 @@ object NebulaWorldConverter {
     private const val MAX_SECTION = 19
 
     fun convert(anvilPath: Path, outputPath: Path, radiusChunks: Int = -1) {
-        val world = buildNebulaWorld(anvilPath, radiusChunks)
+        val world = buildWritableWorld(anvilPath, radiusChunks)
         NebulaWorldWriter.write(world, outputPath)
         logger.info { "Converted ${world.chunks.size} chunks → ${outputPath.fileName} (${Files.size(outputPath) / 1024}KB)" }
     }
 
     fun convertToBytes(anvilPath: Path, radiusChunks: Int = -1): ByteArray {
-        val world = buildNebulaWorld(anvilPath, radiusChunks)
+        val world = buildWritableWorld(anvilPath, radiusChunks)
         return NebulaWorldWriter.write(world)
     }
 
-    private fun buildNebulaWorld(anvilPath: Path, radiusChunks: Int): NebulaWorld {
+    private fun buildWritableWorld(anvilPath: Path, radiusChunks: Int): WritableWorld {
         val regionDir = resolveRegionDir(anvilPath)
         require(Files.isDirectory(regionDir)) { "No region directory at $regionDir" }
 
@@ -53,24 +53,23 @@ object NebulaWorldConverter {
             val loadedChunks = instance.chunks
             logger.info { "Loaded ${loadedChunks.size} chunks, extracting sections..." }
 
-            val nebulaChunks = HashMap<Long, NebulaChunk>()
-            for (chunk in loadedChunks) {
-                val nebulaChunk = extractChunk(chunk)
-                nebulaChunks[NebulaWorld.packChunkKey(chunk.chunkX, chunk.chunkZ)] = nebulaChunk
-            }
+            val writable = ArrayList<WritableChunk>(loadedChunks.size)
+            for (chunk in loadedChunks) writable += extractChunk(chunk)
 
-            return NebulaWorld(
+            return WritableWorld(
                 dataVersion = 0,
                 minSection = MIN_SECTION,
                 maxSection = MAX_SECTION,
-                chunks = nebulaChunks,
+                includeLight = true,
+                userData = ByteArray(0),
+                chunks = writable,
             )
         } finally {
             MinecraftServer.getInstanceManager().unregisterInstance(instance)
         }
     }
 
-    private fun extractChunk(chunk: Chunk): NebulaChunk {
+    private fun extractChunk(chunk: Chunk): WritableChunk {
         val sectionCount = MAX_SECTION - MIN_SECTION + 1
         val sections = Array(sectionCount) { sectionIndex ->
             val section = chunk.getSection(MIN_SECTION + sectionIndex)
@@ -90,7 +89,7 @@ object NebulaWorldConverter {
                                 x = x,
                                 y = worldY,
                                 z = z,
-                                id = block.handler()?.let { "minecraft:${block.name().removePrefix("minecraft:")}" },
+                                id = block.handler()?.let { block.name() },
                                 nbt = block.nbt(),
                             )
                         }
@@ -99,15 +98,15 @@ object NebulaWorldConverter {
             }
         }
 
-        return NebulaChunk(chunk.chunkX, chunk.chunkZ, sections, blockEntities)
+        return WritableChunk(chunk.chunkX, chunk.chunkZ, sections, blockEntities)
     }
 
-    private fun extractSection(section: Section): NebulaSection {
+    private fun extractSection(section: Section): WritableSection {
         val blockPalette = section.blockPalette()
         val biomePalette = section.biomePalette()
 
-        val blockPaletteEntries = mutableListOf<String>()
-        val blockStateMap = HashMap<String, Int>()
+        val blockNames = ArrayList<String>()
+        val blockNameToIdx = HashMap<String, Int>()
         val blockData = IntArray(SECTION_BLOCK_COUNT)
         var allAir = true
 
@@ -119,19 +118,19 @@ object NebulaWorldConverter {
                     if (block != Block.AIR) allAir = false
 
                     val stateStr = stateToString(block)
-                    val paletteIndex = blockStateMap.getOrPut(stateStr) {
-                        blockPaletteEntries += stateStr
-                        blockPaletteEntries.size - 1
+                    val paletteIndex = blockNameToIdx.getOrPut(stateStr) {
+                        blockNames += stateStr
+                        blockNames.size - 1
                     }
                     blockData[y * 256 + z * 16 + x] = paletteIndex
                 }
             }
         }
 
-        if (allAir) return NebulaSection.EMPTY
+        if (allAir) return WritableSection.EMPTY
 
-        val biomePaletteEntries = mutableListOf<String>()
-        val biomeStateMap = HashMap<Int, Int>()
+        val biomeNames = ArrayList<String>()
+        val biomeIdToIdx = HashMap<Int, Int>()
         val biomeData = IntArray(SECTION_BIOME_COUNT)
         val biomeRegistry = MinecraftServer.getBiomeRegistry()
 
@@ -139,21 +138,18 @@ object NebulaWorldConverter {
             for (z in 0..3) {
                 for (x in 0..3) {
                     val biomeId = biomePalette.get(x, y, z)
-                    val paletteIndex = biomeStateMap.getOrPut(biomeId) {
+                    val paletteIndex = biomeIdToIdx.getOrPut(biomeId) {
                         val key = biomeRegistry.getKey(biomeId)
-                        biomePaletteEntries += key?.name() ?: "minecraft:plains"
-                        biomePaletteEntries.size - 1
+                        biomeNames += key?.name() ?: "minecraft:plains"
+                        biomeNames.size - 1
                     }
                     biomeData[x + z * 4 + y * 16] = paletteIndex
                 }
             }
         }
 
-        val blockLightObj = section.blockLight()
-        val skyLightObj = section.skyLight()
-
-        val blockLightArray = blockLightObj.array()
-        val skyLightArray = skyLightObj.array()
+        val blockLightArray = section.blockLight().array()
+        val skyLightArray = section.skyLight().array()
 
         val blockLightData = if (blockLightArray.isNotEmpty() && blockLightArray.any { it != 0.toByte() }) {
             LightData(LightContent.PRESENT, blockLightArray.copyOf())
@@ -167,11 +163,11 @@ object NebulaWorldConverter {
             LightData.EMPTY
         }
 
-        return NebulaSection(
+        return WritableSection(
             isEmpty = false,
-            blockPalette = blockPaletteEntries.toTypedArray(),
+            blockPaletteNames = blockNames.toTypedArray(),
             blockData = blockData,
-            biomePalette = biomePaletteEntries.toTypedArray(),
+            biomePaletteNames = biomeNames.toTypedArray(),
             biomeData = biomeData,
             blockLight = blockLightData,
             skyLight = skyLightData,

@@ -13,14 +13,19 @@ sealed class BlockHitbox(val name: String) {
 
     companion object {
 
-        private val byName = mapOf(
-            "full" to Full, "slab" to Slab, "stair" to Stair, "thin" to Thin,
-            "transparent" to Transparent, "wall" to Wall, "fence" to Fence, "trapdoor" to Trapdoor,
-        )
+        fun fromStringOrNull(value: String): BlockHitbox? = when (value.lowercase()) {
+            "full" -> Full
+            "slab" -> Slab
+            "stair" -> Stair
+            "thin" -> Thin
+            "transparent" -> Transparent
+            "wall" -> Wall
+            "fence" -> Fence
+            "trapdoor" -> Trapdoor
+            else -> null
+        }
 
         fun fromString(value: String): BlockHitbox =
-            byName[value.lowercase()] ?: error("Unknown hitbox type: $value")
-
-        fun fromStringOrNull(value: String): BlockHitbox? = byName[value.lowercase()]
+            fromStringOrNull(value) ?: error("Unknown hitbox type: $value")
     }
 }

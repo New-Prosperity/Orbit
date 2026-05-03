@@ -1,14 +1,12 @@
 package me.nebula.orbit.loadout
 
 import me.nebula.ether.utils.translation.asTranslationKey
-import me.nebula.gravity.loadout.BonusTier
 import me.nebula.gravity.loadout.Loadout
 import me.nebula.gravity.loadout.LoadoutBonusDefinition
 import me.nebula.gravity.loadout.LoadoutCatalog
 import me.nebula.gravity.loadout.LoadoutItemDefinition
 import me.nebula.gravity.loadout.LoadoutPresetDefinition
 import me.nebula.gravity.loadout.UnlockRequirement
-import me.nebula.gravity.loadout.ValidationIssue
 import me.nebula.orbit.translation.translate
 import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.gui.gui

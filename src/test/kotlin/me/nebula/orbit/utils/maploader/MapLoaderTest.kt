@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.maploader
 
-import me.nebula.orbit.utils.nebulaworld.NebulaWorld
 import me.nebula.orbit.utils.nebulaworld.NebulaWorldWriter
+import me.nebula.orbit.utils.nebulaworld.WritableWorld
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -104,8 +104,94 @@ class MapLoaderTest {
     @Test
     fun `scanAndIngest skips non-anvil directories`() {
         Files.createDirectories(tmp.resolve("random"))
-        Files.writeString(tmp.resolve("world.nebula"), "x")
         assertEquals(0, MapLoader.scanAndIngest())
+    }
+
+    @Test
+    fun `resolve picks up nebula file from mount dir and moves it to worlds dir`() {
+        val bytes = NebulaWorldWriter.write(WritableWorld(
+            dataVersion = 1, minSection = -4, maxSection = 19,
+            includeLight = false, userData = ByteArray(0), chunks = emptyList(),
+        ))
+        val source = tmp.resolve("hub.nebula")
+        Files.write(source, bytes)
+
+        val resolved = MapLoader.resolve("hub")
+
+        assertEquals(workTmp.resolve("hub.nebula").toAbsolutePath(), resolved.toAbsolutePath())
+        assertTrue(Files.isRegularFile(workTmp.resolve("hub.nebula")))
+        assertFalse(Files.exists(source), "Source .nebula should be moved out of mount dir")
+    }
+
+    @Test
+    fun `resolve picks up nested nebula file from mount dir`() {
+        val bytes = NebulaWorldWriter.write(WritableWorld(
+            dataVersion = 1, minSection = -4, maxSection = 19,
+            includeLight = false, userData = ByteArray(0), chunks = emptyList(),
+        ))
+        val nested = tmp.resolve("hub")
+        Files.createDirectories(nested)
+        val source = nested.resolve("hub.nebula")
+        Files.write(source, bytes)
+
+        val resolved = MapLoader.resolve("hub", "hub")
+
+        assertEquals(workTmp.resolve("hub.nebula").toAbsolutePath(), resolved.toAbsolutePath())
+        assertFalse(Files.exists(source), "Source .nebula should be moved out of mount dir")
+    }
+
+    @Test
+    fun `ingestNebulaIfPresent returns null when no nebula file in mounts`() {
+        assertNull(MapLoader.ingestNebulaIfPresent("ghost"))
+    }
+
+    @Test
+    fun `ingestNebulaIfPresent rejects malformed nebula file`() {
+        Files.writeString(tmp.resolve("bogus.nebula"), "x")
+        assertFailsWith<IllegalArgumentException> { MapLoader.ingestNebulaIfPresent("bogus") }
+        assertTrue(Files.isRegularFile(tmp.resolve("bogus.nebula")), "Source preserved on rejection")
+    }
+
+    @Test
+    fun `ingestNebulaIfPresent skips when valid target already exists in worlds dir`() {
+        val bytes = NebulaWorldWriter.write(WritableWorld(
+            dataVersion = 1, minSection = -4, maxSection = 19,
+            includeLight = false, userData = ByteArray(0), chunks = emptyList(),
+        ))
+        val source = tmp.resolve("dup.nebula")
+        Files.write(source, bytes)
+        Files.createDirectories(workTmp)
+        Files.write(workTmp.resolve("dup.nebula"), bytes)
+
+        assertNull(MapLoader.ingestNebulaIfPresent("dup"))
+        assertTrue(Files.isRegularFile(source), "Source preserved when target already exists")
+    }
+
+    @Test
+    fun `ingestNebulaIfPresent refuses when conflicting invalid target exists in worlds dir`() {
+        val bytes = NebulaWorldWriter.write(WritableWorld(
+            dataVersion = 1, minSection = -4, maxSection = 19,
+            includeLight = false, userData = ByteArray(0), chunks = emptyList(),
+        ))
+        Files.write(tmp.resolve("clash.nebula"), bytes)
+        Files.createDirectories(workTmp)
+        Files.writeString(workTmp.resolve("clash.nebula"), "garbage")
+
+        assertFailsWith<IllegalArgumentException> { MapLoader.ingestNebulaIfPresent("clash") }
+    }
+
+    @Test
+    fun `scanAndIngest picks up nebula files dropped in mount dir`() {
+        val bytes = NebulaWorldWriter.write(WritableWorld(
+            dataVersion = 1, minSection = -4, maxSection = 19,
+            includeLight = false, userData = ByteArray(0), chunks = emptyList(),
+        ))
+        Files.write(tmp.resolve("alpha.nebula"), bytes)
+        Files.write(tmp.resolve("beta.nebula"), bytes)
+
+        assertEquals(2, MapLoader.scanAndIngest())
+        assertTrue(Files.isRegularFile(workTmp.resolve("alpha.nebula")))
+        assertTrue(Files.isRegularFile(workTmp.resolve("beta.nebula")))
     }
 
     @Test
@@ -113,8 +199,9 @@ class MapLoaderTest {
         val dir = tmp.resolve("already-done")
         Files.createDirectories(dir.resolve("dimensions/minecraft/overworld/region"))
         Files.createDirectories(workTmp)
-        val bytes = NebulaWorldWriter.write(NebulaWorld(
-            dataVersion = 1, minSection = -4, maxSection = 19, chunks = emptyMap(),
+        val bytes = NebulaWorldWriter.write(WritableWorld(
+            dataVersion = 1, minSection = -4, maxSection = 19,
+            includeLight = false, userData = ByteArray(0), chunks = emptyList(),
         ))
         Files.write(workTmp.resolve("already-done.nebula"), bytes)
 
@@ -128,8 +215,9 @@ class MapLoaderTest {
         val dir = tmp.resolve("ready")
         Files.createDirectories(dir.resolve("dimensions/minecraft/overworld/region"))
         Files.createDirectories(workTmp)
-        val bytes = NebulaWorldWriter.write(NebulaWorld(
-            dataVersion = 1, minSection = -4, maxSection = 19, chunks = emptyMap(),
+        val bytes = NebulaWorldWriter.write(WritableWorld(
+            dataVersion = 1, minSection = -4, maxSection = 19,
+            includeLight = false, userData = ByteArray(0), chunks = emptyList(),
         ))
         Files.write(workTmp.resolve("ready.nebula"), bytes)
 

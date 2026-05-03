@@ -1,24 +1,49 @@
 {
   "id": "turret",
-  "carrier_type": "iron_golem",
+  "carrier_type": "silverfish",
   "invisible_carrier": true,
 
   "health": 30.0,
-  "speed": 0.32,
-  "knockback_resistance": 0.5,
-  "in_combat_timeout_ms": 4000,
+  "speed": 0.35,
+  "knockback_resistance": 0.6,
+  "in_combat_timeout_ms": 5000,
 
   "tags": ["pet", "turret"],
+
+  "regen": {
+    "amount": 1.0,
+    "interval_ticks": 40,
+    "in_combat": false
+  },
 
   "controllers": ["walk", "look"],
 
   "sensors": [
-    { "type": "nearest_non_owner", "range": 15.0, "players_only": true, "period": 5 },
-    { "type": "line_of_sight", "range": 20.0, "grace_period_ticks": 40, "period": 5 },
+    { "type": "nearest_non_owner", "range": 18.0, "players_only": true, "period": 5 },
+    { "type": "line_of_sight", "range": 22.0, "grace_period_ticks": 40, "period": 5 },
     { "type": "last_known_position", "period": 10 }
   ],
 
   "behaviors": [
+    {
+      "id": "recall_to_owner",
+      "priority": 6,
+      "evaluator": {
+        "type": "all",
+        "of": [
+          { "type": "has", "key": "owner" },
+          { "type": "distance_above", "target_memory_key": "owner", "value": 48.0 }
+        ]
+      },
+      "executor": {
+        "type": "teleport_behind",
+        "cooldown_ticks": 100,
+        "distance": 2.0,
+        "cooldown_name": "recall_cd"
+      },
+      "score": { "type": "constant", "value": 1000 }
+    },
+
     {
       "id": "retreat_to_owner",
       "priority": 5,
@@ -27,7 +52,8 @@
         "type": "all",
         "of": [
           { "type": "has", "key": "attack_target" },
-          { "type": "has", "key": "owner" }
+          { "type": "has", "key": "owner" },
+          { "type": "distance_below", "target_memory_key": "attack_target", "value": 5.0 }
         ]
       },
       "executor": {
@@ -36,7 +62,7 @@
         "safe_memory_key": "owner",
         "trigger_distance": 5.0,
         "arrived_distance": 2.5,
-        "fallback_flee_range": 5.0
+        "fallback_flee_range": 6.0
       },
       "play_on_start": "retreat",
       "score": { "type": "constant", "value": 500 }
@@ -50,7 +76,7 @@
         "type": "ranged_attack",
         "projectile_type": "arrow",
         "attack_range": 18.0,
-        "min_range": 6.0,
+        "min_range": 4.0,
         "cooldown_ticks": 30,
         "projectile_speed": 2.5,
         "projectile_damage": 4.0,
@@ -66,18 +92,24 @@
     {
       "id": "follow_owner",
       "priority": 3,
-      "evaluator": { "type": "has", "key": "owner" },
+      "evaluator": {
+        "type": "all",
+        "of": [
+          { "type": "has", "key": "owner" },
+          { "type": "distance_above", "target_memory_key": "owner", "value": 5.0 }
+        ]
+      },
       "executor": {
         "type": "follow_entity",
         "target_memory_key": "owner",
-        "min_range": 2.5,
+        "min_range": 3.0,
         "max_range": 64.0
       },
       "score": {
-        "type": "inverse_distance",
+        "type": "distance",
         "target_memory_key": "owner",
-        "multiplier": 200.0,
-        "max_score": 200.0
+        "multiplier": 50.0,
+        "max_score": 600.0
       }
     },
 
@@ -85,8 +117,28 @@
       "id": "alert_roam_near_owner",
       "priority": 2,
       "weight": 3,
-      "evaluator": { "type": "has", "key": "owner" },
-      "executor": { "type": "flat_roam", "range": 4.0, "run_ticks": 60, "max_retries": 10 },
+      "evaluator": {
+        "type": "all",
+        "of": [
+          { "type": "has", "key": "owner" },
+          { "type": "cooldown_ready", "name": "roam_cd" },
+          { "type": "distance_below", "target_memory_key": "owner", "value": 4.0 }
+        ]
+      },
+      "executor": {
+        "type": "with_cooldown",
+        "name": "roam_cd",
+        "ticks": 800,
+        "child": {
+          "type": "flat_roam",
+          "range": 1.2,
+          "run_ticks": 40,
+          "max_retries": 16,
+          "chain_targets": false,
+          "avoid_memory_key": "owner",
+          "avoid_distance": 2.0
+        }
+      },
       "play_on_start": "alert"
     },
 

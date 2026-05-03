@@ -2,9 +2,6 @@ package me.nebula.orbit.utils.replay
 
 import com.github.luben.zstd.Zstd
 import me.nebula.orbit.utils.nebulaworld.GrowableBuffer
-import me.nebula.orbit.utils.nebulaworld.NebulaWorld
-import me.nebula.orbit.utils.nebulaworld.NebulaWorldReader
-import me.nebula.orbit.utils.nebulaworld.NebulaWorldWriter
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
@@ -43,7 +40,7 @@ data class ReplayFileHeader(
 
 sealed interface ReplayWorldSource {
     data class Reference(val mapName: String) : ReplayWorldSource
-    data class Embedded(val world: NebulaWorld) : ReplayWorldSource
+    data class Embedded(val worldBytes: ByteArray) : ReplayWorldSource
 }
 
 data class ReplayFile(
@@ -91,8 +88,7 @@ object ReplayFormat {
             }
             is ReplayWorldSource.Embedded -> {
                 buf.putByte(WORLD_EMBEDDED)
-                val worldBytes = NebulaWorldWriter.write(world.world)
-                buf.putByteArray(worldBytes)
+                buf.putByteArray(world.worldBytes)
             }
         }
 
@@ -159,10 +155,7 @@ object ReplayFormat {
         val worldMode = buf.get()
         val worldSource = when (worldMode) {
             WORLD_REFERENCE -> ReplayWorldSource.Reference(readString(buf))
-            WORLD_EMBEDDED -> {
-                val worldBytes = readByteArray(buf)
-                ReplayWorldSource.Embedded(NebulaWorldReader.read(worldBytes))
-            }
+            WORLD_EMBEDDED -> ReplayWorldSource.Embedded(readByteArray(buf))
             else -> error("Unknown world mode: $worldMode")
         }
 

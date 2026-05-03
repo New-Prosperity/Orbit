@@ -4,7 +4,6 @@ import me.nebula.orbit.mode.game.battleroyale.SpawnModeExecutor
 import me.nebula.orbit.mode.game.battleroyale.SpawnModeResult
 import me.nebula.orbit.mode.game.battleroyale.asJavaRandom
 import net.minestom.server.coordinate.Pos
-import net.minestom.server.entity.Player
 import net.minestom.server.potion.Potion
 import net.minestom.server.potion.PotionEffect
 import java.util.UUID

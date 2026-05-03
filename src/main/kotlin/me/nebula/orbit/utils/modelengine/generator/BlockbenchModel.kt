@@ -11,7 +11,9 @@ data class BlockbenchModel(
     val textures: List<BbTexture>,
     val animations: List<BbAnimation>,
     val display: Map<String, BbDisplaySlot> = emptyMap(),
-)
+) {
+    fun textureIndexByBbId(bbId: Int): Int = textures.indexOfFirst { it.id == bbId }
+}
 
 data class BbDisplaySlot(
     val rotation: FloatArray = FloatArray(3),

@@ -22,9 +22,11 @@ private val nextSeatId = AtomicInteger(-3_500_000)
 class MountBehavior(
     override val bone: ModelBone,
     private val seatOffset: Vec = Vec.ZERO,
+    private val width: Float = 0.6f,
+    private val height: Float = 0.6f,
 ) : BoneBehavior {
 
-    private val seatEntityId = nextSeatId.getAndDecrement()
+    val seatEntityId = nextSeatId.getAndDecrement()
     private val seatUuid = UUID.randomUUID()
     private val viewers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
 
@@ -103,8 +105,8 @@ class MountBehavior(
         ))
         player.sendPacket(EntityMetaDataPacket(seatEntityId, mapOf(
             5 to Metadata.Boolean(true),
-            8 to Metadata.Float(0.001f),
-            9 to Metadata.Float(0.001f),
+            8 to Metadata.Float(width),
+            9 to Metadata.Float(height),
         )))
 
         passenger?.let { p ->

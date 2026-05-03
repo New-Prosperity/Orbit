@@ -13,7 +13,6 @@ import net.minestom.server.entity.metadata.display.AbstractDisplayMeta
 import net.minestom.server.item.ItemStack
 import net.minestom.server.network.packet.server.play.DestroyEntitiesPacket
 import net.minestom.server.network.packet.server.play.EntityMetaDataPacket
-import net.minestom.server.network.packet.server.play.EntityTeleportPacket
 import net.minestom.server.network.packet.server.play.SpawnEntityPacket
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -46,16 +45,18 @@ class BoneEntity(
     var lastItem: ItemStack? = null
     var lastVisible: Boolean = true
     var spawned: Boolean = false
+    var spawnX: Double = 0.0
+    var spawnY: Double = 0.0
+    var spawnZ: Double = 0.0
 }
 
 class BoneRenderer(
-    private val interpolationDuration: Int = 1,
+    private val interpolationDuration: Int = 2,
 ) {
     private val _viewers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
     val viewers: Set<UUID> get() = _viewers
 
     private val boneEntities = ConcurrentHashMap<String, BoneEntity>()
-    private var lastModelPosition: Pos? = null
 
     fun registerBone(bone: ModelBone) {
         boneEntities.computeIfAbsent(bone.blueprint.name) { BoneEntity(bone = bone) }
@@ -87,19 +88,7 @@ class BoneRenderer(
     }
 
     fun update(modelPosition: Pos) {
-        val prev = lastModelPosition
-        lastModelPosition = modelPosition
-
-        val basePos = Pos(modelPosition.x(), modelPosition.y(), modelPosition.z())
-        if (prev != null && (prev.x() != modelPosition.x() || prev.y() != modelPosition.y() || prev.z() != modelPosition.z())) {
-            boneEntities.values.forEach { boneEntity ->
-                if (boneEntity.spawned) {
-                    val packet = EntityTeleportPacket(boneEntity.entityId, basePos, Vec.ZERO, 0, false)
-                    forEachViewer { it.sendPacket(packet) }
-                }
-            }
-        }
-
+        val yaw = modelPosition.yaw()
         boneEntities.values.forEach { boneEntity ->
             val bone = boneEntity.bone
             val shouldBeVisible = bone.visible && bone.modelItem != null
@@ -119,11 +108,16 @@ class BoneRenderer(
             if (!boneEntity.spawned) return@forEach
 
             val transform = bone.globalTransform
-            val relPos = applySkinOffset(transform.toRelativePosition(modelPosition.yaw()), bone.skinPartId)
-            val worldRot = transform.toWorldRotation(modelPosition.yaw())
+            val relPos = applySkinOffset(transform.toRelativePosition(yaw), bone.skinPartId)
+            val combinedTranslation = Vec(
+                relPos.x() + (modelPosition.x() - boneEntity.spawnX),
+                relPos.y() + (modelPosition.y() - boneEntity.spawnY),
+                relPos.z() + (modelPosition.z() - boneEntity.spawnZ),
+            )
+            val worldRot = transform.toWorldRotation(yaw)
             val effectiveScale = applyModelScale(transform.scale, bone.blueprint.modelScale)
 
-            val meta = buildDirtyMetadata(boneEntity, relPos, worldRot, effectiveScale, bone.modelItem)
+            val meta = buildDirtyMetadata(boneEntity, combinedTranslation, worldRot, effectiveScale, bone.modelItem)
             if (meta.isNotEmpty()) {
                 val packet = EntityMetaDataPacket(boneEntity.entityId, meta)
                 forEachViewer { it.sendPacket(packet) }
@@ -150,26 +144,40 @@ class BoneRenderer(
     private fun spawnBoneFor(player: Player, boneEntity: BoneEntity, modelPosition: Pos) {
         val bone = boneEntity.bone
         val transform = bone.globalTransform
-        val relPos = applySkinOffset(transform.toRelativePosition(modelPosition.yaw()), bone.skinPartId)
         val effectiveScale = applyModelScale(transform.scale, bone.blueprint.modelScale)
+        val worldRot = transform.toWorldRotation(modelPosition.yaw())
+        val item = bone.modelItem
 
-        val spawnPos = Pos(modelPosition.x(), modelPosition.y(), modelPosition.z())
+        val firstSpawn = !boneEntity.spawned
+        if (firstSpawn) {
+            boneEntity.spawnX = modelPosition.x()
+            boneEntity.spawnY = modelPosition.y()
+            boneEntity.spawnZ = modelPosition.z()
+        }
+
+        val spawnPos = Pos(boneEntity.spawnX, boneEntity.spawnY, boneEntity.spawnZ)
         player.sendPacket(SpawnEntityPacket(
             boneEntity.entityId, boneEntity.uuid, EntityType.ITEM_DISPLAY,
             spawnPos, 0f, 0, Vec.ZERO,
         ))
 
-        val worldRot = transform.toWorldRotation(modelPosition.yaw())
-        val item = bone.modelItem
-        val meta = buildFullMetadata(boneEntity, relPos, worldRot, effectiveScale, item)
+        val relPos = applySkinOffset(transform.toRelativePosition(modelPosition.yaw()), bone.skinPartId)
+        val combinedTranslation = Vec(
+            relPos.x() + (modelPosition.x() - boneEntity.spawnX),
+            relPos.y() + (modelPosition.y() - boneEntity.spawnY),
+            relPos.z() + (modelPosition.z() - boneEntity.spawnZ),
+        )
+        val meta = buildFullMetadata(boneEntity, combinedTranslation, worldRot, effectiveScale, item)
         player.sendPacket(EntityMetaDataPacket(boneEntity.entityId, meta))
 
-        boneEntity.lastPosition = relPos
-        boneEntity.lastRotation = worldRot
-        boneEntity.lastScale = effectiveScale
-        boneEntity.lastItem = item
-        boneEntity.lastVisible = bone.visible
-        boneEntity.spawned = true
+        if (firstSpawn) {
+            boneEntity.lastPosition = combinedTranslation
+            boneEntity.lastRotation = worldRot
+            boneEntity.lastScale = effectiveScale
+            boneEntity.lastItem = item
+            boneEntity.lastVisible = bone.visible
+            boneEntity.spawned = true
+        }
     }
 
     private fun buildFullMetadata(
@@ -186,8 +194,7 @@ class BoneRenderer(
         put(META_SCALE, Metadata.Vector3(scale))
         put(META_ROTATION_RIGHT, Metadata.Quaternion(boneRotation.toFloatArray()))
         put(META_BILLBOARD, Metadata.Byte(AbstractDisplayMeta.BillboardConstraints.FIXED.ordinal.toByte()))
-        val viewRange = if (entity.bone.skinPartId != null && entity.bone.skinPartId != 0) 1000f else 1.0f
-        put(META_VIEW_RANGE, Metadata.Float(viewRange))
+        put(META_VIEW_RANGE, Metadata.Float(BONE_VIEW_RANGE))
         if (item != null) {
             put(META_DISPLAYED_ITEM, Metadata.ItemStack(item))
             put(META_DISPLAY_TYPE, Metadata.Byte(2))
@@ -251,3 +258,4 @@ class BoneRenderer(
 }
 
 private const val SKIN_SPACING = 1024.0
+private const val BONE_VIEW_RANGE = 1000f

@@ -6,6 +6,7 @@ import me.nebula.orbit.mode.game.GamePhase
 import me.nebula.orbit.utils.gametest.GameTestRunner
 import me.nebula.orbit.utils.customcontent.armor.CustomArmorRegistry
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
+import me.nebula.orbit.utils.customcontent.helditem.HeldItemAnimationRegistry
 import me.nebula.orbit.utils.customcontent.furniture.FurnitureRegistry
 import me.nebula.orbit.utils.customcontent.item.CustomItemRegistry
 import me.nebula.orbit.utils.fakeplayer.BotBehavior
@@ -44,6 +45,10 @@ fun CommandBuilderDsl.customBlockArgument(name: String = "id") {
 
 fun CommandBuilderDsl.customArmorArgument(name: String = "armor_id") {
     wordArgument(name) { matching(CustomArmorRegistry.all().map { it.id }, partial) }
+}
+
+fun CommandBuilderDsl.heldItemArgument(name: String = "helditem_id") {
+    wordArgument(name) { matching(HeldItemAnimationRegistry.all().map { it.id }, partial) }
 }
 
 fun CommandBuilderDsl.customContentArgument(name: String = "id") {

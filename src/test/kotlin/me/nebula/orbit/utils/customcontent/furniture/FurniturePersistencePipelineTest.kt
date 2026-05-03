@@ -1,9 +1,9 @@
 package me.nebula.orbit.utils.customcontent.furniture
 
 import me.nebula.ether.utils.gson.GsonProvider
-import me.nebula.orbit.utils.nebulaworld.NebulaWorld
 import me.nebula.orbit.utils.nebulaworld.NebulaWorldReader
 import me.nebula.orbit.utils.nebulaworld.NebulaWorldWriter
+import me.nebula.orbit.utils.nebulaworld.WritableWorld
 import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.test.assertContentEquals
@@ -27,12 +27,13 @@ class FurniturePersistencePipelineTest {
                 yawDegrees = 90f,
             ),
         ))
-        val world = NebulaWorld(
+        val world = WritableWorld(
             dataVersion = 1,
             minSection = -4,
             maxSection = 19,
+            includeLight = false,
             userData = payload,
-            chunks = emptyMap(),
+            chunks = emptyList(),
         )
 
         val bytes = NebulaWorldWriter.write(world)
@@ -56,12 +57,13 @@ class FurniturePersistencePipelineTest {
             inventoryBase64 = "aGVsbG8gd29ybGQ=",
             owner = owner,
         )
-        val world = NebulaWorld(
+        val world = WritableWorld(
             dataVersion = 1,
             minSection = -4,
             maxSection = 19,
+            includeLight = false,
             userData = manifestBytes(listOf(original)),
-            chunks = emptyMap(),
+            chunks = emptyList(),
         )
 
         val bytes = NebulaWorldWriter.write(world)
@@ -86,12 +88,13 @@ class FurniturePersistencePipelineTest {
 
     @Test
     fun `empty manifest userData survives world round trip as empty bytes`() {
-        val world = NebulaWorld(
+        val world = WritableWorld(
             dataVersion = 1,
             minSection = -4,
             maxSection = 19,
+            includeLight = false,
             userData = ByteArray(0),
-            chunks = emptyMap(),
+            chunks = emptyList(),
         )
 
         val bytes = NebulaWorldWriter.write(world)
@@ -123,12 +126,13 @@ class FurniturePersistencePipelineTest {
                 pitchDegrees = 10f,
             ),
         )
-        val world = NebulaWorld(
+        val world = WritableWorld(
             dataVersion = 1,
             minSection = -4,
             maxSection = 19,
+            includeLight = false,
             userData = manifestBytes(pieces),
-            chunks = emptyMap(),
+            chunks = emptyList(),
         )
 
         val restored = NebulaWorldReader.read(NebulaWorldWriter.write(world))

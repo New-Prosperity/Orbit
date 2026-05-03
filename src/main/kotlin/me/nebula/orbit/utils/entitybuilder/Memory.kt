@@ -38,6 +38,8 @@ object MemoryKeys {
     val LAST_TARGET_KILLED = register(MemoryKey<Entity>("last_target_killed"))
     val OWNER = register(MemoryKey<Entity>("owner"))
     val BURST_COUNT = register(MemoryKey<Int>("burst_count"))
+    val LAST_LOOK_YAW = register(MemoryKey<Float>("last_look_yaw"))
+    val LAST_LOOK_PITCH = register(MemoryKey<Float>("last_look_pitch"))
 
     private fun <T> register(key: MemoryKey<T>): MemoryKey<T> {
         byName[key.name] = key

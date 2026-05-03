@@ -3,6 +3,7 @@ package me.nebula.orbit.utils.customcontent.furniture
 import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.utils.nebulaworld.NebulaWorld
+import me.nebula.orbit.utils.nebulaworld.WritableWorld
 import net.kyori.adventure.nbt.BinaryTagIO
 import net.kyori.adventure.nbt.CompoundBinaryTag
 import net.kyori.adventure.nbt.ListBinaryTag
@@ -109,12 +110,13 @@ object FurniturePersistence {
         }
     }
 
-    fun embed(world: NebulaWorld, instance: Instance): NebulaWorld {
+    fun embed(world: WritableWorld, instance: Instance): WritableWorld {
         val bytes = encode(instance)
-        return NebulaWorld(
+        return WritableWorld(
             dataVersion = world.dataVersion,
             minSection = world.minSection,
             maxSection = world.maxSection,
+            includeLight = world.includeLight,
             userData = bytes,
             chunks = world.chunks,
         )
@@ -122,9 +124,13 @@ object FurniturePersistence {
 
     fun restore(instance: Instance, world: NebulaWorld): RestoreResult {
         val manifest = decode(world.userData) ?: return RestoreResult(0, 0)
+        return restorePieces(instance, manifest.pieces)
+    }
+
+    fun restorePieces(instance: Instance, pieces: List<PersistedPiece>): RestoreResult {
         var restored = 0
         var skipped = 0
-        for (piece in manifest.pieces) {
+        for (piece in pieces) {
             if (restorePiece(instance, piece)) restored++ else skipped++
         }
         logger.info { "Restored $restored furniture pieces ($skipped skipped) in instance ${System.identityHashCode(instance)}" }

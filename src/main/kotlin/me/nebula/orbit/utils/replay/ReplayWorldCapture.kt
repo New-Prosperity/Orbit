@@ -4,11 +4,11 @@ import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.utils.nebulaworld.LightContent
 import me.nebula.orbit.utils.nebulaworld.LightData
 import me.nebula.orbit.utils.nebulaworld.NebulaBlockEntity
-import me.nebula.orbit.utils.nebulaworld.NebulaChunk
-import me.nebula.orbit.utils.nebulaworld.NebulaSection
-import me.nebula.orbit.utils.nebulaworld.NebulaWorld
 import me.nebula.orbit.utils.nebulaworld.SECTION_BIOME_COUNT
 import me.nebula.orbit.utils.nebulaworld.SECTION_BLOCK_COUNT
+import me.nebula.orbit.utils.nebulaworld.WritableChunk
+import me.nebula.orbit.utils.nebulaworld.WritableSection
+import me.nebula.orbit.utils.nebulaworld.WritableWorld
 import net.minestom.server.MinecraftServer
 import net.minestom.server.instance.Chunk
 import net.minestom.server.instance.Instance
@@ -23,24 +23,24 @@ private const val SECTION_COUNT = MAX_SECTION - MIN_SECTION + 1
 
 object ReplayWorldCapture {
 
-    fun capture(instance: Instance): NebulaWorld {
+    fun capture(instance: Instance): WritableWorld {
         val loadedChunks = instance.chunks
         logger.info { "Capturing ${loadedChunks.size} chunks for replay world snapshot" }
 
-        val nebulaChunks = HashMap<Long, NebulaChunk>()
-        for (chunk in loadedChunks) {
-            nebulaChunks[NebulaWorld.packChunkKey(chunk.chunkX, chunk.chunkZ)] = extractChunk(chunk)
-        }
+        val chunks = ArrayList<WritableChunk>(loadedChunks.size)
+        for (chunk in loadedChunks) chunks += extractChunk(chunk)
 
-        return NebulaWorld(
+        return WritableWorld(
             dataVersion = 0,
             minSection = MIN_SECTION,
             maxSection = MAX_SECTION,
-            chunks = nebulaChunks,
+            includeLight = false,
+            userData = ByteArray(0),
+            chunks = chunks,
         )
     }
 
-    private fun extractChunk(chunk: Chunk): NebulaChunk {
+    private fun extractChunk(chunk: Chunk): WritableChunk {
         val sections = Array(SECTION_COUNT) { sectionIndex ->
             extractSection(chunk.getSection(MIN_SECTION + sectionIndex))
         }
@@ -61,10 +61,10 @@ object ReplayWorldCapture {
             }
         }
 
-        return NebulaChunk(chunk.chunkX, chunk.chunkZ, sections, blockEntities)
+        return WritableChunk(chunk.chunkX, chunk.chunkZ, sections, blockEntities)
     }
 
-    private fun extractSection(section: Section): NebulaSection {
+    private fun extractSection(section: Section): WritableSection {
         val blockPalette = section.blockPalette()
         val biomePalette = section.biomePalette()
 
@@ -89,7 +89,7 @@ object ReplayWorldCapture {
             }
         }
 
-        if (allAir) return NebulaSection.EMPTY
+        if (allAir) return WritableSection.EMPTY
 
         val biomePaletteEntries = mutableListOf<String>()
         val biomeStateMap = HashMap<Int, Int>()
@@ -110,11 +110,11 @@ object ReplayWorldCapture {
             }
         }
 
-        return NebulaSection(
+        return WritableSection(
             isEmpty = false,
-            blockPalette = blockPaletteEntries.toTypedArray(),
+            blockPaletteNames = blockPaletteEntries.toTypedArray(),
             blockData = blockData,
-            biomePalette = biomePaletteEntries.toTypedArray(),
+            biomePaletteNames = biomePaletteEntries.toTypedArray(),
             biomeData = biomeData,
             blockLight = captureLight(section.blockLight().array()),
             skyLight = captureLight(section.skyLight().array()),

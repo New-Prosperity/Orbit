@@ -1,9 +1,11 @@
 package me.nebula.orbit.utils.modelengine.generator
 
 import me.nebula.ether.utils.resource.ResourceManager
+import me.nebula.orbit.utils.customcontent.pack.ObfuscationCodec
 import me.nebula.orbit.utils.modelengine.ModelEngine
 import me.nebula.orbit.utils.modelengine.blueprint.AnimationBlueprint
 import me.nebula.orbit.utils.modelengine.blueprint.BlueprintBone
+import me.nebula.orbit.utils.modelengine.blueprint.BoneBehaviorType
 import me.nebula.orbit.utils.modelengine.blueprint.BoneKeyframes
 import me.nebula.orbit.utils.modelengine.blueprint.InterpolationType
 import me.nebula.orbit.utils.modelengine.blueprint.Keyframe
@@ -51,11 +53,14 @@ object ModelGenerator {
         val rootBoneNames = mutableListOf<String>()
         val flatGroups by lazy { model.groups.flatMap { flattenGroups(it) } }
 
+        val hitboxDimensions = findHitboxDimensions(model)
+
         fun registerBoneModel(boneName: String, elements: List<GeneratedElement>): ItemStack? {
             if (elements.isEmpty()) return null
             val lowerModelName = model.name.lowercase()
-            val boneKey = "me_${lowerModelName}_${boneName.lowercase()}"
-            val texturePath = "minecraft:me_${lowerModelName}_atlas"
+            val boneKey = ObfuscationCodec.obfuscate("me_${lowerModelName}_${boneName.lowercase()}")
+            val atlasKey = ObfuscationCodec.obfuscate("me_${lowerModelName}_atlas")
+            val texturePath = "minecraft:x/$atlasKey"
             boneModels[boneKey] = GeneratedBoneModel(
                 textures = listOf(texturePath),
                 elements = elements,
@@ -65,17 +70,29 @@ object ModelGenerator {
         }
 
         fun processGroup(group: BbGroup, parentName: String?, parentOrigin: Vec) {
+            val isHitboxGroup = isHitboxBoneName(group.name)
+            val isSeatGroup = isSeatBoneName(group.name)
+            val parentIsSeat = parentName != null && isSeatBoneName(parentName)
+            val isSeatScopedHitbox = isHitboxGroup && parentIsSeat
+            val skipRendering = isHitboxGroup || isSeatScopedHitbox
             val childNames = group.children.filterIsInstance<BbGroupChild.SubGroup>()
                 .filter { it.group.visibility }
                 .map { it.group.name }
-            val elements = group.children.filterIsInstance<BbGroupChild.ElementRef>()
+            val elements = if (skipRendering) emptyList() else group.children.filterIsInstance<BbGroupChild.ElementRef>()
                 .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
                 .filter { it.visibility }
 
             val (boneElements, boneModelScale) = buildBoneElements(elements, group, atlas, model.resolution)
-            val modelItem = registerBoneModel(group.name, boneElements)
+            val modelItem = if (skipRendering) null else registerBoneModel(group.name, boneElements)
 
             val convertedEuler = Vec(-group.rotation.x(), group.rotation.y(), -group.rotation.z())
+
+            val behaviors: Map<BoneBehaviorType, Map<String, Any>> = if (isSeatGroup) {
+                val (sw, sh) = seatHitboxDimensions(model, group)
+                mapOf(BoneBehaviorType.MOUNT to mapOf("width" to sw, "height" to sh))
+            } else {
+                emptyMap()
+            }
 
             blueprintBones[group.name] = BlueprintBone(
                 name = group.name,
@@ -86,7 +103,7 @@ object ModelGenerator {
                 rotationEuler = convertedEuler,
                 scale = Vec(1.0, 1.0, 1.0),
                 modelItem = modelItem,
-                behaviors = emptyMap(),
+                behaviors = behaviors,
                 visible = group.visibility,
                 modelScale = boneModelScale,
             )
@@ -118,15 +135,84 @@ object ModelGenerator {
             bones = blueprintBones,
             rootBoneNames = rootBoneNames,
             animations = animations,
+            hitboxWidth = hitboxDimensions?.first ?: 1f,
+            hitboxHeight = hitboxDimensions?.second ?: 2f,
             hasIllegalRotations = modelHasIllegal,
         )
 
-        val textureBytes = mapOf("me_${model.name.lowercase()}_atlas.png" to atlasBytes)
+        val atlasKey = ObfuscationCodec.obfuscate("me_${model.name.lowercase()}_atlas")
+        val textureBytes = mapOf("x/$atlasKey.png" to atlasBytes)
         return RawGenerationResult(blueprint, boneModels, textureBytes)
     }
 
     private val VALID_ANGLES = floatArrayOf(-45f, -22.5f, 0f, 22.5f, 45f)
     private const val MAX_ELEMENT_EXTENT = 24f
+
+    private fun isHitboxBoneName(name: String): Boolean = name.lowercase() == "hitbox"
+
+    private fun isSeatBoneName(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower == "seat" || lower.startsWith("seat_")
+    }
+
+    private fun findHitboxDimensions(model: BlockbenchModel): Pair<Float, Float>? {
+        val hitboxGroup = findHitboxGroup(model.groups) ?: return null
+        val elements = hitboxGroup.children.filterIsInstance<BbGroupChild.ElementRef>()
+            .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
+        if (elements.isEmpty()) return null
+
+        var minX = Double.MAX_VALUE; var maxX = -Double.MAX_VALUE
+        var minY = Double.MAX_VALUE; var maxY = -Double.MAX_VALUE
+        var minZ = Double.MAX_VALUE; var maxZ = -Double.MAX_VALUE
+        for (e in elements) {
+            minX = minOf(minX, e.from.x(), e.to.x()); maxX = maxOf(maxX, e.from.x(), e.to.x())
+            minY = minOf(minY, e.from.y(), e.to.y()); maxY = maxOf(maxY, e.from.y(), e.to.y())
+            minZ = minOf(minZ, e.from.z(), e.to.z()); maxZ = maxOf(maxZ, e.from.z(), e.to.z())
+        }
+        val widthX = (maxX - minX) / PIXELS_PER_BLOCK
+        val widthZ = (maxZ - minZ) / PIXELS_PER_BLOCK
+        val height = (maxY - minY) / PIXELS_PER_BLOCK
+        val width = maxOf(widthX, widthZ).toFloat()
+        return width to height.toFloat()
+    }
+
+    private fun findHitboxGroup(groups: List<BbGroup>): BbGroup? {
+        for (g in groups) {
+            if (isHitboxBoneName(g.name)) return g
+            if (isSeatBoneName(g.name)) continue
+            val sub = findHitboxGroup(g.children.filterIsInstance<BbGroupChild.SubGroup>().map { it.group })
+            if (sub != null) return sub
+        }
+        return null
+    }
+
+    private fun seatHitboxDimensions(model: BlockbenchModel, seatGroup: BbGroup): Pair<Float, Float> {
+        val nestedHitbox = seatGroup.children.filterIsInstance<BbGroupChild.SubGroup>()
+            .firstOrNull { isHitboxBoneName(it.group.name) }?.group
+        val source = nestedHitbox ?: seatGroup
+        val elements = source.children.filterIsInstance<BbGroupChild.ElementRef>()
+            .mapNotNull { ref -> model.elements.find { it.uuid == ref.uuid } }
+        if (elements.isEmpty()) return DEFAULT_SEAT_WIDTH to DEFAULT_SEAT_HEIGHT
+
+        var minX = Double.MAX_VALUE; var maxX = -Double.MAX_VALUE
+        var minY = Double.MAX_VALUE; var maxY = -Double.MAX_VALUE
+        var minZ = Double.MAX_VALUE; var maxZ = -Double.MAX_VALUE
+        for (e in elements) {
+            minX = minOf(minX, e.from.x(), e.to.x()); maxX = maxOf(maxX, e.from.x(), e.to.x())
+            minY = minOf(minY, e.from.y(), e.to.y()); maxY = maxOf(maxY, e.from.y(), e.to.y())
+            minZ = minOf(minZ, e.from.z(), e.to.z()); maxZ = maxOf(maxZ, e.from.z(), e.to.z())
+        }
+        val widthX = (maxX - minX) / PIXELS_PER_BLOCK
+        val widthZ = (maxZ - minZ) / PIXELS_PER_BLOCK
+        val height = (maxY - minY) / PIXELS_PER_BLOCK
+        val width = maxOf(widthX, widthZ).toFloat().coerceAtLeast(MIN_SEAT_DIM)
+        return width to height.toFloat().coerceAtLeast(MIN_SEAT_DIM)
+    }
+
+    private const val PIXELS_PER_BLOCK = 16.0
+    private const val DEFAULT_SEAT_WIDTH = 0.6f
+    private const val DEFAULT_SEAT_HEIGHT = 0.6f
+    private const val MIN_SEAT_DIM = 0.1f
 
     data class BoneElementResult(val elements: List<GeneratedElement>, val modelScale: Float)
 
@@ -251,7 +337,8 @@ object ModelGenerator {
 
         model.groups.filter { it.visibility }.forEach { collectElements(it) }
 
-        val texturePath = "customcontent/${model.name.lowercase()}_atlas"
+        val obfTexture = ObfuscationCodec.obfuscate("cc_${model.name.lowercase()}_atlas")
+        val texturePath = "x/$obfTexture"
         val boneModel = GeneratedBoneModel(
             textures = listOf(texturePath),
             elements = allElements,

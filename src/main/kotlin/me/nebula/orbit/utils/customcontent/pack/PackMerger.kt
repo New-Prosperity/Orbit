@@ -17,12 +17,10 @@ import me.nebula.orbit.utils.modelengine.generator.GeneratedBoneModel
 import me.nebula.orbit.utils.modelengine.generator.ModelGenerator
 import me.nebula.orbit.utils.modelengine.generator.RawGenerationResult
 import net.minestom.server.item.Material
-import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
-import javax.imageio.ImageIO
 
 object PackMerger {
 
@@ -55,17 +53,15 @@ object PackMerger {
 
         entries["pack.mcmeta"] = buildMcMeta(packFormat)
 
-        injectTestCube(entries)
-
         modelEngineRawResults.forEach { raw ->
             raw.textureBytes.forEach { (texPath, bytes) ->
                 entries["assets/minecraft/textures/$texPath"] = bytes
             }
             raw.boneModels.forEach { (boneKey, boneModel) ->
                 val json = buildModelJson(boneModel)
-                entries["assets/minecraft/models/$boneKey.json"] = json
+                entries["assets/minecraft/models/x/$boneKey.json"] = json
                 entries["assets/minecraft/items/$boneKey.json"] =
-                    buildItemDefinition("minecraft:$boneKey")
+                    buildItemDefinition("minecraft:x/$boneKey")
             }
         }
 
@@ -90,18 +86,18 @@ object PackMerger {
             processBlockSubfolder(resources, block.id, blocksDirectory, entries)
         }
 
-        customItemTextures.forEach { (path, bytes) ->
-            entries["assets/minecraft/textures/customcontent/$path"] = bytes
+        customItemTextures.forEach { (key, bytes) ->
+            entries["assets/minecraft/textures/x/$key.png"] = bytes
         }
-        customItemModels.forEach { (id, model) ->
-            entries["assets/minecraft/models/customcontent/items/$id.json"] = buildModelJson(model)
+        customItemModels.forEach { (key, model) ->
+            entries["assets/minecraft/models/x/$key.json"] = buildModelJson(model)
         }
 
-        furnitureTextures.forEach { (path, bytes) ->
-            entries["assets/minecraft/textures/customcontent/$path"] = bytes
+        furnitureTextures.forEach { (key, bytes) ->
+            entries["assets/minecraft/textures/x/$key.png"] = bytes
         }
-        furnitureModels.forEach { (id, model) ->
-            entries["assets/minecraft/models/customcontent/furniture/$id.json"] = buildModelJson(model)
+        furnitureModels.forEach { (key, model) ->
+            entries["assets/minecraft/models/x/$key.json"] = buildModelJson(model)
         }
 
         val itemOverrides = collectItemOverrides()
@@ -118,13 +114,11 @@ object PackMerger {
         }
 
         dedupeTextures(entries)
+        obfuscateShaderIncludes(entries)
 
         val customTextures = entries.keys
             .filter {
-                it.endsWith(".png") && (
-                    it.startsWith("assets/minecraft/textures/me_") ||
-                        it.startsWith("assets/minecraft/textures/customcontent/")
-                )
+                it.endsWith(".png") && it.startsWith("assets/minecraft/textures/x/")
             }
             .map { it.removePrefix("assets/minecraft/textures/").removeSuffix(".png") }
         if (customTextures.isNotEmpty()) {
@@ -173,11 +167,13 @@ object PackMerger {
 
         pngs.forEach { png ->
             val baseName = png.substringAfterLast('/').removeSuffix(".png")
-            entries["assets/minecraft/textures/customcontent/blocks/$id/$baseName.png"] = resources.readBytes(png)
+            val obfTex = ObfuscationCodec.obfuscate("cc_block_${id}_$baseName")
+            entries["assets/minecraft/textures/x/$obfTex.png"] = resources.readBytes(png)
         }
 
+        val obfModel = ObfuscationCodec.obfuscate("cc_block_$id")
         val rewritten = rewriteBlockModelTextures(resources.readText(modelPath), id, textureBaseNames)
-        entries["assets/minecraft/models/customcontent/blocks/$id.json"] = rewritten.toByteArray(Charsets.UTF_8)
+        entries["assets/minecraft/models/x/$obfModel.json"] = rewritten.toByteArray(Charsets.UTF_8)
     }
 
     private fun rewriteBlockModelTextures(modelJson: String, id: String, available: Set<String>): String {
@@ -190,7 +186,8 @@ object PackMerger {
             check(baseName in available) {
                 "Custom block '$id' model.json references texture '$ref' but no '$baseName.png' exists in subfolder"
             }
-            rewritten.addProperty(key, "customcontent/blocks/$id/$baseName")
+            val obfTex = ObfuscationCodec.obfuscate("cc_block_${id}_$baseName")
+            rewritten.addProperty(key, "x/$obfTex")
         }
         root.add("textures", rewritten)
         return gson.toJson(root)
@@ -210,8 +207,10 @@ object PackMerger {
         val model = resources.reader(filePath).use { BlockbenchParser.parse(id, it) }
         val excluded = BlockbenchColliderParser.elementUuidsUnderColliderBones(model, FurnitureJsonLoader.DEFAULT_COLLIDER_PREFIX)
         val (boneModel, atlasBytes) = ModelGenerator.buildFlatModel(model, elementFilter = { it.uuid !in excluded })
-        modelOutput[id] = boneModel
-        textureOutput["${id}_atlas.png"] = atlasBytes
+        val obfModel = ObfuscationCodec.obfuscate("cc_furniture_$id")
+        val obfTexture = ObfuscationCodec.obfuscate("cc_${id}_atlas")
+        modelOutput[obfModel] = boneModel
+        textureOutput[obfTexture] = atlasBytes
     }
 
     private fun processCustomContentModel(
@@ -229,8 +228,10 @@ object PackMerger {
             BlockbenchParser.parse(id, it)
         }
         val (boneModel, atlasBytes) = ModelGenerator.buildFlatModel(model)
-        modelOutput[id] = boneModel
-        textureOutput["${id}_atlas.png"] = atlasBytes
+        val obfModel = ObfuscationCodec.obfuscate("cc_item_$id")
+        val obfTexture = ObfuscationCodec.obfuscate("cc_${id}_atlas")
+        modelOutput[obfModel] = boneModel
+        textureOutput[obfTexture] = atlasBytes
     }
 
     private fun collectItemOverrides(): Map<Material, List<ItemModelOverrideWriter.OverrideEntry>> {
@@ -242,9 +243,9 @@ object PackMerger {
             val furniture = furnitureItemIds[item.id]
             val block = blocksByItemId[item.id]
             val modelPath = when {
-                furniture != null -> "customcontent/furniture/${furniture.id}"
-                block != null -> "customcontent/blocks/${block.id}"
-                else -> "customcontent/items/${item.id}"
+                furniture != null -> "x/" + ObfuscationCodec.obfuscate("cc_furniture_${furniture.id}")
+                block != null -> "x/" + ObfuscationCodec.obfuscate("cc_block_${block.id}")
+                else -> "x/" + ObfuscationCodec.obfuscate("cc_item_${item.id}")
             }
             overrides.getOrPut(item.baseMaterial) { mutableListOf() }
                 .add(ItemModelOverrideWriter.OverrideEntry(item.customModelDataId, modelPath))
@@ -255,7 +256,7 @@ object PackMerger {
             overrides.getOrPut(Material.PAPER) { mutableListOf() }
                 .add(ItemModelOverrideWriter.OverrideEntry(
                     block.customModelDataId,
-                    "customcontent/blocks/${block.id}",
+                    "x/" + ObfuscationCodec.obfuscate("cc_block_${block.id}"),
                 ))
         }
 
@@ -397,48 +398,6 @@ object PackMerger {
         return digest.digest(data).joinToString("") { "%02x".format(it) }
     }
 
-    private fun injectTestCube(entries: MutableMap<String, ByteArray>) {
-        val img = BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB)
-        val g = img.createGraphics()
-        g.color = java.awt.Color(255, 0, 0, 255)
-        g.fillRect(0, 0, 16, 16)
-        g.dispose()
-        val baos = ByteArrayOutputStream()
-        ImageIO.write(img, "png", baos)
-        entries["assets/minecraft/textures/me_debug_red.png"] = baos.toByteArray()
-
-        val model = """
-{
-  "textures": {
-    "0": "minecraft:me_debug_red",
-    "particle": "minecraft:me_debug_red"
-  },
-  "elements": [
-    {
-      "from": [0, 0, 0],
-      "to": [16, 16, 16],
-      "faces": {
-        "north": {"uv": [0, 0, 16, 16], "texture": "#0"},
-        "south": {"uv": [0, 0, 16, 16], "texture": "#0"},
-        "east":  {"uv": [0, 0, 16, 16], "texture": "#0"},
-        "west":  {"uv": [0, 0, 16, 16], "texture": "#0"},
-        "up":    {"uv": [0, 0, 16, 16], "texture": "#0"},
-        "down":  {"uv": [0, 0, 16, 16], "texture": "#0"}
-      }
-    }
-  ],
-  "display": {
-    "head": {
-      "translation": [0, 0, 0],
-      "scale": [1, 1, 1]
-    }
-  }
-}
-""".trim()
-        entries["assets/minecraft/models/me_debug_cube.json"] = model.toByteArray(Charsets.UTF_8)
-        entries["assets/minecraft/items/me_debug_cube.json"] = buildItemDefinition("minecraft:me_debug_cube")
-    }
-
     private fun FloatArray.toJsonArray(): JsonArray =
         JsonArray().also { arr -> forEach { arr.add(it) } }
 
@@ -446,8 +405,7 @@ object PackMerger {
         val byHash = mutableMapOf<String, MutableList<String>>()
         for ((path, bytes) in entries) {
             if (!path.endsWith(".png")) continue
-            if (!path.startsWith("assets/minecraft/textures/customcontent/") &&
-                !path.startsWith("assets/minecraft/textures/me_")) continue
+            if (!path.startsWith("assets/minecraft/textures/x/")) continue
             val hash = sha1Hex(bytes)
             byHash.getOrPut(hash) { mutableListOf() }.add(path)
         }
@@ -469,15 +427,15 @@ object PackMerger {
             }
         }
 
-        if (rewrites.isEmpty()) return
-
         val updated = mutableMapOf<String, ByteArray>()
+        var rewriteCount = 0
+        var missingCount = 0
         for ((path, bytes) in entries) {
             if (!path.endsWith(".json")) continue
             if (!path.contains("/models/")) continue
-            val text = String(bytes, Charsets.UTF_8)
-            if (rewrites.keys.none { text.contains("\"$it\"") }) continue
-            val root = try { JsonParser.parseString(text).asJsonObject } catch (_: Exception) { continue }
+            val root = try {
+                JsonParser.parseString(String(bytes, Charsets.UTF_8)).asJsonObject
+            } catch (_: Exception) { continue }
             val textures = root.getAsJsonObject("textures") ?: continue
             val newTextures = JsonObject()
             var changed = false
@@ -487,12 +445,26 @@ object PackMerger {
                     continue
                 }
                 val ref = value.asString
-                val canonical = rewrites[ref]
-                if (canonical != null) {
-                    newTextures.addProperty(key, canonical)
+                if (ref.startsWith("#")) {
+                    newTextures.add(key, value)
+                    continue
+                }
+                val (namespace, bare) = splitNamespace(ref)
+                val refExists = entries.containsKey("assets/minecraft/textures/$bare.png")
+                if (refExists) {
+                    newTextures.add(key, value)
+                    continue
+                }
+                val canonical = rewrites[bare]
+                if (canonical != null && entries.containsKey("assets/minecraft/textures/$canonical.png")) {
+                    val resolved = if (namespace != null) "$namespace:$canonical" else canonical
+                    newTextures.addProperty(key, resolved)
                     changed = true
+                    rewriteCount++
                 } else {
                     newTextures.add(key, value)
+                    missingCount++
+                    logger.warn { "Pack model '$path' references missing texture '$ref' (slot=$key) — no canonical found" }
                 }
             }
             if (changed) {
@@ -502,9 +474,64 @@ object PackMerger {
         }
         updated.forEach { (path, bytes) -> entries[path] = bytes }
 
+        if (missingCount > 0) {
+            logger.warn { "Pack contains $missingCount dangling texture references; affected models will render as black/magenta" }
+        }
         logger.info {
             "Texture dedup: removed ${rewrites.size} duplicate textures, " +
-                "saved ${savedBytes / 1024}KB, rewrote ${updated.size} model refs"
+                "saved ${savedBytes / 1024}KB, healed $rewriteCount refs across ${updated.size} models"
+        }
+    }
+
+    private fun splitNamespace(value: String): Pair<String?, String> {
+        val colon = value.indexOf(':')
+        return if (colon >= 0) value.substring(0, colon) to value.substring(colon + 1)
+        else null to value
+    }
+
+    private fun obfuscateShaderIncludes(entries: MutableMap<String, ByteArray>) {
+        val includePrefix = "assets/minecraft/shaders/include/"
+        val shaderExts = setOf("glsl", "vsh", "fsh")
+        val renames = mutableMapOf<String, String>()
+        val pathRenames = mutableMapOf<String, String>()
+
+        for (path in entries.keys.toList()) {
+            if (!path.startsWith(includePrefix)) continue
+            val ext = path.substringAfterLast('.', "")
+            if (ext !in shaderExts) continue
+            val rel = path.removePrefix(includePrefix)
+            if (rel.startsWith("x/")) continue
+            val obf = ObfuscationCodec.obfuscate("shader_$rel")
+            val newRel = "x/$obf.$ext"
+            renames[rel] = newRel
+            pathRenames[path] = includePrefix + newRel
+        }
+
+        if (renames.isEmpty()) return
+
+        for ((oldPath, newPath) in pathRenames) {
+            val bytes = entries.remove(oldPath) ?: continue
+            entries[newPath] = bytes
+        }
+
+        val importRegex = Regex("""#moj_import\s+<([^>]+)>""")
+        val updated = mutableMapOf<String, ByteArray>()
+        for ((path, bytes) in entries) {
+            val ext = path.substringAfterLast('.', "")
+            if (ext !in shaderExts) continue
+            val text = String(bytes, Charsets.UTF_8)
+            val newText = importRegex.replace(text) { match ->
+                val raw = match.groupValues[1]
+                val (ns, ref) = splitNamespace(raw)
+                val resolved = renames[ref] ?: return@replace match.value
+                if (ns == null) "#moj_import <$resolved>" else "#moj_import <$ns:$resolved>"
+            }
+            if (newText != text) updated[path] = newText.toByteArray(Charsets.UTF_8)
+        }
+        updated.forEach { (path, bytes) -> entries[path] = bytes }
+
+        logger.info {
+            "Shader obfuscation: renamed ${renames.size} include files, rewrote ${updated.size} import directives"
         }
     }
 }

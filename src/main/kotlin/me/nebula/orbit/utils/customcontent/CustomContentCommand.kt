@@ -20,7 +20,6 @@ import net.minestom.server.command.builder.arguments.ArgumentType
 import me.nebula.orbit.utils.customcontent.block.BlockStateAllocator
 import me.nebula.orbit.utils.customcontent.block.CustomBlock
 import me.nebula.orbit.utils.customcontent.block.CustomBlockRegistry
-import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
 import me.nebula.orbit.utils.customcontent.furniture.installFurnitureSubcommands

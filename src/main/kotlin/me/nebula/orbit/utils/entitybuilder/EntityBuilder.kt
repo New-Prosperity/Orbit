@@ -1,17 +1,22 @@
 package me.nebula.orbit.utils.entitybuilder
 
 import me.nebula.orbit.utils.chat.miniMessage
+import me.nebula.orbit.utils.damage.DamageElement
+import me.nebula.orbit.utils.damage.DamageElements
 import net.kyori.adventure.text.Component
+import net.minestom.server.coordinate.Point
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.EntityType
 import net.minestom.server.entity.EquipmentSlot
+import net.minestom.server.entity.LivingEntity
 import net.minestom.server.entity.Player
 import net.minestom.server.entity.attribute.Attribute
 import net.minestom.server.entity.damage.Damage
 import net.minestom.server.instance.Instance
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material
+import net.minestom.server.potion.PotionEffect
 import net.minestom.server.sound.SoundEvent
 
 class EntityBuilder @PublishedApi internal constructor(
@@ -37,8 +42,21 @@ class EntityBuilder @PublishedApi internal constructor(
     private val loot = mutableListOf<LootEntry>()
     private var sounds = EntitySounds()
     private var knockbackResistance: Double = 0.0
-    private var fireImmune: Boolean = false
-    private val damageMultipliers = mutableMapOf<String, Float>()
+    private var iframesAfterDamageTicks: Int = 0
+    private var threatTableEnabled: Boolean = false
+    private var threatDamageWeight: Float = 1f
+    private var threatDecayPerSecond: Float = 0f
+    private var inCombatTimeoutMs: Long = 5000L
+    private var regenAmount: Float = 0f
+    private var regenIntervalTicks: Int = 20
+    private var regenInCombat: Boolean = false
+    private val effectImmunities = mutableSetOf<PotionEffect>()
+    private val effectResistances = mutableMapOf<PotionEffect, EffectResistance>()
+    private var deathAnimationName: String? = null
+    private var deathAnimationTicks: Int = 0
+    private val tags = mutableSetOf<String>()
+    private var onDealtDamage: ((SmartEntity, LivingEntity, Float) -> Unit)? = null
+    private val damageMultipliers = mutableMapOf<DamageElement, Float>()
     private val phases = mutableListOf<PhaseConfig>()
     private var tetherRadius: Double = 0.0
     private var packAlertRadius: Double = 0.0
@@ -62,6 +80,47 @@ class EntityBuilder @PublishedApi internal constructor(
         predicate: (Entity) -> Boolean = { true },
     ) {
         sensors += NearestEntitySensor(range, target, predicate, period)
+    }
+
+    fun lineOfSightSensor(
+        targetKey: MemoryKey<Entity> = MemoryKeys.ATTACK_TARGET,
+        lastPositionKey: MemoryKey<Point> = MemoryKeys.LAST_KNOWN_POSITION,
+        range: Double = 32.0,
+        gracePeriodTicks: Int = 60,
+        period: Int = 5,
+    ) {
+        sensors += LineOfSightSensor(targetKey, lastPositionKey, range, gracePeriodTicks, period)
+    }
+
+    fun lastKnownPositionSensor(
+        targetKey: MemoryKey<Entity> = MemoryKeys.ATTACK_TARGET,
+        outputKey: MemoryKey<Point> = MemoryKeys.LAST_KNOWN_POSITION,
+        period: Int = 5,
+    ) {
+        sensors += LastKnownPositionSensor(targetKey, outputKey, period)
+    }
+
+    fun visibleNearestPlayerSensor(
+        range: Double = 32.0,
+        ignoreSneaking: Boolean = true,
+        requireLineOfSight: Boolean = true,
+        period: Int = 20,
+    ) {
+        sensors += VisibleNearestPlayerSensor(range, ignoreSneaking, requireLineOfSight, period)
+    }
+
+    fun clusterCountSensor(
+        outputKey: MemoryKey<Int> = MemoryKeys.NEARBY_PLAYER_COUNT,
+        range: Double = 24.0,
+        playersOnly: Boolean = true,
+        period: Int = 40,
+    ) {
+        sensors += ClusterCountSensor(outputKey, range, playersOnly, period)
+    }
+
+    fun deathAnimation(animation: String, durationTicks: Int) {
+        deathAnimationName = animation
+        deathAnimationTicks = durationTicks.coerceAtLeast(0)
     }
 
     fun behavior(id: String, block: BehaviorBuilder.() -> Unit) {
@@ -97,11 +156,52 @@ class EntityBuilder @PublishedApi internal constructor(
     }
 
     fun knockbackResistance(value: Double) { knockbackResistance = value.coerceIn(0.0, 1.0) }
-    fun fireImmune() { fireImmune = true }
+    fun fireImmune() { damageMultipliers[DamageElements.FIRE] = 0f }
+    fun iframesAfterDamage(ticks: Int) { iframesAfterDamageTicks = ticks.coerceAtLeast(0) }
 
-    fun immune(type: String) { damageMultipliers[type] = 0f }
-    fun resistant(type: String, multiplier: Float) { damageMultipliers[type] = multiplier }
-    fun vulnerable(type: String, multiplier: Float) { damageMultipliers[type] = multiplier }
+    fun threatTable(damageWeight: Float = 1f, decayPerSecond: Float = 0f) {
+        threatTableEnabled = true
+        threatDamageWeight = damageWeight
+        threatDecayPerSecond = decayPerSecond.coerceAtLeast(0f)
+    }
+
+    fun threatTargetSensor(
+        fallbackRange: Double = 32.0,
+        playersOnlyFallback: Boolean = true,
+        period: Int = 10,
+    ) {
+        sensors += ThreatTargetSensor(
+            fallbackRange = fallbackRange,
+            playersOnlyFallback = playersOnlyFallback,
+            period = period,
+        )
+    }
+
+    fun inCombatTimeoutMs(ms: Long) { inCombatTimeoutMs = ms.coerceAtLeast(0L) }
+
+    fun regen(amount: Float, intervalTicks: Int = 20, inCombat: Boolean = false) {
+        regenAmount = amount.coerceAtLeast(0f)
+        regenIntervalTicks = intervalTicks.coerceAtLeast(1)
+        regenInCombat = inCombat
+    }
+
+    fun immuneToEffect(effect: PotionEffect) { effectImmunities += effect }
+    fun immuneToEffects(vararg effects: PotionEffect) { effectImmunities += effects }
+
+    fun resistEffect(effect: PotionEffect, durationMultiplier: Float = 0.5f, amplifierAdjustment: Int = 0, applyChance: Float = 1f) {
+        effectResistances[effect] = EffectResistance(effect, durationMultiplier, amplifierAdjustment, applyChance)
+    }
+
+    fun tag(name: String) { if (name.isNotBlank() && ',' !in name) tags += name }
+    fun tags(vararg names: String) { names.forEach { tag(it) } }
+
+    fun onDealtDamage(block: (SmartEntity, LivingEntity, Float) -> Unit) {
+        onDealtDamage = block
+    }
+
+    fun immune(element: DamageElement) { damageMultipliers[element] = 0f }
+    fun resistant(element: DamageElement, multiplier: Float) { damageMultipliers[element] = multiplier }
+    fun vulnerable(element: DamageElement, multiplier: Float) { damageMultipliers[element] = multiplier }
 
     fun phase(healthPercent: Float, onEnter: (SmartEntity) -> Unit) {
         phases += PhaseConfig(healthPercent, onEnter)
@@ -167,7 +267,7 @@ class EntityBuilder @PublishedApi internal constructor(
                     }
                 }
                 override fun execute(entity: SmartEntity): Boolean {
-                    val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) as? net.minestom.server.entity.LivingEntity
+                    val target = entity.memory.get(MemoryKeys.ATTACK_TARGET) as? LivingEntity
                     if (target == null || target.isRemoved || target.isDead) {
                         entity.memory.clear(MemoryKeys.LAST_ATTACKER)
                         return false
@@ -209,7 +309,22 @@ class EntityBuilder @PublishedApi internal constructor(
         entity.lootTable = loot.toList()
         entity.sounds = sounds
         entity.knockbackResistance = knockbackResistance
-        entity.fireImmune = fireImmune
+        entity.iframesAfterDamageTicks = iframesAfterDamageTicks
+        if (threatTableEnabled) {
+            entity.threatTable = ThreatTable()
+            entity.threatDamageWeight = threatDamageWeight
+            entity.threatDecayPerSecond = threatDecayPerSecond
+        }
+        entity.inCombatTimeoutMs = inCombatTimeoutMs
+        entity.regenAmount = regenAmount
+        entity.regenIntervalTicks = regenIntervalTicks
+        entity.regenInCombat = regenInCombat
+        entity.effectImmunities = effectImmunities.toSet()
+        entity.effectResistances = effectResistances.toMap()
+        entity.deathAnimation = deathAnimationName
+        entity.deathAnimationTicks = deathAnimationTicks
+        entity.onDealtDamage = onDealtDamage
+        if (tags.isNotEmpty()) entity.setSmartTags(tags)
         entity.damageMultipliers = damageMultipliers.toMap()
         entity.phases = phases.sortedByDescending { it.threshold }
         entity.tetherRadius = tetherRadius

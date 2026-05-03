@@ -21,8 +21,10 @@ import net.minestom.server.event.player.PlayerBlockBreakEvent
 import net.minestom.server.event.player.PlayerBlockInteractEvent
 import net.minestom.server.event.player.PlayerBlockPlaceEvent
 import net.minestom.server.event.player.PlayerEntityInteractEvent
+import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.instance.Instance
 import net.minestom.server.instance.block.Block
+import net.minestom.server.instance.block.BlockFace
 import net.minestom.server.item.ItemStack
 import java.util.UUID
 
@@ -83,7 +85,7 @@ object FurnitureListener {
             breakFurniture(event.player, furniture)
         }
 
-        eventNode.addListener(net.minestom.server.event.player.PlayerSpawnEvent::class.java) { event ->
+        eventNode.addListener(PlayerSpawnEvent::class.java) { event ->
             if (!event.isFirstSpawn) return@addListener
             FurnitureDisplaySpawner.showAllTo(event.player)
         }
@@ -100,7 +102,7 @@ object FurnitureListener {
         anchor: Point,
         definition: FurnitureDefinition,
         heldItem: ItemStack,
-        face: net.minestom.server.instance.block.BlockFace = net.minestom.server.instance.block.BlockFace.TOP,
+        face: BlockFace = BlockFace.TOP,
     ): Boolean {
         val preEvent = FurniturePlacePreEvent(player, definition, anchor)
         MinecraftServer.getGlobalEventHandler().call(preEvent)
@@ -272,20 +274,20 @@ object FurnitureListener {
         FurnitureInteractionDispatcher.dispatch(player, furniture, definition, interaction)
     }
 
-    private fun resolveAnchor(clickedBlock: Point, face: net.minestom.server.instance.block.BlockFace): Point {
+    private fun resolveAnchor(clickedBlock: Point, face: BlockFace): Point {
         val dx = when (face) {
-            net.minestom.server.instance.block.BlockFace.EAST -> 1
-            net.minestom.server.instance.block.BlockFace.WEST -> -1
+            BlockFace.EAST -> 1
+            BlockFace.WEST -> -1
             else -> 0
         }
         val dy = when (face) {
-            net.minestom.server.instance.block.BlockFace.TOP -> 1
-            net.minestom.server.instance.block.BlockFace.BOTTOM -> -1
+            BlockFace.TOP -> 1
+            BlockFace.BOTTOM -> -1
             else -> 0
         }
         val dz = when (face) {
-            net.minestom.server.instance.block.BlockFace.SOUTH -> 1
-            net.minestom.server.instance.block.BlockFace.NORTH -> -1
+            BlockFace.SOUTH -> 1
+            BlockFace.NORTH -> -1
             else -> 0
         }
         return Pos(

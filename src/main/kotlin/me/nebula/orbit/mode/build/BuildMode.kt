@@ -10,7 +10,9 @@ import me.nebula.orbit.utils.nebulaworld.NebulaWorldLoader
 import me.nebula.orbit.utils.nebulaworld.NebulaWorldWriter
 import me.nebula.orbit.utils.replay.ReplayWorldCapture
 import me.nebula.orbit.utils.commandbuilder.command
+import me.nebula.ether.utils.gson.GsonProvider
 import me.nebula.orbit.utils.customcontent.furniture.FurniturePersistence
+import me.nebula.orbit.utils.mapgen.planet.StructureMetadata
 import me.nebula.orbit.utils.scheduler.repeat
 import me.nebula.orbit.utils.worldedit.EditSessionManager
 import me.nebula.orbit.utils.worldedit.SelectionRenderer
@@ -112,6 +114,49 @@ class BuildMode(
         installEditCommands(commandManager)
         installGameRuleCommand(commandManager)
         installWandListeners(handler)
+
+        commandManager.register(command("save-structure") {
+            permission("nebula.worldedit")
+            wordArgument("name")
+            onPlayerExecute {
+                val id = argOrNull("name") ?: run {
+                    player.sendMessage(miniMessage.deserialize("<red>Usage: /save-structure <id>"))
+                    return@onPlayerExecute
+                }
+                Thread.startVirtualThread {
+                    if (!saveInProgress.compareAndSet(false, true)) {
+                        player.sendMessage(miniMessage.deserialize("<yellow>A save is already in progress — please retry shortly."))
+                        return@startVirtualThread
+                    }
+                    try {
+                        val outDir = Path.of(STRUCTURES_DIR)
+                        Files.createDirectories(outDir)
+                        val nebulaPath = outDir.resolve("$id.nebula")
+                        val metaPath = outDir.resolve("$id.json")
+
+                        val captured = ReplayWorldCapture.capture(defaultInstance)
+                        val world = FurniturePersistence.embed(captured, defaultInstance)
+                        val tmpNebula = nebulaPath.resolveSibling("${nebulaPath.fileName}.tmp")
+                        NebulaWorldWriter.write(world, tmpNebula)
+                        Files.move(tmpNebula, nebulaPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+
+                        if (!Files.exists(metaPath)) {
+                            val meta = StructureMetadata(id = id, nebulaPath = "$id.nebula")
+                            Files.writeString(metaPath, GsonProvider.pretty.toJson(meta))
+                        }
+
+                        player.sendMessage(miniMessage.deserialize(
+                            "<green>Saved structure '<white>$id<green>' (${Files.size(nebulaPath) / 1024}KB) → <gray>$nebulaPath"
+                        ))
+                    } catch (e: Throwable) {
+                        player.sendMessage(miniMessage.deserialize("<red>Save-structure failed: ${e.message}"))
+                        logger.warn { "save-structure failed for '$id': ${e.message}" }
+                    } finally {
+                        saveInProgress.set(false)
+                    }
+                }
+            }
+        })
 
         commandManager.register(command("save") {
             permission("nebula.worldedit")
@@ -337,27 +382,11 @@ class BuildMode(
         return SaveResult(outputPath, world.chunks.size, Files.size(outputPath), durationMs)
     }
 
+
     private fun rotateBackups(outputPath: Path) {
-        val base = outputPath.fileName.toString()
-        for (i in BACKUP_COUNT downTo 1) {
-            val olderBackup = outputPath.resolveSibling("$base.bak$i")
-            if (i == BACKUP_COUNT && Files.exists(olderBackup)) {
-                runCatching { Files.delete(olderBackup) }
-                    .onFailure { logger.warn { "Backup delete failed for $olderBackup: ${it.message}" } }
-                continue
-            }
-            if (i < BACKUP_COUNT) {
-                val newerBackup = outputPath.resolveSibling("$base.bak$i")
-                val nextTarget = outputPath.resolveSibling("$base.bak${i + 1}")
-                if (Files.exists(newerBackup)) {
-                    runCatching { Files.move(newerBackup, nextTarget, StandardCopyOption.REPLACE_EXISTING) }
-                        .onFailure { logger.warn { "Backup rotate failed $newerBackup → $nextTarget: ${it.message}" } }
-                }
-            }
-        }
-        val firstBackup = outputPath.resolveSibling("$base.bak1")
-        runCatching { Files.copy(outputPath, firstBackup, StandardCopyOption.REPLACE_EXISTING) }
-            .onFailure { logger.warn { "Backup copy failed for $firstBackup: ${it.message}" } }
+        val backup = outputPath.resolveSibling("${outputPath.fileName}.bak")
+        runCatching { Files.copy(outputPath, backup, StandardCopyOption.REPLACE_EXISTING) }
+            .onFailure { logger.warn { "Backup copy failed for $backup: ${it.message}" } }
     }
 
     private data class SaveResult(
@@ -370,8 +399,8 @@ class BuildMode(
     companion object {
         const val DEFAULT_SESSION_NAME: String = "build"
         const val WORLDS_DIR: String = "worlds"
+        const val STRUCTURES_DIR: String = "data/customcontent/structures"
         private val AUTO_SAVE_INTERVAL: Duration = Duration.ofMinutes(5)
         private const val SHUTDOWN_SAVE_WAIT_MS: Int = 10_000
-        private const val BACKUP_COUNT: Int = 3
     }
 }

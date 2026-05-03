@@ -3,7 +3,6 @@ package me.nebula.orbit.utils.customcontent.furniture
 import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
-import net.minestom.server.instance.Instance
 import net.minestom.server.timer.Task
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap

@@ -9,6 +9,10 @@ import me.nebula.orbit.utils.entitybuilder.EntityBuilder
 import me.nebula.orbit.utils.entitybuilder.SmartEntity
 import me.nebula.orbit.utils.entitybuilder.Triggers
 import me.nebula.orbit.utils.entitybuilder.spawnSmartEntity
+import me.nebula.orbit.utils.modelengine.behavior.MountBehavior
+import me.nebula.orbit.utils.modelengine.mount.MountControllers
+import me.nebula.orbit.utils.modelengine.mount.SeatRegistry
+import net.minestom.server.coordinate.Vec
 import net.kyori.adventure.key.Key
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.EntityType
@@ -18,12 +22,30 @@ import net.minestom.server.potion.PotionEffect
 import net.minestom.server.sound.SoundEvent
 import java.util.concurrent.ConcurrentHashMap
 
+data class SeatConfig(
+    val bone: String,
+    val controller: String,
+    val offsetY: Float,
+    val width: Float?,
+    val height: Float?,
+)
+
 class BehaviorFile(
     val id: String,
     val carrierType: EntityType,
     private val raw: JsonObject,
 ) {
     val invisibleCarrier: Boolean = raw.bool("invisible_carrier", true)
+    val seats: List<SeatConfig> = raw.array("seats")?.map { entry ->
+        val obj = entry.asObjectOrError()
+        SeatConfig(
+            bone = obj.requireString("bone"),
+            controller = obj.string("controller", "passive"),
+            offsetY = obj.float("offset_y", 0f),
+            width = if (obj.has("width")) obj.float("width", 0.6f) else null,
+            height = if (obj.has("height")) obj.float("height", 0.6f) else null,
+        )
+    } ?: emptyList()
 
     fun applyTo(builder: EntityBuilder) {
         raw.string("model")?.let { builder.model(it) }
@@ -213,6 +235,32 @@ class BehaviorFile(
             customize()
         }.also { entity ->
             if (invisible) entity.isInvisible = true
+            applySeats(entity)
+        }
+    }
+
+    private fun applySeats(entity: SmartEntity) {
+        if (seats.isEmpty()) return
+        val modeled = entity.modeledEntity ?: return
+        val activeModel = modeled.models.values.firstOrNull() ?: return
+        for (seat in seats) {
+            val bone = activeModel.bones[seat.bone] ?: continue
+            val mountBehavior = bone.behavior<MountBehavior>() ?: run {
+                val mb = MountBehavior(
+                    bone = bone,
+                    seatOffset = Vec(0.0, seat.offsetY.toDouble(), 0.0),
+                    width = seat.width ?: 0.6f,
+                    height = seat.height ?: 0.6f,
+                )
+                bone.addBehavior(mb)
+                mb.onAdd(modeled)
+                mb
+            }
+            SeatRegistry.register(mountBehavior.seatEntityId, SeatRegistry.Binding(
+                mountBehavior = mountBehavior,
+                modeledEntity = modeled,
+                controllerFactory = MountControllers.resolveFactory(seat.controller),
+            ))
         }
     }
 

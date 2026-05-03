@@ -48,7 +48,7 @@ object NebulaWorldLoader {
         loaded[name] = instance
         worldsByName[name] = world
 
-        logger.info { "Loaded world '$name' from ${path.fileName} (${world.chunks.size} chunks, ${bytes.size / 1024}KB${if (world.userData.isNotEmpty()) ", ${world.userData.size}B userData" else ""})" }
+        logger.info { "Loaded world '$name' from ${path.fileName} (${world.chunkCount} chunks, ${bytes.size / 1024}KB${if (world.userData.isNotEmpty()) ", ${world.userData.size}B userData" else ""})" }
         for (hook in postLoadHooks) {
             runCatching { hook(instance, world) }.onFailure {
                 logger.warn { "Post-load hook failed for '$name': ${it.message}" }

@@ -1,21 +1,16 @@
 package me.nebula.orbit.utils.nebulaworld
 
+import com.github.luben.zstd.Zstd
 import net.kyori.adventure.nbt.CompoundBinaryTag
+import java.util.concurrent.ConcurrentHashMap
 
 const val NEBULA_MAGIC = 0x4E65624C
-const val NEBULA_VERSION: Short = 1
+const val NEBULA_VERSION: Short = 2
 const val SECTION_BLOCK_COUNT = 4096
 const val SECTION_BIOME_COUNT = 64
 const val LIGHT_ARRAY_SIZE = 2048
 
-enum class CompressionType(val id: Byte) {
-    NONE(0),
-    ZSTD(1);
-
-    companion object {
-        fun fromId(id: Byte): CompressionType = entries.first { it.id == id }
-    }
-}
+const val FLAG_INCLUDE_LIGHT = 1 shl 0
 
 enum class LightContent(val id: Byte) {
     MISSING(0),
@@ -46,9 +41,9 @@ class NebulaBlockEntity(
 
 class NebulaSection(
     val isEmpty: Boolean,
-    val blockPalette: Array<String> = emptyArray(),
+    val blockPaletteRefs: IntArray = IntArray(0),
     val blockData: IntArray = IntArray(0),
-    val biomePalette: Array<String> = emptyArray(),
+    val biomePaletteRefs: IntArray = IntArray(0),
     val biomeData: IntArray = IntArray(0),
     val blockLight: LightData = LightData.MISSING,
     val skyLight: LightData = LightData.MISSING,
@@ -66,16 +61,51 @@ class NebulaChunk(
     val userData: ByteArray = ByteArray(0),
 )
 
+class ChunkSlot(
+    val offset: Int,
+    val compressedLen: Int,
+    val uncompressedLen: Int,
+)
+
 class NebulaWorld(
     val dataVersion: Int,
     val minSection: Int,
     val maxSection: Int,
-    val userData: ByteArray = ByteArray(0),
-    val chunks: Map<Long, NebulaChunk>,
+    val flags: Int,
+    val userData: ByteArray,
+    val globalBlockPalette: Array<String>,
+    val globalBiomePalette: Array<String>,
+    private val rawChunkData: ByteArray,
+    private val slots: Map<Long, ChunkSlot>,
 ) {
     val sectionCount: Int get() = maxSection - minSection + 1
+    val includeLight: Boolean get() = flags and FLAG_INCLUDE_LIGHT != 0
+    val chunkCount: Int get() = slots.size
 
-    fun chunkAt(x: Int, z: Int): NebulaChunk? = chunks[packChunkKey(x, z)]
+    private val parsed = ConcurrentHashMap<Long, NebulaChunk>()
+
+    fun chunkAt(x: Int, z: Int): NebulaChunk? {
+        val key = packChunkKey(x, z)
+        parsed[key]?.let { return it }
+        val slot = slots[key] ?: return null
+        return parsed.computeIfAbsent(key) { decodeSlot(x, z, slot) }
+    }
+
+    fun chunkKeys(): Set<Long> = slots.keys
+
+    fun forEachChunk(action: (NebulaChunk) -> Unit) {
+        for (key in slots.keys) {
+            val x = (key shr 32).toInt()
+            val z = key.toInt()
+            chunkAt(x, z)?.let(action)
+        }
+    }
+
+    private fun decodeSlot(x: Int, z: Int, slot: ChunkSlot): NebulaChunk {
+        val decompressed = ByteArray(slot.uncompressedLen)
+        Zstd.decompressByteArray(decompressed, 0, slot.uncompressedLen, rawChunkData, slot.offset, slot.compressedLen)
+        return ChunkPayloadCodec.decode(x, z, decompressed, sectionCount, includeLight)
+    }
 
     companion object {
         fun packChunkKey(x: Int, z: Int): Long =

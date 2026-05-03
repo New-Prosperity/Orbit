@@ -6,7 +6,6 @@
 #moj_import <minecraft:fog.glsl>
 #moj_import <minecraft:dynamictransforms.glsl>
 #moj_import <minecraft:projection.glsl>
-#moj_import <minecraft:globals.glsl>
 #moj_import <minecraft:matf.glsl>
 
 
@@ -22,23 +21,21 @@ in float sphericalVertexDistance;
 in float cylindricalVertexDistance;
 in vec4 vertexColor;
 in vec2 texCoord0;
-in vec4 normal;
+#ifndef EMISSIVE
 in vec4 lightMapColor;
-in vec4 tintColor;
-in vec2 uv;
-in vec4 cem_color;
+#endif
 flat in float emissive;
-in float fogAlpha;
 flat in int bodypart;
 flat in ivec4 cems;
 flat in float cem_size;
 flat in int isGui;
 flat in ivec2 RelativeCords;
 flat in int markforremove;
-flat in int isTrim;
 flat in int armorType;
 flat in int isEnchantedArmor;
+#ifndef NO_OVERLAY
 in vec4 overlayColor;
+#endif
 
 out vec4 fragColor;
 
@@ -78,7 +75,7 @@ void main() {
         #moj_import <cem/frag_main_setup.glsl>
         modelSize /= res.y;
         modelSize *= cem_size;
-        
+
         mat3 rotMat = PIY25;
         if (bodypart != -1) {
             for (int cemId = 0; cemId < 2; cemId++) {
@@ -89,7 +86,7 @@ void main() {
                 switch (cemi) {
                     #moj_import <mods/armor/armor.glsl>
                 }
-                
+
             }
         } else {
             discard;
@@ -98,14 +95,16 @@ void main() {
         if (minT == MAX_DEPTH) discard;
         writeDepth(dir * minT);
         float opacity = ceil(color.a * 255);
-        if (dynamicEmissive == 0 && opacity != 128) color *= cem_light;
+        #ifndef EMISSIVE
+            if (dynamicEmissive == 0 && opacity != 128) color *= cem_light;
+        #endif
 
         #ifndef NO_OVERLAY
             color.rgb = mix(overlayColor.rgb, color.rgb, overlayColor.a);
         #endif
 
         if (isEnchantedArmor == 1) {
-            float t = GameTime * 1000.0;
+            float t = 0.0;
             vec2 glintUV = gl_FragCoord.xy * 0.015;
 
             float g1 = sin((glintUV.x + glintUV.y) * 1.5 + t) * 0.5 + 0.5;
@@ -115,7 +114,7 @@ void main() {
             color.rgb += glint * vec3(0.45, 0.25, 0.8);
         }
     }
-    
+
     float opacity = ceil(color.a * 255);
     if (cem < 1) {
         #ifdef ALPHA_CUTOUT
@@ -125,7 +124,7 @@ void main() {
         #endif
 
         if (opacity == 254) {
-            float animationTime = GameTime * 1000;
+            float animationTime = 0.0;
             color = mix(color * vertexColor, color, pow(sin(animationTime + texCoord0.x * 1.1), 2));
         } else if (opacity==128){
 

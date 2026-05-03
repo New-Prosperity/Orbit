@@ -9,7 +9,6 @@ import net.minestom.server.instance.Section
 import net.minestom.server.instance.block.Block
 import net.minestom.server.registry.RegistryKey
 import net.minestom.server.world.biome.Biome
-import java.util.concurrent.ConcurrentHashMap
 
 private val logger = logger("NebulaChunkLoader")
 
@@ -45,19 +44,23 @@ private fun parseBlockState(state: String): Block {
     return block
 }
 
-private val biomeIdCache = ConcurrentHashMap<String, Int>()
-
-private fun resolveBiomeId(name: String): Int {
-    return biomeIdCache.getOrPut(name) {
-        val registry = MinecraftServer.getBiomeRegistry()
-        val id = registry.getId(RegistryKey.unsafeOf<Biome>(name))
-        if (id >= 0) id else registry.getId(Biome.PLAINS)
-    }
-}
-
 class NebulaChunkLoader(
     private val world: NebulaWorld,
 ) : ChunkLoader {
+
+    private val resolvedBlockStateIds: IntArray = IntArray(world.globalBlockPalette.size) { idx ->
+        parseBlockState(world.globalBlockPalette[idx]).stateId()
+    }
+
+    private val resolvedBiomeIds: IntArray by lazy {
+        val registry = MinecraftServer.getBiomeRegistry()
+        val plainsId = registry.getId(Biome.PLAINS)
+        IntArray(world.globalBiomePalette.size) { idx ->
+            val name = world.globalBiomePalette[idx]
+            val id = registry.getId(RegistryKey.unsafeOf<Biome>(name))
+            if (id >= 0) id else plainsId
+        }
+    }
 
     override fun loadChunk(instance: Instance, chunkX: Int, chunkZ: Int): Chunk? {
         val nebulaChunk = world.chunkAt(chunkX, chunkZ) ?: return null
@@ -67,7 +70,6 @@ class NebulaChunkLoader(
         for (sectionIndex in nebulaChunk.sections.indices) {
             val nebulaSection = nebulaChunk.sections[sectionIndex]
             if (nebulaSection.isEmpty) continue
-
             val section = chunk.getSection(world.minSection + sectionIndex)
             loadSection(section, nebulaSection)
         }
@@ -86,32 +88,34 @@ class NebulaChunkLoader(
 
     private fun loadSection(section: Section, nebula: NebulaSection) {
         val blockPalette = section.blockPalette()
-        val resolvedBlocks = nebula.blockPalette.map { parseBlockState(it) }
+        val sectionStateIds = IntArray(nebula.blockPaletteRefs.size) { i ->
+            resolvedBlockStateIds[nebula.blockPaletteRefs[i]]
+        }
 
-        if (resolvedBlocks.size == 1) {
-            blockPalette.fill(resolvedBlocks[0].stateId())
+        if (sectionStateIds.size == 1) {
+            blockPalette.fill(sectionStateIds[0])
         } else {
             for (i in 0 until SECTION_BLOCK_COUNT) {
-                val paletteIndex = if (i < nebula.blockData.size) nebula.blockData[i] else 0
-                val block = resolvedBlocks.getOrElse(paletteIndex) { Block.AIR }
+                val paletteIdx = nebula.blockData[i]
+                val stateId = sectionStateIds[paletteIdx]
                 val y = i / 256
                 val z = (i % 256) / 16
                 val x = i % 16
-                blockPalette.set(x, y, z, block.stateId())
+                blockPalette.set(x, y, z, stateId)
             }
         }
 
         val sectionBiomePalette = section.biomePalette()
-        val resolvedBiomeIds = nebula.biomePalette.map { resolveBiomeId(it) }
+        val sectionBiomeIds = IntArray(nebula.biomePaletteRefs.size) { i ->
+            resolvedBiomeIds[nebula.biomePaletteRefs[i]]
+        }
 
-        if (resolvedBiomeIds.size == 1) {
-            sectionBiomePalette.fill(resolvedBiomeIds[0])
+        if (sectionBiomeIds.size == 1) {
+            sectionBiomePalette.fill(sectionBiomeIds[0])
         } else {
             for (i in 0 until SECTION_BIOME_COUNT) {
-                val paletteIndex = if (i < nebula.biomeData.size) nebula.biomeData[i] else 0
-                val biomeId = resolvedBiomeIds.getOrElse(paletteIndex) {
-                    MinecraftServer.getBiomeRegistry().getId(Biome.PLAINS)
-                }
+                val paletteIdx = nebula.biomeData[i]
+                val biomeId = sectionBiomeIds[paletteIdx]
                 val x = i % 4
                 val z = (i / 4) % 4
                 val y = i / 16
@@ -127,8 +131,7 @@ class NebulaChunkLoader(
         }
     }
 
-    override fun saveChunk(chunk: Chunk) {
-    }
+    override fun saveChunk(chunk: Chunk) {}
 
     override fun supportsParallelLoading(): Boolean = true
 

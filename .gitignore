@@ -5,3 +5,6 @@
 .kotlin/
 
 logs/
+/data/
+/Orbit/
+*.bak

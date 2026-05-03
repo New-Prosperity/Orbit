@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.customcontent.armor
 
 import net.minestom.server.coordinate.Vec
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -64,8 +65,8 @@ object ArmorGlslGenerator {
                 val armorTypeValue = armor.colorR + armor.colorG * 256 + armor.colorB * 65536
                 sb.appendLine("    $condition (armorType == $armorTypeValue) {")
 
-                val texIndex = if (piece.part.layer == 2) 1 else 0
-                val tex = armor.parsed.textures.getOrElse(texIndex) { armor.parsed.textures.first() }
+                val tex = armor.parsed.textures.getOrNull(piece.textureIndex)
+                    ?: armor.parsed.textures.first()
 
                 val rotations = mutableMapOf<String, String>()
                 for (cube in piece.cubes) {
@@ -73,7 +74,7 @@ object ArmorGlslGenerator {
                     if (key !in rotations) {
                         val name = "rot${rotations.size}"
                         rotations[key] = name
-                        sb.appendLine("        mat3 $name = ${precomputeRotation(cube.rotationLevels, piece.part.signX)};")
+                        sb.appendLine("        mat3 $name = ${precomputeRotation(cube.rotationLevels, piece.part)};")
                     }
                 }
 
@@ -99,56 +100,84 @@ object ArmorGlslGenerator {
 
     private fun generateCemBox(cube: ArmorCube, texW: Int, texH: Int, colorId: Int, rotName: String, part: ArmorPart, isLeft: Boolean): String {
         val cellOffsetU = colorId * CELL_WIDTH
+        val isBoot = part is ArmorPart.RightBoot || part is ArmorPart.LeftBoot
 
         var up = formatUv(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         var down = formatUv(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
 
-        if (part.signZ > 0) {
+        if (part is ArmorPart.Helmet) {
+            up = formatUvFlipU(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+            down = formatUvFlipU(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        } else if (part.signZ > 0) {
             up = formatUvFlipV(cube.uvFaces["up"] ?: EMPTY_UV, texW, texH, cellOffsetU)
             down = formatUvFlipV(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        }
+        if (isBoot) {
+            down = formatUvFlipBoth(cube.uvFaces["down"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         }
         var north = formatUv(cube.uvFaces["north"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         var east = formatUv(cube.uvFaces["east"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         var south = formatUv(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
         var west = formatUv(cube.uvFaces["west"] ?: EMPTY_UV, texW, texH, cellOffsetU)
 
-        if (part.signX < 0) {
-            val tmp = east; east = west; west = tmp
-        }
-        if (part.signX > 0) {
-            val tmp = north; north = south; south = tmp
+        if (isBoot) {
+            north = formatUvFlipU(cube.uvFaces["north"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+            south = formatUvFlipU(cube.uvFaces["south"] ?: EMPTY_UV, texW, texH, cellOffsetU)
+        } else {
+            if (part.signX < 0) {
+                val tmp = east; east = west; west = tmp
+            }
+            if (part.signX > 0) {
+                val tmp = north; north = south; south = tmp
+            }
         }
 
 
-        val bakedCenter = if (cube.hasRotation && cube.rotationLevels.size == 1) {
+        val useHelmetPivot = part is ArmorPart.Helmet && cube.hasRotation && cube.rotationLevels.size == 1
+        val bakedCenter: Vec
+        val pivotVec: Vec
+        if (useHelmetPivot) {
+            val level = cube.rotationLevels[0]
+            bakedCenter = cube.center
+            pivotVec = part.convertCenter(level.bbPivotRel.x(), level.bbPivotRel.y(), level.bbPivotRel.z())
+        } else if (cube.hasRotation && cube.rotationLevels.size == 1) {
             val level = cube.rotationLevels[0]
             val bbOffset = cube.bbPivotOffset
-            val bakeSign = -part.signX
-            val rotatedOffset = applyBbRotation(bbOffset, level.components, bakeSign)
+            val rotatedOffset = applyBbRotation(bbOffset, level.components, 1.0)
             val bbPivRel = level.bbPivotRel
             val newCx = bbPivRel.x() + rotatedOffset.x()
             val newCy = bbPivRel.y() + rotatedOffset.y()
             val newCz = bbPivRel.z() + rotatedOffset.z()
-            part.convertCenter(newCx, newCy, newCz)
+            bakedCenter = part.convertCenter(newCx, newCy, newCz)
+            pivotVec = Vec.ZERO
         } else {
-            cube.center
+            bakedCenter = cube.center
+            pivotVec = Vec.ZERO
         }
 
         val pos = formatVec3(bakedCenter)
+        val pivot = formatVec3(pivotVec)
         val size = formatVec3Pix(cube.halfSize)
         val emissive = if (cube.emissive > 0f) "true" else "false"
 
-        return "CEM_BOX($pos, $size, $rotName, vec3(0), $up, $down, $north, $east, $south, $west, $emissive);"
+        return "CEM_BOX($pos, $size, $rotName, $pivot, $up, $down, $north, $east, $south, $west, $emissive);"
     }
 
-    private fun precomputeRotation(levels: List<ArmorRotationLevel>, signX: Double = -1.0): String {
+    private fun precomputeRotation(levels: List<ArmorRotationLevel>, part: ArmorPart): String {
         if (levels.isEmpty()) return "mat3(1.0)"
         var m = IDENTITY
-        val zSign = if (signX > 0) -1.0 else 1.0
+        val zSign = if (part.signX > 0) -1.0 else 1.0
         for (level in levels.reversed()) {
-            for (comp in level.components) {
-                val angle = if (comp.axis == ArmorRotationComponent.AXIS_Z) zSign * comp.radians else comp.radians
-                m = multiply(m, rotationMatrix(angle, comp.axis))
+            if (level.components.size > 1) {
+                for (comp in level.components) {
+                    val angle = if (comp.axis == ArmorRotationComponent.AXIS_X) -comp.radians else comp.radians
+                    m = multiply(m, rotationMatrix(angle, comp.axis))
+                }
+            } else {
+                for (comp in level.components) {
+                    val angle = if (comp.axis == ArmorRotationComponent.AXIS_Z) zSign * comp.radians else comp.radians
+                    m = multiply(m, rotationMatrix(angle, comp.axis))
+                }
             }
         }
         return formatMat3(m)
@@ -156,8 +185,15 @@ object ArmorGlslGenerator {
 
     private fun applyBbRotation(offset: Vec, components: List<ArmorRotationComponent>, signFactor: Double = -1.0): Vec {
         var p = offset
-        for (comp in components) {
-            p = rotateStandard(p, signFactor * comp.radians, comp.axis)
+        if (components.size > 1) {
+            for (comp in components.reversed()) {
+                val angle = if (comp.axis == ArmorRotationComponent.AXIS_X) -comp.radians else comp.radians
+                p = rotateStandard(p, angle, comp.axis)
+            }
+        } else {
+            for (comp in components) {
+                p = rotateStandard(p, signFactor * comp.radians, comp.axis)
+            }
         }
         return p
     }
@@ -209,17 +245,19 @@ object ArmorGlslGenerator {
     }
 
     private fun formatMat3(m: Array<DoubleArray>): String =
-        "mat3(%.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f)".format(
+        String.format(
+            Locale.ROOT,
+            "mat3(%.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f)",
             m[0][0], m[1][0], m[2][0],
             m[0][1], m[1][1], m[2][1],
             m[0][2], m[1][2], m[2][2],
         )
 
     private fun formatVec3(v: Vec): String =
-        "vec3(%.4f, %.4f, %.4f)".format(v.x(), v.y(), v.z())
+        String.format(Locale.ROOT, "vec3(%.4f, %.4f, %.4f)", v.x(), v.y(), v.z())
 
     private fun formatVec3Pix(v: Vec): String =
-        "vec3(%.4f, %.4f, %.4f)".format(v.x(), v.z(), v.y())
+        String.format(Locale.ROOT, "vec3(%.4f, %.4f, %.4f)", v.x(), v.z(), v.y())
 
     private fun formatUvFlipV(
         uv: ArmorCubeUv,
@@ -233,7 +271,37 @@ object ArmorGlslGenerator {
         val v = (uv.v + uv.height) * scaleV
         val w = uv.width * scaleU
         val h = -uv.height * scaleV
-        return "vec4(%.6f, %.6f, %.6f, %.6f)".format(u, v, w, h)
+        return String.format(Locale.ROOT, "vec4(%.6f, %.6f, %.6f, %.6f)", u, v, w, h)
+    }
+
+    private fun formatUvFlipU(
+        uv: ArmorCubeUv,
+        texW: Int,
+        texH: Int,
+        cellOffsetU: Float,
+    ): String {
+        val scaleU = CELL_WIDTH / texW.toFloat()
+        val scaleV = CELL_HEIGHT / texH.toFloat()
+        val u = (uv.u + uv.width) * scaleU + cellOffsetU
+        val v = uv.v * scaleV
+        val w = -uv.width * scaleU
+        val h = uv.height * scaleV
+        return String.format(Locale.ROOT, "vec4(%.6f, %.6f, %.6f, %.6f)", u, v, w, h)
+    }
+
+    private fun formatUvFlipBoth(
+        uv: ArmorCubeUv,
+        texW: Int,
+        texH: Int,
+        cellOffsetU: Float,
+    ): String {
+        val scaleU = CELL_WIDTH / texW.toFloat()
+        val scaleV = CELL_HEIGHT / texH.toFloat()
+        val u = (uv.u + uv.width) * scaleU + cellOffsetU
+        val v = (uv.v + uv.height) * scaleV
+        val w = -uv.width * scaleU
+        val h = -uv.height * scaleV
+        return String.format(Locale.ROOT, "vec4(%.6f, %.6f, %.6f, %.6f)", u, v, w, h)
     }
 
     private fun formatUv(
@@ -248,11 +316,11 @@ object ArmorGlslGenerator {
         val v = uv.v * scaleV
         val w = uv.width * scaleU
         val h = uv.height * scaleV
-        return "vec4(%.6f, %.6f, %.6f, %.6f)".format(u, v, w, h)
+        return String.format(Locale.ROOT, "vec4(%.6f, %.6f, %.6f, %.6f)", u, v, w, h)
     }
 
     private const val CELL_WIDTH = 64f
-    private const val CELL_HEIGHT = 32f
+    private const val CELL_HEIGHT = 64f
     private val EMPTY_UV = ArmorCubeUv(0f, 0f, 0f, 0f)
 
     private val IDENTITY = arrayOf(

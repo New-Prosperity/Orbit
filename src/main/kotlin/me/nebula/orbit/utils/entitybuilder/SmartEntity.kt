@@ -264,6 +264,7 @@ class SmartEntity(
     fun setupModel(): ModeledEntity? {
         val name = modelName ?: return null
         val blueprint = ModelEngine.blueprintOrNull(name) ?: return null
+        setBoundingBox(blueprint.hitboxWidth.toDouble(), blueprint.hitboxHeight.toDouble(), blueprint.hitboxWidth.toDouble())
         val modeled = ModelEngine.createModeledEntity(this)
         modeled.addModel(name, blueprint)
         modeledEntity = modeled

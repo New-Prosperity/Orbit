@@ -32,17 +32,17 @@ object PlayerSkinPack {
         val scale: FloatArray,
         val rotation: FloatArray = floatArrayOf(180f, 180f, 0f),
     ) {
-        HEAD(1, 0, "custom/entities/player/head",
+        HEAD(1, 0, "customcontent/entities/player/head",
             floatArrayOf(0f, -9f, 0f), floatArrayOf(1f, 1f, 1f)),
-        RIGHT_ARM(2, 1, "custom/entities/player/right_arm",
+        RIGHT_ARM(2, 1, "customcontent/entities/player/right_arm",
             floatArrayOf(0.9375f, -23f, 0f), floatArrayOf(0.5f, 1.5f, 0.5f)),
-        LEFT_ARM(3, 2, "custom/entities/player/left_arm",
+        LEFT_ARM(3, 2, "customcontent/entities/player/left_arm",
             floatArrayOf(-0.9375f, -23f, 0f), floatArrayOf(0.5f, 1.5f, 0.5f)),
-        TORSO(4, 5, "custom/entities/player/torso",
+        TORSO(4, 5, "customcontent/entities/player/torso",
             floatArrayOf(0f, -25f, 0f), floatArrayOf(1f, 1.5f, 0.5f)),
-        RIGHT_LEG(5, 6, "custom/entities/player/right_leg",
+        RIGHT_LEG(5, 6, "customcontent/entities/player/right_leg",
             floatArrayOf(-0.1f, -24f, 0f), floatArrayOf(0.5f, 1.5f, 0.5f)),
-        LEFT_LEG(6, 7, "custom/entities/player/left_leg",
+        LEFT_LEG(6, 7, "customcontent/entities/player/left_leg",
             floatArrayOf(0.1f, -24f, 0f), floatArrayOf(0.5f, 1.5f, 0.5f)),
     }
 

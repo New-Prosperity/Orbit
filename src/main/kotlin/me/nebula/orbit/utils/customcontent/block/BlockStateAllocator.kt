@@ -82,13 +82,13 @@ object BlockStateAllocator {
     private fun buildPools() {
         pools[BlockHitbox.Full] = buildFullPool()
         pools[BlockHitbox.Slab] = buildCanonicalPool(SLAB_MATERIALS) {
-            it.withProperty("type", "bottom").withProperty("waterlogged", "false")
+            it.withProperty("type", "bottom").withProperty("waterlogged", "true")
         }
         pools[BlockHitbox.Stair] = buildCanonicalPool(STAIR_MATERIALS) {
             it.withProperty("facing", "north")
                 .withProperty("half", "bottom")
                 .withProperty("shape", "straight")
-                .withProperty("waterlogged", "false")
+                .withProperty("waterlogged", "true")
         }
         pools[BlockHitbox.Thin] = buildCanonicalPool(CARPET_MATERIALS) { it }
         pools[BlockHitbox.Transparent] = buildTransparentPool()
@@ -98,21 +98,21 @@ object BlockStateAllocator {
                 .withProperty("south", "none")
                 .withProperty("east", "none")
                 .withProperty("west", "none")
-                .withProperty("waterlogged", "false")
+                .withProperty("waterlogged", "true")
         }
         pools[BlockHitbox.Fence] = buildCanonicalPool(FENCE_MATERIALS) {
             it.withProperty("north", "false")
                 .withProperty("south", "false")
                 .withProperty("east", "false")
                 .withProperty("west", "false")
-                .withProperty("waterlogged", "false")
+                .withProperty("waterlogged", "true")
         }
         pools[BlockHitbox.Trapdoor] = buildCanonicalPool(TRAPDOOR_MATERIALS) {
             it.withProperty("facing", "north")
                 .withProperty("half", "bottom")
                 .withProperty("open", "false")
-                .withProperty("powered", "false")
-                .withProperty("waterlogged", "false")
+                .withProperty("powered", "true")
+                .withProperty("waterlogged", "true")
         }
         pools.keys.forEach { poolNextIndex.putIfAbsent(it, 0) }
     }
@@ -120,8 +120,10 @@ object BlockStateAllocator {
     private fun buildFullPool(): List<Block> = buildList {
         val mushroomBases = listOf(Block.BROWN_MUSHROOM_BLOCK, Block.RED_MUSHROOM_BLOCK, Block.MUSHROOM_STEM)
         val faces = listOf("up", "down", "north", "south", "east", "west")
+        val naturalCombo = (1 shl faces.size) - 1
         for (base in mushroomBases) {
             for (combo in 0 until 64) {
+                if (combo == naturalCombo) continue
                 var state = base
                 faces.forEachIndexed { bit, face ->
                     state = state.withProperty(face, ((combo shr bit) and 1 == 1).toString())

@@ -93,12 +93,23 @@ object BlockbenchParser {
     }
 
     private fun parseTexture(index: Int, obj: JsonObject): BbTexture = BbTexture(
-        id = index,
+        id = readTextureId(obj, fallback = index),
         name = obj["name"]?.asString ?: "texture_$index",
         width = obj["width"]?.asInt ?: 16,
         height = obj["height"]?.asInt ?: 16,
         source = obj["source"]?.asString ?: "",
     )
+
+    private fun readTextureId(obj: JsonObject, fallback: Int): Int {
+        val raw = obj["id"] ?: return fallback
+        if (!raw.isJsonPrimitive) return fallback
+        val prim = raw.asJsonPrimitive
+        return when {
+            prim.isNumber -> prim.asInt
+            prim.isString -> prim.asString.toIntOrNull() ?: fallback
+            else -> fallback
+        }
+    }
 
     private fun parseAnimation(obj: JsonObject): BbAnimation {
         val animators = mutableMapOf<String, BbAnimator>()

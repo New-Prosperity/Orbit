@@ -7,7 +7,6 @@ import me.nebula.gravity.config.ConfigEntry
 import me.nebula.gravity.config.ConfigScope
 import me.nebula.gravity.config.ConfigStore
 import me.nebula.gravity.config.ConfigValueType
-import me.nebula.gravity.config.storageKey
 import me.nebula.gravity.config.storageKeyOrNull
 import me.nebula.orbit.utils.itembuilder.itemStack
 import net.minestom.server.item.ItemStack

@@ -285,7 +285,7 @@ fun season1(): Season = season(1) {
         ),
     ))
 
-    mapPreset("perfect")
+    planet("rhexor")
     lobbyWorld("worlds/lobby")
 
     registerLootTable(buildStandardChest())

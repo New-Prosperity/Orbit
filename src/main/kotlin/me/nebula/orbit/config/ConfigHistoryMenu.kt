@@ -8,7 +8,6 @@ import me.nebula.gravity.config.ConfigStore
 import me.nebula.gravity.config.storageKey
 import me.nebula.gravity.config.storageKeyOrNull
 import me.nebula.orbit.translation.translateRaw
-import me.nebula.orbit.utils.gui.openGui
 import me.nebula.orbit.utils.gui.paginatedGui
 import me.nebula.orbit.utils.itembuilder.itemStack
 import net.kyori.adventure.text.Component

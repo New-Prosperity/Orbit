@@ -42,9 +42,12 @@ class ReplayViewer(
         val future = CompletableFuture<InstanceContainer>()
 
         Thread.startVirtualThread {
+            val world = when (val source = replayFile.worldSource) {
+                is ReplayWorldSource.Embedded -> NebulaWorldReader.read(source.worldBytes)
+                is ReplayWorldSource.Reference -> NebulaWorldReader.read(Path.of("worlds", "${source.mapName}.nebula"))
+            }
             val inst = when (val source = replayFile.worldSource) {
                 is ReplayWorldSource.Embedded -> {
-                    val world = source.world
                     val container = MinecraftServer.getInstanceManager().createInstanceContainer()
                     container.chunkLoader = NebulaChunkLoader(world)
                     container
@@ -56,11 +59,7 @@ class ReplayViewer(
             }
             instance = inst
 
-            val world = when (val source = replayFile.worldSource) {
-                is ReplayWorldSource.Embedded -> source.world
-                is ReplayWorldSource.Reference -> NebulaWorldReader.read(Path.of("worlds", "${source.mapName}.nebula"))
-            }
-            for (key in world.chunks.keys) {
+            for (key in world.chunkKeys()) {
                 val chunk = world.chunkAt(
                     (key shr 32).toInt(),
                     key.toInt(),

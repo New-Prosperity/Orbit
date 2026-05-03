@@ -1,9 +1,11 @@
 package me.nebula.orbit.utils.customcontent.furniture
 
+import me.nebula.orbit.utils.customcontent.block.BlockHitbox
 import me.nebula.orbit.utils.modelengine.generator.BbElement
 import me.nebula.orbit.utils.modelengine.generator.BbGroup
 import me.nebula.orbit.utils.modelengine.generator.BbGroupChild
 import me.nebula.orbit.utils.modelengine.generator.BlockbenchModel
+import kotlin.math.floor
 
 object BlockbenchColliderParser {
 
@@ -38,7 +40,7 @@ object BlockbenchColliderParser {
             val unioned = entries.map { it.aabb }.reduce(CubeAabb::union)
             val hitbox = HitboxInferrer.bestFit(unioned.toCellLocal(cell))
             result[cell] = when (hitbox) {
-                me.nebula.orbit.utils.customcontent.block.BlockHitbox.Full -> CellDecision.Barrier
+                BlockHitbox.Full -> CellDecision.Barrier
                 else -> CellDecision.Shaped(hitbox)
             }
         }
@@ -197,7 +199,7 @@ object BlockbenchColliderParser {
     }
 
     private fun pixelToCell(pixel: Double): Int =
-        kotlin.math.floor(pixel / PIXELS_PER_BLOCK).toInt()
+        floor(pixel / PIXELS_PER_BLOCK).toInt()
 
     private const val PIXELS_PER_BLOCK = 16.0
     private const val PIXEL_EDGE_EPSILON = 0.0001

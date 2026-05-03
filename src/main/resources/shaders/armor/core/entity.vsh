@@ -2,8 +2,6 @@
 
 #define VSH
 
-#moj_import <minecraft:globals.glsl>
-
 #moj_import <minecraft:light.glsl>
 #moj_import <minecraft:fog.glsl>
 #moj_import <minecraft:dynamictransforms.glsl>
@@ -60,41 +58,54 @@ const int[] faceremap = int[](0, 0, 1, 1, 2, 3, 4, 5);
 in vec3 Position;
 in vec4 Color;
 in vec2 UV0;
-in ivec2 UV1, UV2;
+in ivec2 UV1;
+in ivec2 UV2;
 in vec3 Normal;
 
-uniform sampler2D Sampler0,Sampler1, Sampler2;
+uniform sampler2D Sampler0;
+
+#ifndef NO_OVERLAY
+uniform sampler2D Sampler1;
+#endif
+
+#ifndef EMISSIVE
+uniform sampler2D Sampler2;
+#endif
 
 out float sphericalVertexDistance;
 out float cylindricalVertexDistance;
-out vec4 vertexColor, tintColor, lightMapColor;
+out vec4 vertexColor;
 out vec2 texCoord0;
-out vec2 texCoord1;
-out float part;
-out vec4 normal;
-out vec4 cem_pos1, cem_pos2, cem_pos3, cem_pos4;
+out vec4 cem_pos1;
+out vec4 cem_pos2;
+out vec4 cem_pos3;
+out vec4 cem_pos4;
 out vec3 cem_glPos;
-out vec3 cem_uv1, cem_uv2;
-out vec4 cem_lightMapColor;
+out vec3 cem_uv1;
+out vec3 cem_uv2;
 
+#ifndef EMISSIVE
+out vec4 lightMapColor;
+#endif
+
+#ifndef NO_OVERLAY
 out vec4 overlayColor;
+#endif
 
 flat out int cem;
 flat out int bodypart;
 flat out int cem_reverse;
+#ifndef EMISSIVE
 flat out vec4 cem_light;
+#endif
 flat out ivec4 cems;
 flat out float cem_size;
 flat out ivec2 RelativeCords;
 flat out int armorType;
 flat out int isGui;
-flat out int isUpperArmor;
 flat out int markforremove;
-flat out int isTrim;
 flat out float emissive;
-flat out int isLeatherLayer;
 flat out int isEnchantedArmor;
-out vec4 cem_color;
 
 float getChannel(ivec2 cords, int channel) {
     vec4 color = texelFetch(Sampler0, cords, 0);
@@ -112,15 +123,15 @@ int colorId(vec3 c) {
     ivec3 v = ivec3(c*255);
     return (v.r<<16)+(v.g<<8)+v.b;
 }
-vec2 cords=vec2(0,0);
 
-bool shouldApplyArmor(){
+bool shouldApplyArmor(out vec2 cords){
+    cords = vec2(0,0);
     int vertexColorId=colorId(Color.rgb);
     switch(vertexColorId){
         default:
-        
+
         #moj_import<armorcords.glsl>
-        
+
         return true;
     }
     return false;
@@ -128,8 +139,8 @@ bool shouldApplyArmor(){
 
 
 float getChannel(ivec2 rcords, ivec2 icords, int channel)
-{       
-    ivec2 cords = ivec2(rcords.x*64 + icords.x, rcords.y*32 + icords.y);
+{
+    ivec2 cords = ivec2(rcords.x*64 + icords.x, rcords.y*64 + icords.y);
     vec4 color = texelFetch(Sampler0, cords, 0);
     if (channel == 0)
         return floor(color.x * 255);
@@ -143,18 +154,14 @@ float getChannel(ivec2 rcords, ivec2 icords, int channel)
 }
 
 void main() {
-    cem_color = vec4(0,1,0,1);
-    isTrim = 0;
+    armorType = 0;
     isGui = (ProjMat[2][3] == 0.0) ? 1 : 0;
     isEnchantedArmor = int(Color.r * 255.0 + 0.5) & 1;
     vec3 pos = Position;
-    part = 0.0;
-    texCoord1 = vec2(0.0);
 
     ivec2 ps_dim = textureSize(Sampler0, 0);
     if (abs(ProjMat[2][3]) > 10e-6 && ps_dim.x == SKINRES && ps_dim.y == SKINRES && FogRenderDistanceEnd > FogRenderDistanceStart) {
         int ps_partId = -int((Position.y - MAXRANGE) / SPACING);
-        part = float(ps_partId);
         if (ps_partId != 0) {
             ps_partId -= 1;
             bool ps_slim = ps_partId == 2 || ps_partId == 3;
@@ -165,7 +172,6 @@ void main() {
             ivec2 ps_faceIdTmp = ivec2(round(UV0 * SKINRES));
 
             vec2 ps_UVout = origins[2 * ps_partIdMod + ps_outerLayer];
-            vec2 ps_UVout2 = origins[2 * ps_partIdMod];
 
             if ((ps_faceId != 1 && ps_vertexId >= 2) || (ps_faceId == 1 && ps_vertexId <= 1)) {
                 ps_faceIdTmp.y -= FACERES;
@@ -201,9 +207,7 @@ void main() {
             }
 
             ps_UVout += ps_offset;
-            ps_UVout2 += ps_offset;
             ps_UVout /= float(SKINRES);
-            ps_UVout2 /= float(SKINRES);
 
             vec3 ps_wpos = Position;
             ps_wpos.y += SPACING * (ps_partId + 1);
@@ -213,18 +217,24 @@ void main() {
             cylindricalVertexDistance = fog_cylindrical_distance(ps_wpos);
 
             texCoord0 = ps_UVout;
-            texCoord1 = ps_UVout2;
 
             vertexColor = minecraft_mix_light(Light0_Direction, Light1_Direction, Normal, Color);
-            tintColor = Color;
-            lightMapColor = sample_lightmap(Sampler2, UV2);
-            overlayColor = texelFetch(Sampler1, UV1, 0);
-            normal = vec4(0.0);
-            cem_pos1 = cem_pos2 = cem_pos3 = cem_pos4 = vec4(0);
-            cem_uv1 = cem_uv2 = vec3(0);
+            #ifndef EMISSIVE
+                lightMapColor = sample_lightmap(Sampler2, UV2);
+                cem_light = lightMapColor;
+            #endif
+            #ifndef NO_OVERLAY
+                overlayColor = texelFetch(Sampler1, UV1, 0);
+            #endif
+            cem_pos1 = vec4(0);
+            cem_pos2 = vec4(0);
+            cem_pos3 = vec4(0);
+            cem_pos4 = vec4(0);
+            cem_uv1 = vec3(0);
+            cem_uv2 = vec3(0);
+            cem_glPos = vec3(0);
             cem = 0;
             cem_reverse = 0;
-            cem_light = sample_lightmap(Sampler2, UV2);
             cem_size = 1.0;
             cems = ivec4(-1);
             bodypart = -1;
@@ -237,20 +247,21 @@ void main() {
 
     gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
     #moj_import <fog_reader.glsl>
-    normal = ProjMat * ModelViewMat * vec4(Normal, 0.0);
 
-    
+
     #ifndef EMISSIVE
         lightMapColor = sample_lightmap(Sampler2, UV2);
     #endif
+    #ifndef NO_OVERLAY
         overlayColor = texelFetch(Sampler1, UV1, 0);
+    #endif
 
     texCoord0 = UV0;
-    tintColor = Color;
+    vec4 tintColor = Color;
     emissive = 0.0;
     markforremove = 0;
     RelativeCords = ivec2(0);
-    
+
     bool isLeather = IS_LEATHER_LAYER;
     if (isLeather) {
         ivec2 atlasSize = textureSize(Sampler0, 0);
@@ -258,7 +269,8 @@ void main() {
         vec2 offset = 1.0 / armorAmount;
 
         texCoord0 *= offset;
-        shouldApplyArmor();
+        vec2 cords;
+        shouldApplyArmor(cords);
         if (cords.x != 0 || cords.y != 0) {
             tintColor = vec4(1);
             RelativeCords = ivec2(floor(cords));
@@ -267,10 +279,18 @@ void main() {
     }
     vec4 light = minecraft_mix_light(Light0_Direction, Light1_Direction, Normal, tintColor);
 
-    cem_pos1 = cem_pos2 = cem_pos3 = cem_pos4 = vec4(0);
-    cem_uv1 = cem_uv2 = vec3(0);
-    cem = cem_reverse = 0;
-    cem_light = sample_lightmap(Sampler2, UV2);
+    cem_pos1 = vec4(0);
+    cem_pos2 = vec4(0);
+    cem_pos3 = vec4(0);
+    cem_pos4 = vec4(0);
+    cem_uv1 = vec3(0);
+    cem_uv2 = vec3(0);
+    cem_glPos = vec3(0);
+    cem = 0;
+    cem_reverse = 0;
+    #ifndef EMISSIVE
+        cem_light = sample_lightmap(Sampler2, UV2);
+    #endif
     cem_size = 1.0;
     cems = ivec4(-1);
     bodypart = -1;
@@ -288,22 +308,24 @@ void main() {
         texCoord0 = (TextureMat * vec4(UV0, 0.0, 1.0)).xy;
     #endif
 
-    float ch0 = getChannel(RelativeCords, ivec2(63,30), 0);
-    float ch1 = getChannel(RelativeCords, ivec2(63,30), 1);
-    float ch2 = getChannel(RelativeCords, ivec2(63,30), 2);
-    float ch3 = getChannel(RelativeCords, ivec2(63,30), 3);
+    float ch0 = getChannel(RelativeCords, ivec2(63,62), 0);
+    float ch1 = getChannel(RelativeCords, ivec2(63,62), 1);
+    float ch2 = getChannel(RelativeCords, ivec2(63,62), 2);
+    float ch3 = getChannel(RelativeCords, ivec2(63,62), 3);
 
     bool isPartOne = (ch0 == 0 && ch1 == 0 && ch2 == 0 && ch3 == 255);
     bool isPartTwo = (ch0 == 255 && ch1 == 255 && ch2 == 255 && ch3 == 255);
 
     if (isLeather && (isPartOne || isPartTwo)) {
-        float RVC_0 = getChannel(RelativeCords,ivec2(63,31), 0);
-        float RVC_1 = getChannel(RelativeCords,ivec2(63,31), 1);
-        float RVC_2 = getChannel(RelativeCords,ivec2(63,31), 2);
+        float RVC_0 = getChannel(RelativeCords,ivec2(63,63), 0);
+        float RVC_1 = getChannel(RelativeCords,ivec2(63,63), 1);
+        float RVC_2 = getChannel(RelativeCords,ivec2(63,63), 2);
         if(RVC_0==0 && RVC_1==0 && RVC_2==0){
             markforremove = 1;
             gl_Position = vec4(0,0,0,1);
-            overlayColor = vec4(0,0,0,0);
+            #ifndef NO_OVERLAY
+                overlayColor = vec4(0,0,0,0);
+            #endif
             return;
         }
         vec2 texSize = textureSize(Sampler0, 0);
@@ -319,7 +341,7 @@ void main() {
 
         int cube = (gl_VertexID / 24) % 10;
         bodypart = cube;
-        
+
         #moj_import <mods/armor/setup.glsl>
 
         #moj_import <mods/armor/armor.glsl>
@@ -338,7 +360,9 @@ void main() {
             if(removeAll==1){
                 markforremove = 1;
                 gl_Position = vec4(0,0,0,1);
-                overlayColor = vec4(0,0,0,0);
+                #ifndef NO_OVERLAY
+                    overlayColor = vec4(0,0,0,0);
+                #endif
                 return;
             }else{
               bodypart = -1;

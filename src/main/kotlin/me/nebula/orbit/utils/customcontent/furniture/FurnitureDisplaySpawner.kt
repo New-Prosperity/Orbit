@@ -8,6 +8,7 @@ import me.nebula.orbit.utils.modelengine.model.standAloneModel
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
+import net.minestom.server.item.ItemStack
 import java.util.concurrent.ConcurrentHashMap
 
 object FurnitureDisplaySpawner {
@@ -58,7 +59,7 @@ object FurnitureDisplaySpawner {
         }
     }
 
-    fun setItem(instance: Instance, entityId: Int, item: net.minestom.server.item.ItemStack) {
+    fun setItem(instance: Instance, entityId: Int, item: ItemStack) {
         logger.warn { "setItem() is a no-op under ModelEngine-backed rendering; OpenClose variant swaps need separate blueprints — not yet implemented." }
     }
 

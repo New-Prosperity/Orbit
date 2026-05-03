@@ -21,6 +21,8 @@ object BoneBehaviorFactory {
         BoneBehaviorType.MOUNT -> MountBehavior(
             bone = bone,
             seatOffset = config.readVec("seatOffsetX", "seatOffsetY", "seatOffsetZ"),
+            width = (config["width"] as? Number)?.toFloat() ?: 0.6f,
+            height = (config["height"] as? Number)?.toFloat() ?: 0.6f,
         )
 
         BoneBehaviorType.NAMETAG -> NameTagBehavior(

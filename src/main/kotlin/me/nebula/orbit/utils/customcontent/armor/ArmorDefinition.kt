@@ -42,6 +42,7 @@ data class ArmorCubeUv(
 data class ParsedArmorPiece(
     val part: ArmorPart,
     val cubes: List<ArmorCube>,
+    val textureIndex: Int = 0,
 )
 
 data class ArmorTexture(

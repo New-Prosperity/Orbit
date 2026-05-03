@@ -13,6 +13,14 @@ class PriorityHandler : AnimationHandler {
     private val priorityCounter = AtomicInteger(0)
     private val playingAnimations = ConcurrentHashMap<String, PlayingAnimation>()
 
+    private val sortedScratch = ArrayList<Map.Entry<String, PlayingAnimation>>(8)
+    private val bonePropertiesScratch = HashMap<String, AnimationProperty>(16)
+    private val bonePrioritiesScratch = HashMap<String, Int>(16)
+    private val toRemoveScratch = ArrayList<String>(4)
+    private val priorityComparator = Comparator<Map.Entry<String, PlayingAnimation>> { a, b ->
+        a.value.priority.compareTo(b.value.priority)
+    }
+
     var boundModel: ActiveModel? = null
 
     private class PlayingAnimation(
@@ -36,7 +44,10 @@ class PriorityHandler : AnimationHandler {
 
     override fun play(animationName: String, lerpIn: Float, lerpOut: Float, speed: Float) {
         val existing = playingAnimations[animationName]
-        if (existing != null && !existing.stopping) return
+        if (existing != null) {
+            existing.stopping = false
+            return
+        }
 
         val model = boundModel ?: return
         val animBlueprint = model.blueprint.animations[animationName] ?: return
@@ -79,13 +90,21 @@ class PriorityHandler : AnimationHandler {
         boundModel = model
         if (playingAnimations.isEmpty()) return
 
-        val boneProperties = mutableMapOf<String, AnimationProperty>()
-        val bonePriorities = mutableMapOf<String, Int>()
+        val boneProperties = bonePropertiesScratch
+        val bonePriorities = bonePrioritiesScratch
+        val toRemove = toRemoveScratch
+        val sorted = sortedScratch
+        boneProperties.clear()
+        bonePriorities.clear()
+        toRemove.clear()
+        sorted.clear()
+        sorted.addAll(playingAnimations.entries)
+        sorted.sortWith(priorityComparator)
 
-        val sorted = playingAnimations.entries.sortedBy { it.value.priority }
-        val toRemove = mutableListOf<String>()
-
-        for ((name, anim) in sorted) {
+        for (idx in sorted.indices) {
+            val entry = sorted[idx]
+            val name = entry.key
+            val anim = entry.value
             anim.time += deltaSeconds * anim.speed
 
             when (anim.blueprint.loop) {
@@ -120,7 +139,9 @@ class PriorityHandler : AnimationHandler {
                 }
             }
 
-            anim.interpolators.forEach { (boneName, interps) ->
+            for (interpEntry in anim.interpolators.entries) {
+                val boneName = interpEntry.key
+                val interps = interpEntry.value
                 val prop = AnimationProperty.fromKeyframes(interps.position, interps.rotation, interps.scale, anim.time)
                 val existing = boneProperties[boneName]
                 val existingPriority = bonePriorities[boneName] ?: -1
@@ -136,15 +157,17 @@ class PriorityHandler : AnimationHandler {
             }
         }
 
-        toRemove.forEach { playingAnimations.remove(it) }
+        for (i in toRemove.indices) playingAnimations.remove(toRemove[i])
 
-        boneProperties.forEach { (boneName, _) ->
+        for (boneName in boneProperties.keys) {
             model.bones[boneName]?.resetAnimation()
         }
 
         val illegalModel = model.blueprint.hasIllegalRotations
-        boneProperties.forEach { (boneName, prop) ->
-            val bone = model.bones[boneName] ?: return@forEach
+        for (propEntry in boneProperties.entries) {
+            val boneName = propEntry.key
+            val prop = propEntry.value
+            val bone = model.bones[boneName] ?: continue
             bone.animatedPosition = prop.position
             val boneEuler = bone.blueprint.rotationEuler
             val animRot = if (illegalModel) {

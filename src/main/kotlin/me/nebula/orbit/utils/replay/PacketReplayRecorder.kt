@@ -1,7 +1,7 @@
 package me.nebula.orbit.utils.replay
 
 import me.nebula.ether.utils.logging.logger
-import me.nebula.orbit.utils.nebulaworld.NebulaWorld
+import me.nebula.orbit.utils.nebulaworld.NebulaWorldWriter
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
@@ -39,7 +39,7 @@ class PacketReplayRecorder {
     private val seenHashes = ConcurrentHashMap.newKeySet<Long>()
     private var startTimeMillis = 0L
     @Volatile private var recording = false
-    @Volatile var worldSnapshot: NebulaWorld? = null
+    @Volatile var worldSnapshotBytes: ByteArray? = null
         private set
     private var eventNode: EventNode<Event>? = null
     @Volatile private var targetInstance: Instance? = null
@@ -57,8 +57,9 @@ class PacketReplayRecorder {
         recording = true
 
         Thread.startVirtualThread {
-            worldSnapshot = ReplayWorldCapture.capture(instance)
-            logger.info { "Replay world snapshot captured: ${worldSnapshot?.chunks?.size} chunks" }
+            val captured = ReplayWorldCapture.capture(instance)
+            worldSnapshotBytes = NebulaWorldWriter.write(captured)
+            logger.info { "Replay world snapshot captured: ${captured.chunks.size} chunks" }
         }
 
         for (player in instance.players) {
@@ -123,7 +124,7 @@ class PacketReplayRecorder {
             players,
         )
 
-        val worldSource = worldSnapshot?.let { ReplayWorldSource.Embedded(it) }
+        val worldSource = worldSnapshotBytes?.let { ReplayWorldSource.Embedded(it) }
             ?: ReplayWorldSource.Reference(mapName)
 
         return ReplayFile(header, worldSource, ReplayData(emptyList(), playerNames.toMap()), recordedPackets)

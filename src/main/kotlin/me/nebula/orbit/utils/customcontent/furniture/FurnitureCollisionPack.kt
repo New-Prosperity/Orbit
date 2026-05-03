@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.customcontent.furniture
 
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import me.nebula.ether.utils.gson.GsonProvider
 import net.minestom.server.instance.block.Block
@@ -28,7 +29,7 @@ object FurnitureCollisionPack {
     private fun buildEmptyModel(): ByteArray {
         val json = JsonObject().apply {
             add("textures", JsonObject())
-            add("elements", com.google.gson.JsonArray())
+            add("elements", JsonArray())
         }
         return gson.toJson(json).toByteArray(Charsets.UTF_8)
     }

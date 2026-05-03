@@ -51,7 +51,6 @@ import me.nebula.orbit.utils.entitybuilder.WithChanceDecorator
 import net.kyori.adventure.key.Key
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
-import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.EntityType
 import net.minestom.server.particle.Particle
@@ -120,6 +119,9 @@ object ExecutorFactories {
                 range = obj.double("range", 10.0),
                 runTicks = obj.int("run_ticks", 100),
                 maxRetries = obj.int("max_retries", 10),
+                chainTargets = obj.bool("chain_targets", true),
+                avoidKey = obj.string("avoid_memory_key", "").ifEmpty { null }?.let { memoryKeyOf(it) },
+                avoidDistance = obj.double("avoid_distance", 0.0),
             )
         }
 
@@ -183,6 +185,7 @@ object ExecutorFactories {
                 projectileSpeed = obj.double("projectile_speed", 1.5),
                 projectileDamage = obj.float("projectile_damage", 4f),
                 cooldownName = obj.string("cooldown_name", "ranged_attack"),
+                originBone = obj.string("origin_bone", "").ifEmpty { null },
             )
         }
 

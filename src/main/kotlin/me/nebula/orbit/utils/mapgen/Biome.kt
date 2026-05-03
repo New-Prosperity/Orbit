@@ -42,6 +42,7 @@ data class BiomeDefinition(
     val treeDensity: Double = 0.0,
     val vegetationDensity: Double = 0.0,
     val treeTypes: List<TreeType> = listOf(TreeType.OAK),
+    val treeShapes: List<String> = emptyList(),
     val caveFrequencyMultiplier: Double = 1.0,
     val oreMultiplier: Double = 1.0,
     val snowLine: Int = Int.MAX_VALUE,
@@ -51,6 +52,13 @@ data class BiomeDefinition(
     val grassColor: Int? = null,
     val foliageColor: Int? = null,
     val grassModifier: GrassModifier = GrassModifier.NONE,
+    val surfaceDepth: Int = 1,
+    val subsurfaceBlock: Block? = null,
+    val subsurfaceDepth: Int = 0,
+    val flowerBlocks: List<Block> = emptyList(),
+    val grassBlock: Block = Block.SHORT_GRASS,
+    val tallGrassBlock: Block? = null,
+    val oreOverrides: List<me.nebula.orbit.utils.mapgen.planet.OreEntry> = emptyList(),
 )
 
 object BiomeRegistry {
@@ -199,6 +207,7 @@ data class BiomeZoneConfig(
     val ringRadius: Int = 0,
     val zoneShape: ZoneShape = ZoneShape.CIRCLE,
     val excludedBiomeIds: Set<String> = emptySet(),
+    val includedBiomeIds: Set<String>? = null,
     val fallbackBiomeId: String = "plains",
     val biomeScale: Double = 0.003,
     val blendRadius: Int = 8,
@@ -270,14 +279,19 @@ class BiomeProvider(
         ZoneShape.SQUARE -> max(abs(x), abs(z)).toDouble()
     }
 
+    private val candidates: Collection<BiomeDefinition> by lazy {
+        val included = config.includedBiomeIds
+        if (included.isNullOrEmpty()) BiomeRegistry.all()
+        else BiomeRegistry.all().filter { it.id in included }
+    }
+
     private fun selectBiome(temperature: Double, moisture: Double, weirdness: Double): BiomeDefinition {
-        val all = BiomeRegistry.all()
-        if (all.isEmpty()) return fallback
+        if (candidates.isEmpty()) return fallback
 
         var best: BiomeDefinition = fallback
         var bestDist = Double.MAX_VALUE
 
-        for (biome in all) {
+        for (biome in candidates) {
             val dt = temperature - (biome.temperature * 2 - 1)
             val dm = moisture - (biome.moisture * 2 - 1)
             val dw = weirdness * 0.3

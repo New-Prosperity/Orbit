@@ -8,6 +8,7 @@ import net.minestom.server.entity.Player
 import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerPacketEvent
 import net.minestom.server.network.packet.client.play.ClientInputPacket
+import net.minestom.server.network.packet.client.play.ClientInteractEntityPacket
 import net.minestom.server.timer.Task
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -75,6 +76,12 @@ object MountManager {
                 if (session.input.sneak) {
                     return@addListener
                 }
+            } else if (packet is ClientInteractEntityPacket) {
+                val binding = SeatRegistry.get(packet.targetId()) ?: return@addListener
+                val player = event.player
+                if (sessions.containsKey(player.uuid)) return@addListener
+                if (binding.mountBehavior.passenger != null) return@addListener
+                mount(player, binding.modeledEntity, binding.mountBehavior, binding.controllerFactory())
             }
         }
         MinecraftServer.getGlobalEventHandler().addChild(node)

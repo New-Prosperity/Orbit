@@ -5,9 +5,11 @@ import me.nebula.orbit.utils.chat.mm
 import net.kyori.adventure.bossbar.BossBar
 import me.nebula.orbit.utils.scheduler.repeat
 import net.minestom.server.MinecraftServer
+import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
 import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
+import net.minestom.server.event.entity.EntityDespawnEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.item.Material
 import net.minestom.server.timer.Task
@@ -410,3 +412,114 @@ class MessageCooldownBuilder @PublishedApi internal constructor() {
 
 inline fun messageCooldown(builder: MessageCooldownBuilder.() -> Unit): MessageCooldownManager =
     MessageCooldownBuilder().apply(builder).build()
+
+private data class EntityCooldownKey(val uuid: UUID, val name: String)
+
+object EntityNamedCooldown {
+
+    private val cooldowns = ConcurrentHashMap<EntityCooldownKey, Long>()
+    private val configs = ConcurrentHashMap<String, EntityNamedCooldownConfig>()
+
+    fun register(config: EntityNamedCooldownConfig) {
+        configs[config.name] = config
+    }
+
+    fun check(entity: Entity, name: String): Boolean {
+        val key = EntityCooldownKey(entity.uuid, name)
+        val expiry = cooldowns[key] ?: return true
+        if (System.currentTimeMillis() >= expiry) {
+            cooldowns.remove(key)
+            return true
+        }
+        return false
+    }
+
+    fun use(entity: Entity, name: String) {
+        val config = configs[name] ?: return
+        cooldowns[EntityCooldownKey(entity.uuid, name)] =
+            System.currentTimeMillis() + config.duration.toMillis()
+    }
+
+    fun useFor(entity: Entity, name: String, duration: Duration) {
+        cooldowns[EntityCooldownKey(entity.uuid, name)] =
+            System.currentTimeMillis() + duration.toMillis()
+    }
+
+    fun tryUse(entity: Entity, name: String): Boolean {
+        if (!check(entity, name)) return false
+        use(entity, name)
+        return true
+    }
+
+    fun tryUseFor(entity: Entity, name: String, duration: Duration): Boolean {
+        if (!check(entity, name)) return false
+        useFor(entity, name, duration)
+        return true
+    }
+
+    fun remaining(entity: Entity, name: String): Duration {
+        val expiry = cooldowns[EntityCooldownKey(entity.uuid, name)] ?: return Duration.ZERO
+        val remaining = expiry - System.currentTimeMillis()
+        return if (remaining > 0) Duration.ofMillis(remaining) else Duration.ZERO
+    }
+
+    fun reset(entity: Entity, name: String) {
+        cooldowns.remove(EntityCooldownKey(entity.uuid, name))
+    }
+
+    fun resetAll(entity: Entity) {
+        resetAll(entity.uuid)
+    }
+
+    fun resetAll(uuid: UUID) {
+        cooldowns.keys.removeAll { it.uuid == uuid }
+    }
+
+    fun entriesFor(entity: Entity): Map<String, Duration> = entriesFor(entity.uuid)
+
+    fun entriesFor(uuid: UUID): Map<String, Duration> {
+        val now = System.currentTimeMillis()
+        return cooldowns.entries
+            .asSequence()
+            .filter { it.key.uuid == uuid && it.value > now }
+            .associate { it.key.name to Duration.ofMillis(it.value - now) }
+    }
+
+    fun install(eventNode: EventNode<Event>) {
+        eventNode.addListener(EntityDespawnEvent::class.java) { event ->
+            resetAll(event.entity)
+        }
+    }
+
+    fun cleanup() {
+        val now = System.currentTimeMillis()
+        cooldowns.entries.removeIf { it.value <= now }
+    }
+}
+
+data class EntityNamedCooldownConfig(
+    val name: String,
+    val duration: Duration,
+)
+
+class EntityNamedCooldownBuilder @PublishedApi internal constructor(private val name: String) {
+
+    @PublishedApi internal var duration: Duration = Duration.ofSeconds(5)
+
+    fun duration(duration: Duration) { this.duration = duration }
+    fun durationMillis(millis: Long) { duration = Duration.ofMillis(millis) }
+    fun durationSeconds(seconds: Long) { duration = Duration.ofSeconds(seconds) }
+    fun durationTicks(ticks: Int) { duration = Duration.ofMillis(ticks * 50L) }
+
+    @PublishedApi internal fun build(): EntityNamedCooldownConfig =
+        EntityNamedCooldownConfig(name, duration)
+}
+
+inline fun entityNamedCooldown(
+    name: String,
+    block: EntityNamedCooldownBuilder.() -> Unit,
+): EntityNamedCooldownConfig {
+    val config = EntityNamedCooldownBuilder(name).apply(block).build()
+    EntityNamedCooldown.register(config)
+    return config
+}

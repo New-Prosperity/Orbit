@@ -53,7 +53,7 @@ object BlockStateWriter {
 
         allBlocks.filter { it.hitbox == BlockHitbox.Thin }.forEach { customBlock ->
             val name = customBlock.allocatedState.name().removePrefix("minecraft:")
-            result["assets/minecraft/blockstates/$name.json"] = buildSingleVariant("customcontent/blocks/${customBlock.id}")
+            result["assets/minecraft/blockstates/$name.json"] = buildSingleVariant("x/" + ObfuscationCodec.obfuscate("cc_block_${customBlock.id}"))
         }
 
         return result
@@ -70,7 +70,7 @@ object BlockStateWriter {
                         .withProperty("powered", powered)
                     val key = "instrument=$instrument,note=$note,powered=$powered"
                     val custom = byStateId[state.stateId()]
-                    val model = custom?.let { "customcontent/blocks/${it.id}" } ?: "block/note_block"
+                    val model = custom?.let { "x/" + ObfuscationCodec.obfuscate("cc_block_${it.id}") } ?: "block/note_block"
                     variants.add(key, JsonObject().apply { addProperty("model", model) })
                 }
             }
@@ -95,7 +95,7 @@ object BlockStateWriter {
             }
             val key = props.joinToString(",")
             val custom = byStateId[state.stateId()]
-            val model = custom?.let { "customcontent/blocks/${it.id}" } ?: vanillaModel
+            val model = custom?.let { "x/" + ObfuscationCodec.obfuscate("cc_block_${it.id}") } ?: vanillaModel
             variants.add(key, JsonObject().apply { addProperty("model", model) })
         }
         return toBytes(JsonObject().apply { add("variants", variants) })
@@ -119,7 +119,7 @@ object BlockStateWriter {
             val custom = byStateId[state.stateId()] ?: continue
             multipart.add(JsonObject().apply {
                 add("when", whenObj)
-                add("apply", JsonObject().apply { addProperty("model", "customcontent/blocks/${custom.id}") })
+                add("apply", JsonObject().apply { addProperty("model", "x/" + ObfuscationCodec.obfuscate("cc_block_${custom.id}")) })
             })
         }
 

@@ -1,10 +1,15 @@
-in vec4 cem_pos1, cem_pos2, cem_pos3, cem_pos4;
-in vec3 cem_uv1, cem_uv2;
+in vec4 cem_pos1;
+in vec4 cem_pos2;
+in vec4 cem_pos3;
+in vec4 cem_pos4;
+in vec3 cem_uv1;
+in vec3 cem_uv2;
 in vec3 cem_glPos;
-in vec4 cem_lightMapColor;
+#ifndef EMISSIVE
+flat in vec4 cem_light;
+#endif
 flat in int cem;
 flat in int cem_reverse;
-flat in vec4 cem_light;
 
 #define MAX_DEPTH 1024000.0
 

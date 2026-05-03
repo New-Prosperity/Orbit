@@ -2,6 +2,8 @@ package me.nebula.orbit
 
 import me.nebula.ether.utils.app.App
 import me.nebula.ether.utils.app.appDelegate
+import me.nebula.ether.utils.console.ConsoleCommandReader
+import me.nebula.ether.utils.console.consoleReader
 import me.nebula.ether.utils.environment.environment
 import me.nebula.ether.utils.hazelcast.HazelcastHealth
 import me.nebula.ether.utils.hazelcast.Store
@@ -137,7 +139,6 @@ import me.nebula.orbit.utils.statue.statueCommand
 import me.nebula.orbit.utils.vanish.VanishManager
 import me.nebula.orbit.utils.actionbar.ActionBarManager
 import me.nebula.orbit.utils.tablist.TabListManager
-import me.nebula.orbit.utils.customcontent.armor.armorTestCommand
 import me.nebula.orbit.utils.tooltip.TooltipStyleRegistry
 import me.nebula.orbit.utils.tooltip.tooltipCommand
 import me.nebula.orbit.utils.customcontent.customContentCommand
@@ -173,6 +174,7 @@ import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
 import net.minestom.server.tag.Tag
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import me.nebula.orbit.notification.OrbitNotifications
 
 object Orbit {
@@ -204,6 +206,8 @@ object Orbit {
 
     @Volatile var instance: OrbitInstance? = null
         private set
+
+    private var consoleReader: ConsoleCommandReader? = null
 
     private val moduleRegistry = moduleRegistry {
         register(ModelEngineModule)
@@ -501,7 +505,6 @@ object Orbit {
         commandManager.register(customContentCommand(app.resources))
         commandManager.register(cinematicTestCommand())
         commandManager.register(screenTestCommand())
-        commandManager.register(armorTestCommand())
         commandManager.register(tooltipCommand())
         nickCommands().forEach(commandManager::register)
         commandManager.register(vanishCommand())
@@ -697,6 +700,20 @@ object Orbit {
 
         installNetworkSubscribers(gameMode)
 
+        consoleReader = consoleReader {
+            loggerName = "OrbitConsole"
+            command("stop", "Shut Orbit down gracefully") {
+                log.info { "Stop requested via console" }
+                Thread.startVirtualThread { System.exit(0) }
+            }
+            fallback {
+                val result = MinecraftServer.getCommandManager().executeServerCommand(raw)
+                if (result.type.name == "UNKNOWN") {
+                    log.info { "Unknown command: $raw" }
+                }
+            }
+        }.start()
+
         Runtime.getRuntime().addShutdownHook(Thread {
             if (!shuttingDown.compareAndSet(false, true)) return@Thread
 
@@ -704,6 +721,8 @@ object Orbit {
                 Thread.sleep(15_000)
                 Runtime.getRuntime().halt(1)
             }
+
+            consoleReader?.stop()
 
             val players = MinecraftServer.getConnectionManager().onlinePlayers.toList()
             if (players.isNotEmpty()) {
@@ -722,7 +741,7 @@ object Orbit {
             PlayerCache.clear()
             runCatching { Store.flushAll() }.onFailure { }
             runCatching { MinecraftServer.stopCleanly() }.onFailure { }
-            runCatching { app.stop().get(10, java.util.concurrent.TimeUnit.SECONDS) }.onFailure { }
+            runCatching { app.stop().get(10, TimeUnit.SECONDS) }.onFailure { }
         })
     }
 

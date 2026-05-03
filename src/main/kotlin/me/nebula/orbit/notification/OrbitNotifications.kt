@@ -1,11 +1,9 @@
 package me.nebula.orbit.notification
 
 import me.nebula.ether.utils.logging.logger
-import me.nebula.gravity.notification.Notification
 import me.nebula.gravity.notification.NotificationBundle
 import me.nebula.gravity.notification.PlatformNotificationBridge
 import me.nebula.gravity.notification.Priority
-import me.nebula.gravity.user.NebulaUser
 import net.kyori.adventure.text.Component
 import net.minestom.server.item.ItemStack
 import net.minestom.server.item.Material

@@ -1,5 +1,7 @@
 package me.nebula.orbit.utils.customcontent.furniture
 
+import kotlin.math.round
+
 object FootprintRotation {
 
     fun rotate(footprint: FurnitureFootprint, quarterTurns: Int): FurnitureFootprint {
@@ -25,7 +27,7 @@ object FootprintRotation {
         if (snapDegrees <= 0.0) return yawDegrees
         val normalized = ((yawDegrees % 360f) + 360f) % 360f
         val steps = normalized / snapDegrees
-        val snapped = kotlin.math.round(steps) * snapDegrees
+        val snapped = round(steps) * snapDegrees
         return (snapped % 360.0).toFloat()
     }
 }

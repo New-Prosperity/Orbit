@@ -41,4 +41,3 @@ proj[3].xy = vec2(0, 0);
 gl_Position = proj * cem_Pos;
 
 vertexColor = minecraft_mix_light(Light0_Direction, Light1_Direction, Normal, vec4(1));
-cem_lightMapColor = texelFetch(Sampler2, UV2 / 16, 0);

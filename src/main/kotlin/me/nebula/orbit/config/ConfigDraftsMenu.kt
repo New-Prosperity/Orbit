@@ -7,7 +7,6 @@ import me.nebula.orbit.translation.translateRaw
 import me.nebula.orbit.utils.gui.AnvilInput
 import me.nebula.orbit.utils.gui.AnvilResult
 import me.nebula.orbit.utils.gui.confirmGui
-import me.nebula.orbit.utils.gui.gui
 import me.nebula.orbit.utils.gui.openGui
 import me.nebula.orbit.utils.gui.paginatedGui
 import me.nebula.orbit.utils.itembuilder.itemStack

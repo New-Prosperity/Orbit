@@ -1,12 +1,14 @@
 package me.nebula.orbit.utils.customcontent.furniture
 
 import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import me.nebula.ether.utils.logging.logger
 import me.nebula.ether.utils.resource.ResourceManager
 import me.nebula.ether.utils.translation.TranslationKey
 import me.nebula.orbit.utils.modelengine.generator.BlockbenchParser
+import net.minestom.server.instance.block.BlockFace
 
 object FurnitureJsonLoader {
 
@@ -107,7 +109,7 @@ object FurnitureJsonLoader {
         else -> error("Unknown collision mode: $raw (expected 'solid' or 'nonsolid')")
     }
 
-    private fun parsePlacement(element: com.google.gson.JsonElement?): FurniturePlacement {
+    private fun parsePlacement(element: JsonElement?): FurniturePlacement {
         if (element == null) return FurniturePlacement.FLOOR
         if (element.isJsonPrimitive) {
             val name = element.asString
@@ -118,7 +120,7 @@ object FurnitureJsonLoader {
         val obj = element.asJsonObject
         val facesArray = obj.getAsJsonArray("allowed_faces") ?: obj.getAsJsonArray("allowedFaces")
         val allowedFaces = if (facesArray == null) {
-            net.minestom.server.instance.block.BlockFace.values().toSet()
+            BlockFace.values().toSet()
         } else {
             facesArray.map { parseFace(it.asString) }.toSet()
         }
@@ -129,13 +131,13 @@ object FurnitureJsonLoader {
         return FurniturePlacement(allowedFaces, autoOrient)
     }
 
-    private fun parseFace(raw: String): net.minestom.server.instance.block.BlockFace = when (raw.lowercase()) {
-        "top", "up" -> net.minestom.server.instance.block.BlockFace.TOP
-        "bottom", "down" -> net.minestom.server.instance.block.BlockFace.BOTTOM
-        "north" -> net.minestom.server.instance.block.BlockFace.NORTH
-        "south" -> net.minestom.server.instance.block.BlockFace.SOUTH
-        "east" -> net.minestom.server.instance.block.BlockFace.EAST
-        "west" -> net.minestom.server.instance.block.BlockFace.WEST
+    private fun parseFace(raw: String): BlockFace = when (raw.lowercase()) {
+        "top", "up" -> BlockFace.TOP
+        "bottom", "down" -> BlockFace.BOTTOM
+        "north" -> BlockFace.NORTH
+        "south" -> BlockFace.SOUTH
+        "east" -> BlockFace.EAST
+        "west" -> BlockFace.WEST
         else -> error("Unknown face '$raw' (expected top/bottom/north/south/east/west)")
     }
 
@@ -172,7 +174,7 @@ object FurnitureJsonLoader {
     private fun parseFootprintAndColliders(
         resources: ResourceManager,
         directory: String,
-        footprintElement: com.google.gson.JsonElement?,
+        footprintElement: JsonElement?,
         bbmodelPath: String?,
         colliderPrefix: String,
     ): FootprintParseResult {

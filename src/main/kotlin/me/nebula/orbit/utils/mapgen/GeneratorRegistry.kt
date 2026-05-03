@@ -1,9 +1,11 @@
 package me.nebula.orbit.utils.mapgen
 
+import me.nebula.orbit.utils.mapgen.planet.rhexor.RhexorGenerator
 import net.kyori.adventure.key.Key
 import net.minestom.server.instance.block.Block
 import net.minestom.server.instance.generator.Generator
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ThreadLocalRandom
 
 object GeneratorRegistry {
 
@@ -37,10 +39,14 @@ object GeneratorRegistry {
             )
         }
 
+        register("br_rhexor") { params ->
+            RhexorGenerator(seed = params.seedOrRandom())
+        }
+
         register("terrain") { params ->
             TerrainGenerator(
                 TerrainConfig(
-                    seed = params.longOr("seed", 0L),
+                    seed = params.seedOrRandom(),
                     seaLevel = params.intOr("sea_level", 62),
                     bedrockHeight = params.intOr("bedrock_height", 1),
                     fillerDepth = params.intOr("filler_depth", 3),
@@ -80,4 +86,7 @@ object GeneratorRegistry {
 
     private fun Map<String, String>.boolOr(key: String, default: Boolean): Boolean =
         get(key)?.toBooleanStrictOrNull() ?: default
+
+    private fun Map<String, String>.seedOrRandom(key: String = "seed"): Long =
+        get(key)?.toLongOrNull() ?: ThreadLocalRandom.current().nextLong()
 }

@@ -37,9 +37,9 @@ data class CommandExecutionContext(
 ) {
     val user: OrbitOnlineUser = player.asNebulaUser()
 
-    fun arg(name: String): String = args.get(ArgumentType.String(name))
+    fun arg(name: String): String = args.getRaw(name)
     fun argOrNull(name: String): String? =
-        if (args.has(name)) args.get(ArgumentType.String(name)) else null
+        if (args.has(name)) args.getRaw(name) else null
     fun intArg(name: String): Int = args.get(ArgumentType.Integer(name))
     fun intArgOrNull(name: String): Int? =
         if (args.has(name)) args.get(ArgumentType.Integer(name)) else null
@@ -126,7 +126,7 @@ class CommandBuilderDsl @PublishedApi internal constructor(
             ?: error("No argument named '$name' — add it before calling suggestArgument")
         arg.setSuggestionCallback { sender, context, suggestion ->
             if (sender !is Player) return@setSuggestionCallback
-            val partial = suggestion.input.substringAfterLast(" ")
+            val partial = extractPartial(suggestion.input)
             val scope = SuggestionScope(sender, context, partial)
             provider(scope).forEach { suggestion.addEntry(SuggestionEntry(it)) }
         }
@@ -191,7 +191,7 @@ class CommandBuilderDsl @PublishedApi internal constructor(
             tabCompleteHandler?.let { handler ->
                 arguments.last().setSuggestionCallback { sender, _, suggestion ->
                     if (sender !is Player) return@setSuggestionCallback
-                    val partial = suggestion.input.substringAfterLast(" ")
+                    val partial = extractPartial(suggestion.input)
                     handler(sender, partial).forEach { suggestion.addEntry(SuggestionEntry(it)) }
                 }
             }
@@ -223,6 +223,10 @@ class CommandBuilderDsl @PublishedApi internal constructor(
 
     private val cooldown: Cooldown<UUID>? by lazy {
         if (cooldownMs > 0) Cooldown(Duration.ofMillis(cooldownMs)) else null
+    }
+
+    private fun extractPartial(input: String): String {
+        return input.substringAfterLast(' ').trimEnd(' ')
     }
 
     private fun resolveHandler(): ((CommandSender, CommandContext) -> Unit)? {

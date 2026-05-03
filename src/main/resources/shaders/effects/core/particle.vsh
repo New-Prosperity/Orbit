@@ -10,7 +10,6 @@ in vec2 UV0;
 in vec4 Color;
 in ivec2 UV2;
 
-uniform sampler2D Sampler0;
 uniform sampler2D Sampler2;
 
 out float sphericalVertexDistance;
