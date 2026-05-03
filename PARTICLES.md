@@ -1,5 +1,7 @@
 # Particle Effect Catalog
 
+> _Last reviewed: 2026-05-03. Action items at the bottom are recommended next steps, not pending tasks._
+
 Audit of every particle effect emitted today, classified by the cheapest backend that serves it. Used as the gate for deciding whether a shader-particle layer is justified.
 
 ---

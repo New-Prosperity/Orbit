@@ -1,5 +1,7 @@
 # Vanilla Minecraft Features — Implementation Status
 
+> _Last reviewed: 2026-05-03. Statuses are point-in-time snapshots — re-verify against `Orbit/src/main/kotlin/me/nebula/orbit/utils/vanilla/` before treating as authoritative._
+
 Living reference for all vanilla mechanics and their status in Orbit's VanillaModule system.
 
 Status: `[NOT IMPLEMENTED]` `[PLANNED]` `[PARTIAL]` `[IMPLEMENTED]`

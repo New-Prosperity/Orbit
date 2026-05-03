@@ -1,5 +1,7 @@
 # 3D Armor Shader System — Deep Technical Reference
 
+> _Last reviewed: 2026-05-03. Sections 10–12 (current implementation analysis + rebuild plan) reference specific GLSL/Kotlin files that may drift as the shader code evolves — verify file paths before relying on them._
+
 ## Table of Contents
 
 1. [How Minecraft Renders Armor](#1-how-minecraft-renders-armor)
