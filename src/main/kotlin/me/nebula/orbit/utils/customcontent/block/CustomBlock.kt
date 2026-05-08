@@ -19,6 +19,7 @@ data class CustomBlock(
     val breakSound: String,
     val allocatedState: Block,
     val miningBlock: Block? = null,
+    val mapColor: Int? = null,
 ) {
 
     fun item(): CustomItem? = CustomItemRegistry[itemId]

@@ -1,6 +1,7 @@
 package me.nebula.orbit.utils.customcontent.biome
 
 import me.nebula.orbit.utils.mapgen.BiomeDefinition
+import me.nebula.orbit.utils.mapgen.BiomeSubsurface
 import me.nebula.orbit.utils.mapgen.GrassModifier
 import me.nebula.orbit.utils.mapgen.HeightCurve
 import me.nebula.orbit.utils.mapgen.TreeType
@@ -29,6 +30,21 @@ data class CustomBiomeJson(
     val grassColor: Int? = null,
     val foliageColor: Int? = null,
     val grassModifier: GrassModifier = GrassModifier.NONE,
+    val patchBlock: String? = null,
+    val patchScale: Double = 0.08,
+    val patchThreshold: Double = 0.55,
+    val snowBlock: String = "minecraft:snow",
+    val cliffEdge: Boolean = false,
+    val lavaPoolThreshold: Double = -1.0,
+    val lavaPoolMinY: Int = 4,
+    val lavaPoolMaxY: Int = 30,
+    val aquiferDensity: Double = 0.0,
+    val aquiferMinY: Int = 8,
+    val aquiferMaxY: Int = 50,
+    val crystalDensity: Double = 0.0,
+    val crystalBlock: String? = null,
+    val caveEntranceFrequency: Double = 0.0,
+    val caveEntranceMaxDepth: Int = 16,
 ) {
     fun toDefinition(): BiomeDefinition = BiomeDefinition(
         id = id,
@@ -53,5 +69,22 @@ data class CustomBiomeJson(
         grassColor = grassColor,
         foliageColor = foliageColor,
         grassModifier = grassModifier,
+        patchBlock = patchBlock?.let { BlockResolver.resolve(it) },
+        patchScale = patchScale,
+        patchThreshold = patchThreshold,
+        snowBlock = BlockResolver.resolve(snowBlock),
+        cliffEdge = cliffEdge,
+        subsurface = BiomeSubsurface(
+            lavaPoolThreshold = lavaPoolThreshold,
+            lavaPoolMinY = lavaPoolMinY,
+            lavaPoolMaxY = lavaPoolMaxY,
+            aquiferDensity = aquiferDensity,
+            aquiferMinY = aquiferMinY,
+            aquiferMaxY = aquiferMaxY,
+            crystalDensity = crystalDensity,
+            crystalBlock = crystalBlock?.let { BlockResolver.resolve(it) },
+            caveEntranceFrequency = caveEntranceFrequency,
+            caveEntranceMaxDepth = caveEntranceMaxDepth,
+        ),
     )
 }

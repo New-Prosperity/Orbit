@@ -253,6 +253,7 @@ object CustomContentRegistry {
             breakSound = def.breakSound,
             allocatedState = allocatedState,
             miningBlock = def.miningBlock,
+            mapColor = def.mapColor,
         )
         CustomBlockRegistry.register(block)
         logger.info {

@@ -1,7 +1,9 @@
 package me.nebula.orbit.utils.mapgen.planet
 
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
+
+private const val STRUCTURE_PLAN_CACHE_CAP = 8192
+private val STRUCTURE_PLAN_SALT: Long = 0x9E3779B97F4A7C15uL.toLong()
 
 data class PlannedStructure(
     val schematicId: String,
@@ -21,7 +23,7 @@ class StructurePlanner(
     private val baseHeightFn: (Int, Int) -> Int,
 ) {
 
-    private val cache = ConcurrentHashMap<Long, List<PlannedStructure>>()
+    private val cache = BoundedCache<Long, List<PlannedStructure>>(STRUCTURE_PLAN_CACHE_CAP)
 
     fun planFor(chunkX: Int, chunkZ: Int): List<PlannedStructure> =
         cache.computeIfAbsent(packKey(chunkX, chunkZ)) { computePlans(chunkX, chunkZ) }
@@ -39,8 +41,7 @@ class StructurePlanner(
     private fun computePlans(chunkX: Int, chunkZ: Int): List<PlannedStructure> {
         if (spec.structures.isEmpty()) return emptyList()
 
-        val seed = spec.seed xor (chunkX.toLong() * 341873128712L) xor (chunkZ.toLong() * 132897987541L)
-        val rng = Random(seed)
+        val rng = Random(SeedMix.chunkSeed(spec.seed, chunkX, chunkZ, STRUCTURE_PLAN_SALT))
 
         val out = ArrayList<PlannedStructure>()
         for (entry in spec.structures) {

@@ -59,6 +59,25 @@ data class BiomeDefinition(
     val grassBlock: Block = Block.SHORT_GRASS,
     val tallGrassBlock: Block? = null,
     val oreOverrides: List<me.nebula.orbit.utils.mapgen.planet.OreEntry> = emptyList(),
+    val patchBlock: Block? = null,
+    val patchScale: Double = 0.08,
+    val patchThreshold: Double = 0.55,
+    val snowBlock: Block = Block.SNOW,
+    val subsurface: BiomeSubsurface = BiomeSubsurface(),
+    val cliffEdge: Boolean = false,
+)
+
+data class BiomeSubsurface(
+    val lavaPoolThreshold: Double = -1.0,
+    val lavaPoolMinY: Int = 4,
+    val lavaPoolMaxY: Int = 30,
+    val aquiferDensity: Double = 0.0,
+    val aquiferMinY: Int = 8,
+    val aquiferMaxY: Int = 50,
+    val crystalDensity: Double = 0.0,
+    val crystalBlock: Block? = null,
+    val caveEntranceFrequency: Double = 0.0,
+    val caveEntranceMaxDepth: Int = 16,
 )
 
 object BiomeRegistry {

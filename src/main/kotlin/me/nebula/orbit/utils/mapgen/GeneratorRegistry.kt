@@ -22,6 +22,11 @@ object GeneratorRegistry {
     fun create(name: String, params: Map<String, String> = emptyMap()): Generator? =
         factories[name.lowercase()]?.create(params)
 
+    fun createOrThrow(name: String, params: Map<String, String> = emptyMap()): Generator =
+        create(name, params) ?: error(
+            "Unknown generator '$name'. Available: ${factories.keys.sorted().joinToString(", ")}"
+        )
+
     fun names(): Set<String> = factories.keys.toSet()
 
     fun has(name: String): Boolean = factories.containsKey(name.lowercase())

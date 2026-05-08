@@ -36,7 +36,6 @@ data class Season(
     val goldenHead: GoldenHeadConfig = GoldenHeadConfig(),
     val deathmatch: DeathmatchConfig = DeathmatchConfig(),
     val cosmetics: CosmeticConfig = CosmeticConfig(),
-    val mapPreset: String? = null,
     val planet: String? = null,
     val lobbyWorld: LobbyWorldConfig? = null,
     val airdropTable: String? = null,

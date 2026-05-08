@@ -23,6 +23,13 @@ object PlanetMapGenerator {
     fun generate(planet: PlanetGenerator): GeneratedMap {
         val island = planet.spec.island
         val mapRadius = if (island.enabled) island.radius.toInt() else DEFAULT_RADIUS
+
+        val issues = planet.validateAgainstRegistries()
+        if (issues.isNotEmpty()) {
+            issues.forEach { logger.warn { "Planet validation: $it" } }
+            error("Planet '${planet.spec.id}' has unresolved registry references — refusing to generate. Fix the missing biomes/structures/ore-clusters first.")
+        }
+
         logger.info { "Generating planet '${planet.spec.id}' (seed=${planet.spec.seed}, radius=$mapRadius, island=${island.enabled})" }
 
         val instance = MinecraftServer.getInstanceManager().createInstanceContainer()
@@ -40,8 +47,13 @@ object PlanetMapGenerator {
         }
         CompletableFuture.allOf(*futures.toTypedArray()).join()
 
-        val centerY = planet.groundLevelAt(island.centerX, island.centerZ).toInt()
-        val center = Pos(island.centerX + 0.5, centerY + 2.0, island.centerZ + 0.5)
+        val safe = planet.findSafeSpawn(island.centerX, island.centerZ)
+        val center = Pos(safe.x + 0.5, safe.y.toDouble(), safe.z + 0.5)
+        if (safe.fallback) {
+            logger.warn { "findSafeSpawn fell back after ${safe.columnsTested} columns; spawning at planet origin (may be in water/cave)" }
+        } else if (safe.columnsTested > 1) {
+            logger.info { "Spawn relocated to (${safe.x}, ${safe.y}, ${safe.z}) after testing ${safe.columnsTested} columns" }
+        }
 
         logger.info { "Planet generation complete (center=${center.blockX()},${center.blockY()},${center.blockZ()})" }
         return GeneratedMap(instance, center, mapRadius)

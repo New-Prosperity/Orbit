@@ -1,8 +1,11 @@
 package me.nebula.orbit.utils.nebulaworld
 
 import com.github.luben.zstd.Zstd
+import me.nebula.ether.utils.logging.logger
 import net.kyori.adventure.nbt.CompoundBinaryTag
 import java.util.concurrent.ConcurrentHashMap
+
+private val nebulaWorldLogger = logger("NebulaWorld")
 
 const val NEBULA_MAGIC = 0x4E65624C
 const val NEBULA_VERSION: Short = 2
@@ -83,12 +86,21 @@ class NebulaWorld(
     val chunkCount: Int get() = slots.size
 
     private val parsed = ConcurrentHashMap<Long, NebulaChunk>()
+    private val brokenSlots = ConcurrentHashMap.newKeySet<Long>()
 
     fun chunkAt(x: Int, z: Int): NebulaChunk? {
         val key = packChunkKey(x, z)
         parsed[key]?.let { return it }
+        if (key in brokenSlots) return null
         val slot = slots[key] ?: return null
-        return parsed.computeIfAbsent(key) { decodeSlot(x, z, slot) }
+        return try {
+            parsed.computeIfAbsent(key) { decodeSlot(x, z, slot) }
+        } catch (t: Throwable) {
+            if (brokenSlots.add(key)) {
+                nebulaWorldLogger.warn { "Chunk decode failed at ($x, $z) — chunk will be skipped: ${t.message}" }
+            }
+            null
+        }
     }
 
     fun chunkKeys(): Set<Long> = slots.keys

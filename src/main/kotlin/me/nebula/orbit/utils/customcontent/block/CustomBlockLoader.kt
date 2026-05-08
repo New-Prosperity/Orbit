@@ -19,6 +19,7 @@ data class CustomBlockDefinition(
     val placeSound: String,
     val breakSound: String,
     val miningBlock: Block? = null,
+    val mapColor: Int? = null,
 )
 
 object CustomBlockLoader {
@@ -54,6 +55,14 @@ object CustomBlockLoader {
             Block.fromKey(Key.key(full)) ?: error("Block $id: unknown mining_block '$key'")
         }
         val drops = parseDrops(id, obj.getAsJsonObject("drops"))
+        val mapColor = obj["map_color"]?.let { element ->
+            when {
+                element.isJsonPrimitive && element.asJsonPrimitive.isNumber -> element.asInt
+                element.isJsonPrimitive && element.asJsonPrimitive.isString ->
+                    element.asString.removePrefix("#").toInt(16)
+                else -> null
+            }
+        }
 
         return CustomBlockDefinition(
             id = id,
@@ -64,6 +73,7 @@ object CustomBlockLoader {
             placeSound = placeSound,
             breakSound = breakSound,
             miningBlock = miningBlock,
+            mapColor = mapColor,
         )
     }
 
@@ -100,6 +110,7 @@ class CustomBlockDsl @PublishedApi internal constructor(val id: String) {
     @PublishedApi internal var placeSound = "block.stone.place"
     @PublishedApi internal var breakSound = "block.stone.break"
     @PublishedApi internal var miningBlock: Block? = null
+    @PublishedApi internal var mapColor: Int? = null
 
     fun hitbox(hitbox: BlockHitbox) { this.hitbox = hitbox }
     fun item(itemId: String) { this.itemId = itemId }
@@ -107,6 +118,7 @@ class CustomBlockDsl @PublishedApi internal constructor(val id: String) {
     fun placeSound(sound: String) { placeSound = sound }
     fun breakSound(sound: String) { breakSound = sound }
     fun miningBlock(block: Block) { miningBlock = block }
+    fun mapColor(color: Int) { mapColor = color }
 
     fun drops(block: CustomBlockDropsDsl.() -> Unit) {
         drops = CustomBlockDropsDsl().apply(block).build()
@@ -121,6 +133,7 @@ class CustomBlockDsl @PublishedApi internal constructor(val id: String) {
         placeSound = placeSound,
         breakSound = breakSound,
         miningBlock = miningBlock,
+        mapColor = mapColor,
     )
 }
 

@@ -2,6 +2,7 @@ package me.nebula.orbit.utils.mapgen.planet.rhexor
 
 import me.nebula.orbit.utils.mapgen.BiomeDefinition
 import me.nebula.orbit.utils.mapgen.BiomeRegistry
+import me.nebula.orbit.utils.mapgen.BiomeSubsurface
 import me.nebula.orbit.utils.mapgen.BiomeZoneConfig
 import me.nebula.orbit.utils.mapgen.HeightCurve
 import me.nebula.orbit.utils.mapgen.planet.BlockResolver
@@ -56,6 +57,14 @@ class RhexorGenerator(
                 subsurfaceDepth = 3,
                 vegetationDensity = 0.005,
                 grassBlock = Block.DEAD_BUSH,
+                patchBlock = Block.GRAVEL,
+                patchScale = 0.07,
+                patchThreshold = 0.62,
+                subsurface = BiomeSubsurface(
+                    aquiferDensity = 0.06,
+                    aquiferMinY = 14,
+                    aquiferMaxY = 36,
+                ),
             ))
             BiomeRegistry.register(BiomeDefinition(
                 id = BIOME_CANYON,
@@ -78,6 +87,18 @@ class RhexorGenerator(
                 subsurfaceBlock = Block.TERRACOTTA,
                 subsurfaceDepth = 4,
                 vegetationDensity = 0.0,
+                patchBlock = Block.RED_SANDSTONE,
+                patchScale = 0.06,
+                patchThreshold = 0.58,
+                subsurface = BiomeSubsurface(
+                    lavaPoolThreshold = 0.55,
+                    lavaPoolMinY = 4,
+                    lavaPoolMaxY = 26,
+                    crystalDensity = 0.18,
+                    crystalBlock = Block.AMETHYST_BLOCK,
+                    caveEntranceFrequency = 0.04,
+                    caveEntranceMaxDepth = 14,
+                ),
             ))
             BiomeRegistry.register(BiomeDefinition(
                 id = BIOME_PLATEAU,
@@ -101,6 +122,7 @@ class RhexorGenerator(
                 subsurfaceDepth = 6,
                 vegetationDensity = 0.002,
                 grassBlock = Block.DEAD_BUSH,
+                cliffEdge = true,
             ))
         }
 

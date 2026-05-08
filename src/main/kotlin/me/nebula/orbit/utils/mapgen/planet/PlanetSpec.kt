@@ -27,6 +27,8 @@ data class HeightProfile(
     val overhangAmplitude: Double = 0.0,
     val overhangScaleXZ: Double = 0.04,
     val overhangScaleY: Double = 0.08,
+    val surfaceJitterAmplitude: Double = 1.2,
+    val surfaceJitterScale: Double = 0.18,
 )
 
 data class RiverConfig(
@@ -107,4 +109,36 @@ data class PlanetSpec(
     val maxStructureTransitionRadius: Int = 16,
     val worldMinY: Int = 0,
     val worldMaxY: Int = 256,
-)
+) {
+    init {
+        require(id.isNotBlank()) { "PlanetSpec.id must not be blank" }
+        require(worldMinY < worldMaxY) { "PlanetSpec.worldMinY ($worldMinY) must be < worldMaxY ($worldMaxY)" }
+        require(bedrockHeight >= 0) { "PlanetSpec.bedrockHeight must be >= 0 (got $bedrockHeight)" }
+        require(deepslateLevel >= bedrockHeight) { "PlanetSpec.deepslateLevel ($deepslateLevel) must be >= bedrockHeight ($bedrockHeight)" }
+        require(seaLevel in worldMinY..worldMaxY) { "PlanetSpec.seaLevel ($seaLevel) must lie within worldMinY..worldMaxY ($worldMinY..$worldMaxY)" }
+        require(fillerDepth >= 0) { "PlanetSpec.fillerDepth must be >= 0 (got $fillerDepth)" }
+        require(structureRadiusChunks in 0..8) { "PlanetSpec.structureRadiusChunks must be in 0..8 (got $structureRadiusChunks)" }
+        require(heightProfile.heightVariation >= 0) { "HeightProfile.heightVariation must be >= 0 (got ${heightProfile.heightVariation})" }
+        require(heightProfile.terrainScale > 0) { "HeightProfile.terrainScale must be > 0 (got ${heightProfile.terrainScale})" }
+        require(heightProfile.overhangAmplitude >= 0) { "HeightProfile.overhangAmplitude must be >= 0 (got ${heightProfile.overhangAmplitude})" }
+        if (island.enabled) {
+            require(island.radius > 0) { "IslandConfig.radius must be > 0 when enabled (got ${island.radius})" }
+            require(island.falloffWidth in 0.0..island.radius) { "IslandConfig.falloffWidth (${island.falloffWidth}) must be in 0..radius (${island.radius})" }
+            require(island.oceanDepth >= 0) { "IslandConfig.oceanDepth must be >= 0 (got ${island.oceanDepth})" }
+            require(island.beachWidth >= 0) { "IslandConfig.beachWidth must be >= 0 (got ${island.beachWidth})" }
+        }
+        if (caveProfile.enabled) {
+            require(caveProfile.minY <= caveProfile.maxY) { "CaveProfile.minY (${caveProfile.minY}) must be <= maxY (${caveProfile.maxY})" }
+            require(caveProfile.threshold > 0) { "CaveProfile.threshold must be > 0 (got ${caveProfile.threshold})" }
+        }
+        for (ore in ores) {
+            require(ore.minY <= ore.maxY) { "OreEntry minY (${ore.minY}) must be <= maxY (${ore.maxY}) for block ${ore.block.name()}" }
+            require(ore.veinSize > 0) { "OreEntry veinSize must be > 0 for block ${ore.block.name()}" }
+            require(ore.veinsPerChunk >= 0) { "OreEntry veinsPerChunk must be >= 0 for block ${ore.block.name()}" }
+        }
+        for (entry in structures) {
+            require(entry.chancePerChunk in 0.0..1.0) { "StructureEntry.chancePerChunk for '${entry.schematicId}' must be in 0..1 (got ${entry.chancePerChunk})" }
+            require(entry.minSpacingChunks >= 0) { "StructureEntry.minSpacingChunks for '${entry.schematicId}' must be >= 0 (got ${entry.minSpacingChunks})" }
+        }
+    }
+}

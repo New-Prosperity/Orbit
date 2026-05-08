@@ -66,10 +66,8 @@ import me.nebula.orbit.utils.rewards.rewardDistributor
 import me.nebula.orbit.utils.hotbar.Hotbar
 import me.nebula.orbit.utils.hotbar.hotbar
 import me.nebula.orbit.utils.itembuilder.itemStack
-import me.nebula.orbit.utils.mapgen.BattleRoyaleMapGenerator
 import me.nebula.orbit.utils.mapgen.planet.PlanetMapGenerator
 import me.nebula.orbit.utils.mapgen.GeneratedMap
-import me.nebula.orbit.utils.mapgen.MapPresets
 import me.nebula.orbit.utils.matchresult.MatchResult
 import me.nebula.orbit.utils.matchresult.matchResult
 import me.nebula.orbit.utils.deathrecap.DamageEntry
@@ -117,14 +115,9 @@ class BattleRoyaleMode(worldPathOverride: String? = null) : GameMode(), BorderCo
     private val generatedMap: GeneratedMap?
         get() {
             if (_generatedMap == null) {
-                val planetId = season.planet
-                _generatedMap = if (planetId != null) {
-                    val planet = PlanetMapGenerator.build(planetId)
-                    PlanetMapGenerator.generate(planet)
-                } else {
-                    val mapConfig = season.mapPreset?.let { MapPresets[it] } ?: return null
-                    BattleRoyaleMapGenerator.generate(mapConfig)
-                }
+                val planetId = season.planet ?: return null
+                val planet = PlanetMapGenerator.build(planetId)
+                _generatedMap = PlanetMapGenerator.generate(planet)
             }
             return _generatedMap
         }

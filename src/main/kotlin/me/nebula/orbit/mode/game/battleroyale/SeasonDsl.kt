@@ -40,7 +40,6 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
     @PublishedApi internal var goldenHead = GoldenHeadConfig()
     @PublishedApi internal var deathmatch = DeathmatchConfig()
     @PublishedApi internal var cosmetics = CosmeticConfig()
-    @PublishedApi internal var mapPreset: String? = null
     @PublishedApi internal var planet: String? = null
     @PublishedApi internal var lobbyWorld: LobbyWorldConfig? = null
     @PublishedApi internal var airdropTable: String? = null
@@ -118,8 +117,6 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
 
     fun cosmetics(config: CosmeticConfig) { cosmetics = config }
 
-    fun mapPreset(preset: String) { mapPreset = preset }
-
     fun planet(id: String) { planet = id }
 
     fun lobbyWorld(path: String, preload: Int = 4, spawnConfig: SpawnConfig = SpawnConfig(0.5, 65.0, 0.5, 0f, 0f)) {
@@ -154,7 +151,6 @@ class SeasonBuilder @PublishedApi internal constructor(private val id: Int) {
         goldenHead = goldenHead,
         deathmatch = deathmatch,
         cosmetics = cosmetics,
-        mapPreset = mapPreset,
         planet = planet,
         lobbyWorld = lobbyWorld,
         airdropTable = airdropTable,

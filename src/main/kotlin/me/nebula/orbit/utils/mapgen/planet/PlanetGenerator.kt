@@ -1,5 +1,6 @@
 package me.nebula.orbit.utils.mapgen.planet
 
+import me.nebula.ether.utils.logging.logger
 import me.nebula.orbit.utils.mapgen.BiomeDefinition
 import me.nebula.orbit.utils.mapgen.BiomeProvider
 import me.nebula.orbit.utils.mapgen.BiomeRegistry
@@ -22,7 +23,6 @@ import net.minestom.server.instance.generator.Generator
 import net.minestom.server.instance.generator.UnitModifier
 import net.minestom.server.registry.RegistryKey
 import net.minestom.server.world.biome.Biome
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
@@ -45,9 +45,13 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
     private val biomeEdgeNoise = OctaveNoise(PerlinNoise(spec.seed + 1300), octaves = 2, lacunarity = 2.0, persistence = 0.5)
     private val coastlineNoise = OctaveNoise(PerlinNoise(spec.seed + 1500), octaves = 4, lacunarity = 2.0, persistence = 0.5)
     private val surfaceJitterNoise = OctaveNoise(PerlinNoise(spec.seed + 1700), octaves = 2, lacunarity = 2.0, persistence = 0.4)
+    private val surfacePatchNoise = OctaveNoise(PerlinNoise(spec.seed + 1900), octaves = 3, lacunarity = 2.0, persistence = 0.5)
+    private val lavaPoolNoise = OctaveNoise(PerlinNoise(spec.seed + 2100), octaves = 3, lacunarity = 2.0, persistence = 0.5)
+    private val aquiferNoise = OctaveNoise(PerlinNoise(spec.seed + 2300), octaves = 3, lacunarity = 2.2, persistence = 0.45)
+    private val crystalNoise = OctaveNoise(PerlinNoise(spec.seed + 2500), octaves = 2, lacunarity = 2.0, persistence = 0.4)
 
-    private val groundLevelCache = ConcurrentHashMap<Long, Double>()
-    private val chunkContextCache = ConcurrentHashMap<Long, ChunkContext>()
+    private val groundLevelCache = BoundedCache<Long, Double>(GROUND_LEVEL_CACHE_CAP)
+    private val chunkContextCache = BoundedCache<Long, ChunkContext>(CHUNK_CONTEXT_CACHE_CAP)
 
     private val biomeProvider: BiomeProvider? = if (spec.biomes.isEmpty()) null else BiomeProvider(
         seed = spec.seed,
@@ -56,7 +60,11 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
 
     val structurePlanner = StructurePlanner(spec) { x, z -> groundLevelAt(x, z).toInt() }
 
-    private val spawnedPlanKeys = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+    private val spawnedPlanKeys = BoundedCache<Long, Boolean>(SPAWNED_PLAN_KEYS_CAP)
+
+    private val chunksGenerated = java.util.concurrent.atomic.AtomicLong()
+    private val chunksFailed = java.util.concurrent.atomic.AtomicLong()
+    private val slowChunks = java.util.concurrent.atomic.AtomicLong()
 
     init {
         ensureGlobalListenerInstalled()
@@ -69,7 +77,7 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
             val originChunkZ = plan.originZ shr 4
             if (originChunkX != chunkX || originChunkZ != chunkZ) continue
             val key = (plan.originX.toLong() shl 32) or (plan.originZ.toLong() and 0xFFFFFFFFL)
-            if (!spawnedPlanKeys.add(key)) continue
+            if (!spawnedPlanKeys.markFresh(key, true)) continue
             val structure = StructureLibrary[plan.schematicId] ?: continue
             val manifest = structure.furnitureManifest ?: continue
             if (manifest.pieces.isEmpty()) continue
@@ -100,18 +108,131 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
         val end = unit.absoluteEnd()
         val chunkX = start.blockX() shr 4
         val chunkZ = start.blockZ() shr 4
-        val ctx = chunkContextOf(chunkX, chunkZ)
+        val nanoStart = System.nanoTime()
+
+        val ctx = try {
+            chunkContextOf(chunkX, chunkZ)
+        } catch (t: Throwable) {
+            stageFailureLogger.warn { "ChunkContext build failed at ($chunkX, $chunkZ): ${t.message}" }
+            chunksFailed.incrementAndGet()
+            return
+        }
         val modifier = unit.modifier()
 
-        stageFill(modifier, ctx, start, end)
-        stageCarveCheese(modifier, ctx, start, end)
-        stageCarveNoodle(modifier, ctx, start, end)
-        stageCarveRavines(modifier, ctx, start, end)
-        stageOres(modifier, ctx, start, end)
-        stagePasteStructures(modifier, ctx, start, end)
-        stageDecorate(modifier, ctx, start, end)
-        stageBiomeWrite(modifier, ctx, start, end)
+        runStage("fill", chunkX, chunkZ) { stageFill(modifier, ctx, start, end) }
+        runStage("carve_cheese", chunkX, chunkZ) { stageCarveCheese(modifier, ctx, start, end) }
+        runStage("carve_noodle", chunkX, chunkZ) { stageCarveNoodle(modifier, ctx, start, end) }
+        runStage("carve_ravines", chunkX, chunkZ) { stageCarveRavines(modifier, ctx, start, end) }
+        runStage("lava_pools", chunkX, chunkZ) { stageLavaPools(modifier, ctx, start, end) }
+        runStage("aquifers", chunkX, chunkZ) { stageAquifers(modifier, ctx, start, end) }
+        runStage("ores", chunkX, chunkZ) { stageOres(modifier, ctx, start, end) }
+        runStage("cave_entrances", chunkX, chunkZ) { stageCaveEntrances(modifier, ctx, start, end) }
+        runStage("paste_structures", chunkX, chunkZ) { stagePasteStructures(modifier, ctx, start, end) }
+        runStage("crystal_formations", chunkX, chunkZ) { stageCrystalFormations(modifier, ctx, start, end) }
+        runStage("decorate", chunkX, chunkZ) { stageDecorate(modifier, ctx, start, end) }
+        runStage("biome_write", chunkX, chunkZ) { stageBiomeWrite(modifier, ctx, start, end) }
+
+        chunksGenerated.incrementAndGet()
+        val elapsedMs = (System.nanoTime() - nanoStart) / 1_000_000
+        if (elapsedMs >= SLOW_CHUNK_THRESHOLD_MS) {
+            slowChunks.incrementAndGet()
+            stageFailureLogger.info { "Slow chunk ($chunkX, $chunkZ) took ${elapsedMs}ms (planet=${spec.id})" }
+        }
     }
+
+    private inline fun runStage(name: String, chunkX: Int, chunkZ: Int, body: () -> Unit) {
+        try {
+            body()
+        } catch (t: Throwable) {
+            stageFailureLogger.warn { "Stage '$name' failed at chunk ($chunkX, $chunkZ) on planet '${spec.id}': ${t.message}" }
+        }
+    }
+
+    fun validateAgainstRegistries(): List<String> {
+        val issues = mutableListOf<String>()
+
+        for (biomeId in spec.biomes) {
+            if (BiomeRegistry[biomeId] == null) {
+                issues += "Biome '$biomeId' referenced by planet '${spec.id}' is not registered"
+            }
+        }
+
+        for (entry in spec.structures) {
+            if (StructureLibrary[entry.schematicId] == null) {
+                issues += "Structure '${entry.schematicId}' referenced by planet '${spec.id}' is not loaded"
+            }
+        }
+
+        for (ore in spec.ores) {
+            ore.clusterShape?.let { id ->
+                if (OreClusterShapeRegistry[id] == null) {
+                    issues += "OreClusterShape '$id' for ore '${ore.block.name()}' on planet '${spec.id}' is not registered"
+                }
+            }
+        }
+
+        spec.biomeZoning.fallbackBiomeId.let { fb ->
+            if (BiomeRegistry[fb] == null) {
+                issues += "BiomeZoneConfig.fallbackBiomeId '$fb' on planet '${spec.id}' is not registered"
+            }
+        }
+
+        return issues
+    }
+
+    fun stats(): GeneratorStats = GeneratorStats(
+        chunksGenerated = chunksGenerated.get(),
+        chunksFailed = chunksFailed.get(),
+        slowChunks = slowChunks.get(),
+        groundLevelCacheSize = groundLevelCache.size(),
+        chunkContextCacheSize = chunkContextCache.size(),
+        spawnedStructureCount = spawnedPlanKeys.size(),
+    )
+
+    fun clearCaches() {
+        groundLevelCache.clear()
+        chunkContextCache.clear()
+        spawnedPlanKeys.clear()
+    }
+
+    fun findSafeSpawn(targetX: Int, targetZ: Int, maxRadius: Int = SAFE_SPAWN_MAX_RADIUS): SafeSpawn {
+        var searched = 0
+        for (radius in 0..maxRadius) {
+            for ((dx, dz) in spiralRing(radius)) {
+                searched++
+                val sx = targetX + dx
+                val sz = targetZ + dz
+                if (islandStateAt(sx, sz) == IslandState.OCEAN) continue
+                val groundY = groundLevelAt(sx, sz).toInt()
+                if (groundY < spec.seaLevel) continue
+                if (isRiverColumn(sx, sz)) continue
+                val standY = groundY + 1
+                val plans = structurePlanner.planAround(sx shr 4, sz shr 4)
+                if (plans.any { it.protectBox.contains(sx, standY, sz) }) continue
+                return SafeSpawn(sx, standY, sz, searched)
+            }
+        }
+        val fallbackY = groundLevelAt(targetX, targetZ).toInt() + 1
+        return SafeSpawn(targetX, fallbackY, targetZ, searched, fallback = true)
+    }
+
+    private fun spiralRing(radius: Int): Sequence<Pair<Int, Int>> {
+        if (radius == 0) return sequenceOf(0 to 0)
+        return sequence {
+            for (dx in -radius..radius) yield(dx to -radius)
+            for (dz in -radius + 1..radius) yield(radius to dz)
+            for (dx in radius - 1 downTo -radius) yield(dx to radius)
+            for (dz in radius - 1 downTo -radius + 1) yield(-radius to dz)
+        }
+    }
+
+    data class SafeSpawn(
+        val x: Int,
+        val y: Int,
+        val z: Int,
+        val columnsTested: Int,
+        val fallback: Boolean = false,
+    )
 
     open fun customSurfaceBlock(x: Int, z: Int, surfaceY: Int, defaultBlock: Block): Block = defaultBlock
 
@@ -129,23 +250,47 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
         }
 
         val plans = structurePlanner.planAround(chunkX, chunkZ)
-        val approxHeights = IntArray(256) { i ->
-            val lx = i and 0xF
-            val lz = (i shr 4) and 0xF
-            val wx = chunkX * 16 + lx
-            val wz = chunkZ * 16 + lz
-            blendHeightWithStructures(wx, wz, groundLevelAt(wx, wz).toInt(), plans)
+        val approxHeights = IntArray(256)
+        val worldTopSolid = IntArray(256)
+        for (lx in 0 until 16) {
+            for (lz in 0 until 16) {
+                val wx = chunkX * 16 + lx
+                val wz = chunkZ * 16 + lz
+                val ground = groundLevelAt(wx, wz).toInt()
+                val blended = blendHeightWithStructures(wx, wz, ground, plans)
+                approxHeights[lx + lz * 16] = blended
+                worldTopSolid[lx + lz * 16] = computeWorldTopSolid(wx, wz, blended)
+            }
         }
 
-        return ChunkContext(chunkX, chunkZ, approxHeights, biomes, plans)
+        return ChunkContext(chunkX, chunkZ, approxHeights, worldTopSolid, biomes, plans)
     }
+
+    open fun densityScanTopY(x: Int, z: Int, blendedGround: Int): Int =
+        blendedGround + spec.heightProfile.overhangAmplitude.toInt() + 4
+
+    private fun computeWorldTopSolid(x: Int, z: Int, blendedGround: Int): Int {
+        val scanTop = minOf(densityScanTopY(x, z, blendedGround), spec.worldMaxY - 1)
+        var y = scanTop
+        while (y >= spec.bedrockHeight) {
+            if (density.sample(x, y, z) > 0.0) return y
+            y--
+        }
+        return spec.bedrockHeight
+    }
+
+    fun biomeAt(x: Int, z: Int): BiomeDefinition? = pickBiomeWithEdgeJitter(x, z)
 
     private fun pickBiomeWithEdgeJitter(x: Int, z: Int): BiomeDefinition? {
         val provider = biomeProvider ?: return null
+        val unjittered = provider.biomeAt(x, z)
+        if (unjittered.cliffEdge) return unjittered
         val jitter = biomeEdgeNoise.sample2D(x * 0.07, z * 0.07) * 2.0
         val jx = (x + jitter).toInt()
         val jz = (z + jitter).toInt()
-        return provider.biomeAt(jx, jz)
+        val jittered = provider.biomeAt(jx, jz)
+        if (jittered.cliffEdge) return unjittered
+        return jittered
     }
 
     private fun blendHeightWithStructures(x: Int, z: Int, baseHeight: Int, plans: List<PlannedStructure>): Int {
@@ -195,7 +340,7 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
         }
     }
 
-    private fun islandStateAt(x: Int, z: Int): IslandState {
+    fun islandStateAt(x: Int, z: Int): IslandState {
         val island = spec.island
         if (!island.enabled) return IslandState.LAND
         val dx = (x - island.centerX).toDouble()
@@ -259,7 +404,15 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
         val baseH = biome?.baseHeight ?: hp.baseHeight.toDouble()
         val variation = biome?.heightVariation ?: hp.heightVariation.toDouble()
 
-        return (baseH + continental + mixed * variation).coerceIn(2.0, 250.0)
+        val jitter = if (hp.surfaceJitterAmplitude > 0.0) {
+            surfaceJitterNoise.sample2D(x * hp.surfaceJitterScale, z * hp.surfaceJitterScale) * hp.surfaceJitterAmplitude
+        } else 0.0
+
+        val raw = baseH + continental + mixed * variation + jitter
+        val safe = if (raw.isFinite()) raw else baseH
+        val low = (spec.worldMinY + spec.bedrockHeight + 1).toDouble()
+        val high = (spec.worldMaxY - 4).toDouble()
+        return safe.coerceIn(low, high)
     }
 
     private fun applyRiver(x: Int, z: Int, baseGround: Double): Double {
@@ -306,11 +459,18 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
                 val subsurfaceBlock = biome?.subsurfaceBlock
                 val subsurfaceDepth = biome?.subsurfaceDepth ?: 0
 
-                var topSolid = -1
-                for (y in sectionMaxY downTo sectionMinY) {
+                val worldTopSolid = ctx.worldTopSolid[lx + lz * 16]
+                val nearWaterline = worldTopSolid in (seaLevel - islandConfig.beachWidth)..(seaLevel + 1)
+                val isBeachColumn = islandConfig.enabled
+                    && nearWaterline
+                    && (islandState == IslandState.COAST || islandState == IslandState.LAND)
+
+                val effectiveMaxY = minOf(sectionMaxY, maxOf(worldTopSolid + 1, seaLevel))
+                val effectiveMinY = maxOf(sectionMinY, spec.worldMinY)
+                if (effectiveMinY > effectiveMaxY) continue
+                for (y in effectiveMinY..effectiveMaxY) {
                     if (y < spec.bedrockHeight) {
                         modifier.setBlock(wx, y, wz, pal.bedrockBlock)
-                        if (topSolid == -1) topSolid = y
                         continue
                     }
                     val isSolid = density.sample(wx, y, wz) > 0.0
@@ -321,30 +481,24 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
                         }
                         continue
                     }
-                    if (topSolid == -1) topSolid = y
-                }
 
-                if (topSolid < 0) continue
-
-                for (y in sectionMinY..topSolid) {
-                    if (y < spec.bedrockHeight) continue
-                    if (density.sample(wx, y, wz) <= 0.0) continue
-                    val depthFromTop = topSolid - y
-                    val nearWaterline = topSolid in (seaLevel - islandConfig.beachWidth)..(seaLevel + 1)
-                    val isBeachColumn = islandConfig.enabled
-                        && nearWaterline
-                        && (islandState == PlanetGenerator.IslandState.COAST || islandState == PlanetGenerator.IslandState.LAND)
+                    val depthFromTop = worldTopSolid - y
                     val block: Block = when {
                         y < spec.deepslateLevel -> deepslateBlock
-                        y == topSolid -> {
-                            val s = when {
-                                islandState == PlanetGenerator.IslandState.OCEAN -> oceanFloorBlock
+                        y == worldTopSolid -> {
+                            val baseSurface = when {
+                                islandState == IslandState.OCEAN -> oceanFloorBlock
                                 isBeachColumn -> beachBlock
                                 isRiver -> riverBank
-                                topSolid >= seaLevel -> surfaceBlock
+                                worldTopSolid >= seaLevel -> surfaceBlock
                                 else -> underwater
                             }
-                            customSurfaceBlock(wx, topSolid, y, s)
+                            val patched = if (biome?.patchBlock != null
+                                && islandState == IslandState.LAND
+                                && !isBeachColumn && !isRiver
+                                && surfacePatchNoise.sample2D(wx * biome.patchScale, wz * biome.patchScale) > biome.patchThreshold
+                            ) biome.patchBlock else baseSurface
+                            customSurfaceBlock(wx, worldTopSolid, y, patched)
                         }
                         depthFromTop < surfaceDepth -> if (isBeachColumn) beachBlock else surfaceBlock
                         depthFromTop < surfaceDepth + subsurfaceDepth && subsurfaceBlock != null -> subsurfaceBlock
@@ -354,9 +508,14 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
                     modifier.setBlock(wx, y, wz, block)
                 }
 
-                if (snowLine != Int.MAX_VALUE && topSolid >= snowLine && topSolid >= seaLevel
-                    && (topSolid + 1) in sectionMinY..sectionMaxY) {
-                    modifier.setBlock(wx, topSolid + 1, wz, Block.SNOW)
+                val snowBlock = biome?.snowBlock ?: Block.SNOW
+                if (snowLine != Int.MAX_VALUE && worldTopSolid >= snowLine && worldTopSolid >= seaLevel
+                    && (worldTopSolid + 1) in sectionMinY..sectionMaxY) {
+                    modifier.setBlock(wx, worldTopSolid + 1, wz, snowBlock)
+                }
+                if (frozen && worldTopSolid < seaLevel && !isRiver
+                    && (seaLevel + 1) in sectionMinY..sectionMaxY) {
+                    modifier.setBlock(wx, seaLevel + 1, wz, snowBlock)
                 }
             }
         }
@@ -425,7 +584,7 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
     private fun stageCarveRavines(modifier: UnitModifier, ctx: ChunkContext, start: Point, end: Point) {
         val cave = spec.caveProfile
         if (!cave.ravinesEnabled) return
-        val rng = Random(spec.seed xor (ctx.chunkX.toLong() * 13441L) xor (ctx.chunkZ.toLong() * 31337L))
+        val rng = Random(SeedMix.chunkSeed(spec.seed, ctx.chunkX, ctx.chunkZ, RAVINE_SALT))
         if (rng.nextDouble() >= cave.ravineChancePerChunk) return
 
         val originX = ctx.chunkX * 16 + rng.nextInt(16)
@@ -467,7 +626,7 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
     }
 
     private fun stageOres(modifier: UnitModifier, ctx: ChunkContext, start: Point, end: Point) {
-        val rng = Random(spec.seed xor (ctx.chunkX.toLong() * 49829L) xor (ctx.chunkZ.toLong() * 7919L))
+        val rng = Random(SeedMix.chunkSeed(spec.seed, ctx.chunkX, ctx.chunkZ, ORE_SALT))
         val sectionMinY = start.blockY()
         val sectionMaxY = end.blockY() - 1
 
@@ -526,6 +685,141 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
         }
     }
 
+    private fun stageLavaPools(modifier: UnitModifier, ctx: ChunkContext, start: Point, end: Point) {
+        val sectionMinY = start.blockY()
+        val sectionMaxY = end.blockY() - 1
+        for (lx in 0 until 16) {
+            for (lz in 0 until 16) {
+                val biome = ctx.biomes[lx + lz * 16] ?: continue
+                val sub = biome.subsurface
+                if (sub.lavaPoolThreshold < 0.0) continue
+                val wx = ctx.chunkX * 16 + lx
+                val wz = ctx.chunkZ * 16 + lz
+                val effectiveMin = maxOf(sub.lavaPoolMinY, sectionMinY)
+                val effectiveMax = minOf(sub.lavaPoolMaxY, sectionMaxY)
+                if (effectiveMin > effectiveMax) continue
+                for (y in effectiveMin..effectiveMax) {
+                    if (isInsideAnyProtect(wx, y, wz, ctx)) continue
+                    val n = lavaPoolNoise.sample3D(wx * 0.04, y * 0.06, wz * 0.04)
+                    if (n > sub.lavaPoolThreshold) {
+                        modifier.setBlock(wx, y, wz, Block.LAVA)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stageAquifers(modifier: UnitModifier, ctx: ChunkContext, start: Point, end: Point) {
+        val sectionMinY = start.blockY()
+        val sectionMaxY = end.blockY() - 1
+        for (lx in 0 until 16) {
+            for (lz in 0 until 16) {
+                val biome = ctx.biomes[lx + lz * 16] ?: continue
+                val sub = biome.subsurface
+                if (sub.aquiferDensity <= 0.0) continue
+                val wx = ctx.chunkX * 16 + lx
+                val wz = ctx.chunkZ * 16 + lz
+                val effectiveMin = maxOf(sub.aquiferMinY, sectionMinY)
+                val effectiveMax = minOf(sub.aquiferMaxY, sectionMaxY)
+                if (effectiveMin > effectiveMax) continue
+                val threshold = (1.0 - sub.aquiferDensity).coerceIn(0.0, 1.0)
+                for (y in effectiveMin..effectiveMax) {
+                    if (isInsideAnyProtect(wx, y, wz, ctx)) continue
+                    val n = aquiferNoise.sample3D(wx * 0.05, y * 0.07, wz * 0.05)
+                    if (n > threshold) {
+                        modifier.setBlock(wx, y, wz, Block.WATER)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stageCaveEntrances(modifier: UnitModifier, ctx: ChunkContext, start: Point, end: Point) {
+        val sectionMinY = start.blockY()
+        val sectionMaxY = end.blockY() - 1
+        val rng = Random(SeedMix.chunkSeed(spec.seed, ctx.chunkX, ctx.chunkZ, CAVE_ENTRANCE_SALT))
+        var maxFreq = 0.0
+        for (b in ctx.biomes) {
+            val f = b?.subsurface?.caveEntranceFrequency ?: 0.0
+            if (f > maxFreq) maxFreq = f
+        }
+        if (maxFreq <= 0.0 || rng.nextDouble() >= maxFreq) return
+
+        val lx = rng.nextInt(2, 14)
+        val lz = rng.nextInt(2, 14)
+        val biome = ctx.biomes[lx + lz * 16] ?: return
+        if (biome.subsurface.caveEntranceFrequency <= 0.0) return
+
+        val wx = ctx.chunkX * 16 + lx
+        val wz = ctx.chunkZ * 16 + lz
+        val topY = ctx.worldTopSolid[lx + lz * 16]
+        val depth = biome.subsurface.caveEntranceMaxDepth
+        val bottomY = (topY - depth).coerceAtLeast(spec.bedrockHeight + 1)
+
+        for (dx in -1..1) {
+            for (dz in -1..1) {
+                val cx = wx + dx
+                val cz = wz + dz
+                if ((cx shr 4) != ctx.chunkX || (cz shr 4) != ctx.chunkZ) continue
+                for (y in bottomY..topY) {
+                    if (y !in sectionMinY..sectionMaxY) continue
+                    if (isInsideAnyProtect(cx, y, cz, ctx)) continue
+                    val r = (dx * dx + dz * dz)
+                    val taper = 1.0 - (topY - y).toDouble() / depth.coerceAtLeast(1).toDouble()
+                    if (r > 1 && taper < 0.5) continue
+                    modifier.setBlock(cx, y, cz, Block.CAVE_AIR)
+                }
+            }
+        }
+    }
+
+    private fun stageCrystalFormations(modifier: UnitModifier, ctx: ChunkContext, start: Point, end: Point) {
+        val sectionMinY = start.blockY()
+        val sectionMaxY = end.blockY() - 1
+        val cave = spec.caveProfile
+        if (!cave.enabled) return
+
+        for (lx in 0 until 16) {
+            for (lz in 0 until 16) {
+                val biome = ctx.biomes[lx + lz * 16] ?: continue
+                val sub = biome.subsurface
+                val crystalBlock = sub.crystalBlock ?: continue
+                if (sub.crystalDensity <= 0.0) continue
+
+                val wx = ctx.chunkX * 16 + lx
+                val wz = ctx.chunkZ * 16 + lz
+                val biomeMul = biome.caveFrequencyMultiplier
+                val effectiveThreshold = cave.threshold / biomeMul.coerceAtLeast(0.05)
+                val carveTop = minOf(sectionMaxY, ctx.worldTopSolid[lx + lz * 16] - 4)
+                val carveBottom = maxOf(sectionMinY, cave.minY)
+
+                for (y in carveBottom..carveTop) {
+                    if (isInsideAnyProtect(wx, y, wz, ctx)) continue
+                    val isCarvedHere = isCarvedAir(wx, y, wz, biomeMul, effectiveThreshold, cave)
+                    if (!isCarvedHere) continue
+                    val isFloorBelow = !isCarvedAir(wx, y - 1, wz, biomeMul, effectiveThreshold, cave)
+                    if (!isFloorBelow) continue
+
+                    val n = crystalNoise.sample2D(wx * 0.13, wz * 0.13)
+                    if (n <= 1.0 - sub.crystalDensity) continue
+
+                    val height = 1 + ((n - (1.0 - sub.crystalDensity)) * 3.0).toInt().coerceIn(0, 3)
+                    for (h in 0..height) {
+                        val cy = y + h
+                        if (cy !in sectionMinY..sectionMaxY) break
+                        modifier.setBlock(wx, cy, wz, crystalBlock)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun isCarvedAir(x: Int, y: Int, z: Int, biomeMul: Double, effectiveThreshold: Double, cave: CaveProfile): Boolean {
+        val a = caveNoiseA.sample3D(x * cave.noiseScale, y * cave.noiseScale * 2, z * cave.noiseScale)
+        val b = caveNoiseB.sample3D(x * cave.noiseScale, y * cave.noiseScale * 2, z * cave.noiseScale)
+        return a > effectiveThreshold && b > effectiveThreshold
+    }
+
     private fun stagePasteStructures(modifier: UnitModifier, ctx: ChunkContext, start: Point, end: Point) {
         val sectionMinY = start.blockY()
         val sectionMaxY = end.blockY() - 1
@@ -538,22 +832,26 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
             if (!plan.bbox.intersectsChunk(ctx.chunkX, ctx.chunkZ)) continue
             val structure = StructureLibrary[plan.schematicId] ?: continue
 
-            for (sy in 0 until structure.height) {
-                val wy = plan.originY + sy
-                if (wy !in sectionMinY..sectionMaxY) continue
+            try {
+                for (sy in 0 until structure.height) {
+                    val wy = plan.originY + sy
+                    if (wy !in sectionMinY..sectionMaxY) continue
 
-                for (sx in 0 until structure.width) {
-                    for (sz in 0 until structure.length) {
-                        val (rx, rz) = rotateXZ(sx, sz, plan.rotation, structure.width, structure.length)
-                        val wx = plan.originX + rx
-                        val wz = plan.originZ + rz
-                        if (wx !in cMinX..cMaxX || wz !in cMinZ..cMaxZ) continue
+                    for (sx in 0 until structure.width) {
+                        for (sz in 0 until structure.length) {
+                            val (rx, rz) = rotateXZ(sx, sz, plan.rotation, structure.width, structure.length)
+                            val wx = plan.originX + rx
+                            val wz = plan.originZ + rz
+                            if (wx !in cMinX..cMaxX || wz !in cMinZ..cMaxZ) continue
 
-                        val block = structure.blockAt(sx, sy, sz)
-                        if (block.isAir) continue
-                        modifier.setBlock(wx, wy, wz, rotateBlockYaw(block, plan.rotation))
+                            val block = structure.blockAt(sx, sy, sz)
+                            if (block.isAir) continue
+                            modifier.setBlock(wx, wy, wz, rotateBlockYaw(block, plan.rotation))
+                        }
                     }
                 }
+            } catch (t: Throwable) {
+                pasteFailureLogger.warn { "Structure paste failed for '${plan.schematicId}' at (${plan.originX}, ${plan.originY}, ${plan.originZ}): ${t.message}" }
             }
         }
     }
@@ -562,7 +860,7 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
         if (!spec.decoration.enabled) return
         val sectionMinY = start.blockY()
         val sectionMaxY = end.blockY() - 1
-        val rng = Random(spec.seed xor (ctx.chunkX.toLong() * 921347L) xor (ctx.chunkZ.toLong() * 53761L))
+        val rng = Random(SeedMix.chunkSeed(spec.seed, ctx.chunkX, ctx.chunkZ, DECORATE_SALT))
 
         var treeBudget = spec.decoration.maxTreesPerChunk
         var vegBudget = spec.decoration.maxVegetationPerChunk
@@ -711,14 +1009,35 @@ abstract class PlanetGenerator(val spec: PlanetSpec) : Generator {
         val chunkX: Int,
         val chunkZ: Int,
         val approxHeights: IntArray,
+        val worldTopSolid: IntArray,
         val biomes: Array<BiomeDefinition?>,
         val plans: List<PlannedStructure>,
+    )
+
+    data class GeneratorStats(
+        val chunksGenerated: Long,
+        val chunksFailed: Long,
+        val slowChunks: Long,
+        val groundLevelCacheSize: Int,
+        val chunkContextCacheSize: Int,
+        val spawnedStructureCount: Int,
     )
 
     companion object {
         private val HORIZONTAL_FACINGS = listOf("north", "east", "south", "west")
         private val fallbackBiomeKey: RegistryKey<Biome> = RegistryKey.unsafeOf("plains")
         private val globalListenerInstalled = java.util.concurrent.atomic.AtomicBoolean(false)
+        private val pasteFailureLogger = logger("PlanetGenerator.paste")
+        private const val GROUND_LEVEL_CACHE_CAP = 500_000
+        private const val CHUNK_CONTEXT_CACHE_CAP = 4_096
+        private const val SPAWNED_PLAN_KEYS_CAP = 65_536
+        private const val ORE_SALT = 0x6C078965CAFE1234L
+        private const val RAVINE_SALT = 0x4F1BBCDC9E3779B9L
+        private const val DECORATE_SALT = 0x243F6A8885A308D3L
+        private const val CAVE_ENTRANCE_SALT = 0x13198A2E03707344L
+        private const val SLOW_CHUNK_THRESHOLD_MS = 100L
+        private const val SAFE_SPAWN_MAX_RADIUS = 64
+        private val stageFailureLogger = logger("PlanetGenerator.stage")
 
         internal fun ensureGlobalListenerInstalled() {
             if (!globalListenerInstalled.compareAndSet(false, true)) return
