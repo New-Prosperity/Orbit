@@ -40,15 +40,15 @@ object NebulaWorldLoader {
     fun load(name: String, path: Path): InstanceContainer {
         require(!loaded.containsKey(name)) { "World '$name' already loaded" }
 
-        val bytes = path.readBytes()
-        val world = NebulaWorldReader.read(bytes)
+        val world = NebulaWorldReader.read(path)
+        val sizeKb = path.toFile().length() / 1024
 
         val instance = MinecraftServer.getInstanceManager().createInstanceContainer()
         instance.chunkLoader = NebulaChunkLoader(world)
         loaded[name] = instance
         worldsByName[name] = world
 
-        logger.info { "Loaded world '$name' from ${path.fileName} (${world.chunkCount} chunks, ${bytes.size / 1024}KB${if (world.userData.isNotEmpty()) ", ${world.userData.size}B userData" else ""})" }
+        logger.info { "Loaded world '$name' from ${path.fileName} (${world.chunkCount} chunks, ${sizeKb}KB${if (world.userData.isNotEmpty()) ", ${world.userData.size}B userData" else ""})" }
         for (hook in postLoadHooks) {
             runCatching { hook(instance, world) }.onFailure {
                 logger.warn { "Post-load hook failed for '$name': ${it.message}" }

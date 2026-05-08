@@ -9,6 +9,7 @@ private val nebulaWorldLogger = logger("NebulaWorld")
 
 const val NEBULA_MAGIC = 0x4E65624C
 const val NEBULA_VERSION: Short = 2
+const val LEGACY_V1_VERSION: Short = 1
 const val SECTION_BLOCK_COUNT = 4096
 const val SECTION_BIOME_COUNT = 64
 const val LIGHT_ARRAY_SIZE = 2048

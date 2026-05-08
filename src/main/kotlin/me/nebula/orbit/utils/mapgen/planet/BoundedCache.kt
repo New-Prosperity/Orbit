@@ -53,7 +53,6 @@ class BoundedCache<K : Any, V : Any>(
             try {
                 onEvict(oldest, evicted)
             } catch (_: Throwable) {
-                // eviction listener failures must not break the cache
             }
         }
     }
